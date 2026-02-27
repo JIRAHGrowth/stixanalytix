@@ -184,7 +184,7 @@ export default function DashboardPage() {
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: t.bright }}>{k.name}</div>
                   <div style={{ fontSize: 11, color: t.dim }}>
-                    {[k.role, k.catch_hand ? `${k.catch_hand} catch` : null].filter(Boolean).join(" · ")}
+                    {[k.role, k.catch_hand ? `${k.catch_hand} footed` : null].filter(Boolean).join(" · ")}
                   </div>
                 </div>
                 <div style={{
