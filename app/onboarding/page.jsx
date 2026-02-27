@@ -15,7 +15,7 @@ const font = "'DM Sans', -apple-system, sans-serif";
 
 const ROLES = ["GK Coach", "Director of Goalkeeping", "Head of Academy GK", "Scout", "Technical Director", "Individual Keeper", "Parent"];
 const DEPTHS = ["Starter", "Backup", "Third", "Development"];
-const CATCHING = ["Left", "Right"];
+const CATCHING = ["Left", "Right", "Ambidextrous"];
 
 // ═══ UI COMPONENTS ═══════════════════════════════════════════════════════════
 
@@ -122,7 +122,7 @@ function KeeperEditor({ keeper, onSave, onCancel, accent }) {
         </div>
 
         <div style={{ marginBottom: 16 }}>
-          <label style={{ fontSize: 11, color: t.dim, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 8 }}>Catching Hand</label>
+          <label style={{ fontSize: 11, color: t.dim, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 8 }}>Footed</label>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {CATCHING.map(c => <Chip key={c} label={c} selected={k.catch_hand === c} onClick={() => u("catch_hand", c)} accent={accent} small />)}
           </div>
@@ -361,7 +361,7 @@ export default function OnboardingPage() {
                 <div>
                   <div style={{ fontSize: 15, fontWeight: 600, color: t.bright }}>{k.name}</div>
                   <div style={{ fontSize: 11, color: t.dim }}>
-                    {[k.role, k.catch_hand ? `${k.catch_hand} catch` : null].filter(Boolean).join(" · ") || "No details yet"}
+                    {[k.role, k.catch_hand ? `${k.catch_hand} footed` : null].filter(Boolean).join(" · ") || "No details yet"}
                   </div>
                 </div>
               </div>
@@ -457,7 +457,7 @@ export default function OnboardingPage() {
                     }}>#{k.number || "?"}</div>
                     <div>
                       <div style={{ fontSize: 12, fontWeight: 600, color: t.bright }}>{k.name}</div>
-                      <div style={{ fontSize: 10, color: t.dim }}>{[k.role, k.catch_hand ? `${k.catch_hand} catch` : null].filter(Boolean).join(" · ")}</div>
+                      <div style={{ fontSize: 10, color: t.dim }}>{[k.role, k.catch_hand ? `${k.catch_hand} footed` : null].filter(Boolean).join(" · ")}</div>
                     </div>
                   </div>
                 ))}
