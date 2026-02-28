@@ -25,8 +25,31 @@ export async function middleware(request) {
     }
   );
 
-  // Refresh the auth token (important for server-side auth)
-  const { data: { user } } = await supabase.auth.getUser();
+  // Refresh the auth token — this is critical for keeping sessions alive
+  // If the token is expired, getUser() will attempt to refresh it
+  // If refresh fails, user will be null and stale cookies get cleared by Supabase SSR
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+  // If there was an auth error (expired/invalid token), clear the cookies
+  // This prevents the "stuck loading" state where a stale cookie exists but the session is dead
+  if (authError) {
+    // Clear all Supabase auth cookies to prevent stale state
+    const cookieNames = request.cookies.getAll()
+      .map(c => c.name)
+      .filter(name => name.startsWith('sb-'));
+
+    if (cookieNames.length > 0) {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = '/login';
+      const response = NextResponse.redirect(redirectUrl);
+
+      cookieNames.forEach(name => {
+        response.cookies.delete(name);
+      });
+
+      return response;
+    }
+  }
 
   // Protected routes - redirect to login if not authenticated
   const protectedPaths = ['/dashboard', '/pitchside', '/onboarding', '/staff'];
@@ -41,7 +64,7 @@ export async function middleware(request) {
     return NextResponse.redirect(url);
   }
 
-  // If logged in user tries to visit login/signup, redirect to dashboard
+  // If logged in user tries to visit login/signup, redirect appropriately
   const authPaths = ['/login', '/signup'];
   const isAuthRoute = authPaths.some(path =>
     request.nextUrl.pathname.startsWith(path)
@@ -49,7 +72,7 @@ export async function middleware(request) {
 
   if (isAuthRoute && user) {
     const url = request.nextUrl.clone();
-    // Check if onboarding is needed
+
     const { data: profile } = await supabase
       .from('profiles')
       .select('onboarding_complete')
@@ -79,7 +102,6 @@ export async function middleware(request) {
 
 export const config = {
   matcher: [
-    // Match all paths except static files and API routes
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };
