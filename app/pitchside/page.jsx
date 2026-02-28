@@ -350,7 +350,7 @@ function EventLog({ events, half, onUndo }) {
 // ═══ MAIN APP ═══════════════════════════════════════════════════════════════
 
 export default function PitchsidePage() {
-  const { user, profile, club, supabase, loading: authLoading } = useAuth();
+  const { user, profile, club, supabase, loading: authLoading, isDelegate, delegateOf } = useAuth();
   const router = useRouter();
 
   // ─── Phase routing
@@ -418,13 +418,25 @@ export default function PitchsidePage() {
   useEffect(() => {
     const fetchKeepers = async () => {
       if (!user) return;
-      const { data } = await supabase
-        .from("keepers").select("*").eq("coach_id", user.id).eq("active", true).order("created_at");
-      if (data) setKeepers(data);
+
+      if (isDelegate && delegateOf) {
+        // Delegate: fetch only keepers they have pitchside access to
+        const { data } = await supabase
+          .from("keepers").select("*")
+          .eq("coach_id", delegateOf.coach_id).eq("active", true)
+          .in("id", delegateOf.pitchside_keepers)
+          .order("created_at");
+        if (data) setKeepers(data);
+      } else {
+        // Coach: fetch all their keepers
+        const { data } = await supabase
+          .from("keepers").select("*").eq("coach_id", user.id).eq("active", true).order("created_at");
+        if (data) setKeepers(data);
+      }
       setLoadingKeepers(false);
     };
     if (user) fetchKeepers();
-  }, [user]);
+  }, [user, isDelegate, delegateOf]);
 
   // ─── Helpers
   const hd = halves[half];
@@ -551,7 +563,11 @@ export default function PitchsidePage() {
       const { data: matchData, error: matchError } = await supabase
         .from("matches")
         .insert({
-          coach_id: user.id, keeper_id: selectedKeeperId, club_id: club.id,
+          coach_id: isDelegate && delegateOf ? delegateOf.coach_id : user.id,
+          keeper_id: selectedKeeperId,
+          club_id: isDelegate && delegateOf ? delegateOf.club?.id : club.id,
+          logged_by: user.id,
+          logged_by_name: profile?.full_name || user.email,
           session_type: sessionType,
           opponent: sessionType === "training" ? null : opponent,
           venue: homeAway?.toLowerCase() || "home",
@@ -588,7 +604,7 @@ export default function PitchsidePage() {
 
       if (goalEvents.length > 0) {
         const goalRows = goalEvents.map(g => ({
-          match_id: matchData.id, coach_id: user.id,
+          match_id: matchData.id, coach_id: isDelegate && delegateOf ? delegateOf.coach_id : user.id,
           goal_zone: g.goalZone || null, shot_origin: g.origin || null,
           goal_source: g.type === "Corner" ? "Corner" : g.type === "Penalty" ? "Penalty" : "Open Play",
           goal_rank: g.rank || null, shot_type: g.method || null,
@@ -609,7 +625,7 @@ export default function PitchsidePage() {
         "Command of Box": "command_of_box", "Composure": "composure",
         "Compete Level": "compete_level",
       };
-      const attrRow = { match_id: matchData.id, keeper_id: selectedKeeperId, coach_id: user.id };
+      const attrRow = { match_id: matchData.id, keeper_id: selectedKeeperId, coach_id: isDelegate && delegateOf ? delegateOf.coach_id : user.id };
       Object.entries(attrKeys).forEach(([label, col]) => { attrRow[col] = attrs[label] || null; });
       const { error: attrError } = await supabase.from("match_attributes").insert(attrRow);
       if (attrError) throw attrError;
@@ -654,12 +670,27 @@ export default function PitchsidePage() {
             <p style={{ fontSize: 13, color: t.dim, marginTop: 4 }}>{club?.name || "Your Club"}</p>
           </div>
 
+          {/* Delegate banner */}
+          {isDelegate && delegateOf && (
+            <div style={{
+              padding: "10px 16px", borderRadius: 10, marginBottom: 12,
+              background: t.cyan + "08", border: `1px solid ${t.cyan}22`,
+              display: "flex", alignItems: "center", gap: 10,
+            }}>
+              <span style={{ fontSize: 14 }}>📱</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: t.cyan }}>Logging for {delegateOf.coach_name}</div>
+                <div style={{ fontSize: 10, color: t.dim }}>{delegateOf.club?.name || "Club"} · {delegateOf.pitchside_keepers?.length || 0} assigned keeper{delegateOf.pitchside_keepers?.length !== 1 ? "s" : ""}</div>
+              </div>
+            </div>
+          )}
+
           {/* Session Type */}
           <div style={{ background: t.card, borderRadius: 14, padding: 16, border: `1px solid ${t.border}`, marginBottom: 12 }}>
             <div style={{ fontSize: 11, color: t.dim, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Session Type</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               <Chip label="⚽ Match" selected={sessionType === "match"} onClick={() => setSessionType("match")} />
-              <Chip label="🏋️ Training" selected={sessionType === "training"} onClick={() => setSessionType("training")} />
+              <Chip label="🔶 Training" selected={sessionType === "training"} onClick={() => setSessionType("training")} />
             </div>
           </div>
 
@@ -1241,4 +1272,5 @@ export default function PitchsidePage() {
     </div>
   );
 }
+
 
