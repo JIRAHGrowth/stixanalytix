@@ -527,34 +527,48 @@ export default function StaffPage() {
   };
 
   const handleInviteSave = async (data) => {
-    // If creating an account directly, use Supabase Admin (or just insert the invite for now)
     if (data.createAccount) {
-      // Create the auth user via Supabase
-      // Note: In production, this would be a server-side API route using the service role key.
-      // For the demo, we insert the delegate record as "active" with the email.
-      // The coach shares the credentials and the person signs up themselves.
+      // Call server-side API to create the auth account + delegate record
+      const res = await fetch("/api/create-delegate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: data.email,
+          password: data.password,
+          name: data.name,
+          role: data.role,
+          pitchside_keepers: data.pitchside_keepers,
+          dashboard_keepers: data.dashboard_keepers,
+          dashboard_access: data.dashboard_access,
+        }),
+      });
+
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Failed to create account.");
+
+      await fetchDelegates();
+      setShowModal(null);
+      showToast(`Account created for ${data.name}. Share the temporary password securely.`);
+
+    } else {
+      // Email invite: just create the delegate record as "pending"
+      const { error } = await supabase.from("delegates").insert({
+        coach_id: user.id,
+        email: data.email,
+        name: data.name,
+        role: data.role,
+        pitchside_keepers: data.pitchside_keepers,
+        dashboard_keepers: data.dashboard_keepers,
+        dashboard_access: data.dashboard_access,
+        status: "pending",
+      });
+
+      if (error) throw error;
+
+      await fetchDelegates();
+      setShowModal(null);
+      showToast(`Invite recorded for ${data.email}. They'll see their access when they sign up.`);
     }
-
-    const { error } = await supabase.from("delegates").insert({
-      coach_id: user.id,
-      email: data.email,
-      name: data.name,
-      role: data.role,
-      pitchside_keepers: data.pitchside_keepers,
-      dashboard_keepers: data.dashboard_keepers,
-      dashboard_access: data.dashboard_access,
-      status: data.createAccount ? "active" : "pending",
-    });
-
-    if (error) throw error;
-
-    await fetchDelegates();
-    setShowModal(null);
-    showToast(
-      data.createAccount
-        ? `Account created for ${data.name}. Share the credentials securely.`
-        : `Invite recorded for ${data.email}. They'll see their access when they sign up.`
-    );
   };
 
   const handleEditSave = async (data) => {
