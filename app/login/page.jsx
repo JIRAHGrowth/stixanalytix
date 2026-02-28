@@ -1,5 +1,5 @@
 "use client";
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -16,12 +16,26 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [clearing, setClearing] = useState(true);
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/dashboard";
   const justSignedUp = searchParams.get("registered") === "true";
 
   const supabase = createClient();
+
+  // On mount: clear any stale session so the login page always works
+  useEffect(() => {
+    const clearStaleSession = async () => {
+      try {
+        await supabase.auth.signOut();
+      } catch (e) {
+        // Ignore — we just want cookies cleared
+      }
+      setClearing(false);
+    };
+    clearStaleSession();
+  }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -58,7 +72,6 @@ function LoginForm() {
         .limit(1);
 
       if (delegateRecords?.length > 0) {
-        // Delegate user — send to dashboard, not onboarding
         router.push(redirect);
         router.refresh();
         return;
@@ -68,6 +81,10 @@ function LoginForm() {
     router.push(profile?.onboarding_complete ? redirect : "/onboarding");
     router.refresh();
   };
+
+  if (clearing) {
+    return null; // Brief flash while clearing — nearly instant
+  }
 
   return (
     <>
@@ -224,5 +241,4 @@ export default function LoginPage() {
     </div>
   );
 }
-
 
