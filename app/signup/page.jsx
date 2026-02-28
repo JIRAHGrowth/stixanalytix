@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 const t = {
@@ -18,7 +17,6 @@ export default function SignupPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
 
   const supabase = createClient();
 
@@ -64,11 +62,10 @@ export default function SignupPage() {
 
     // If email confirmation is disabled (recommended for MVP), sign in directly
     if (data.session) {
-      router.push("/onboarding");
-      router.refresh();
+      window.location.href = "/onboarding";
     } else {
       // Email confirmation is enabled — redirect to login with success message
-      router.push("/login?registered=true");
+      window.location.href = "/login?registered=true";
     }
   };
 
@@ -240,3 +237,4 @@ export default function SignupPage() {
     </div>
   );
 }
+
