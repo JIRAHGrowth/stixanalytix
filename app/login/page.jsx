@@ -16,7 +16,7 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [clearing, setClearing] = useState(true);
+  const [ready, setReady] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/dashboard";
@@ -24,17 +24,33 @@ function LoginForm() {
 
   const supabase = createClient();
 
-  // On mount: clear any stale session so the login page always works
+  // On mount: check if there's a valid session
+  // If valid → redirect to dashboard (they shouldn't be on the login page)
+  // If stale/broken → clear it quietly so login form works
+  // If no session → just show the form
   useEffect(() => {
-    const clearStaleSession = async () => {
+    const checkSession = async () => {
       try {
-        await supabase.auth.signOut();
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+        if (!userError && user) {
+          // Valid session — they don't belong on the login page, redirect out
+          router.push(redirect);
+          return;
+        }
+
+        if (userError) {
+          // Stale/expired token exists — clear it, but use signOut({ scope: 'local' })
+          // so it only clears THIS tab's state, not all tabs
+          await supabase.auth.signOut({ scope: 'local' });
+        }
       } catch (e) {
-        // Ignore — we just want cookies cleared
+        // Something went wrong — try local signout
+        try { await supabase.auth.signOut({ scope: 'local' }); } catch (e2) {}
       }
-      setClearing(false);
+      setReady(true);
     };
-    clearStaleSession();
+    checkSession();
   }, []);
 
   const handleLogin = async (e) => {
@@ -62,7 +78,7 @@ function LoginForm() {
       .eq("id", data.user.id)
       .single();
 
-    // Check if this user is a delegate (they might not have completed coach onboarding)
+    // Check if this user is a delegate
     if (!profile?.onboarding_complete) {
       const { data: delegateRecords } = await supabase
         .from("delegates")
@@ -82,8 +98,8 @@ function LoginForm() {
     router.refresh();
   };
 
-  if (clearing) {
-    return null; // Brief flash while clearing — nearly instant
+  if (!ready) {
+    return null;
   }
 
   return (
