@@ -1,7 +1,6 @@
 "use client";
-import { useState, Suspense } from "react";
+import { useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
-import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 const t = {
@@ -11,16 +10,23 @@ const t = {
 };
 const font = "'DM Sans', -apple-system, sans-serif";
 
-function LoginForm() {
+export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") || "/dashboard";
-  const justSignedUp = searchParams.get("registered") === "true";
 
   const supabase = createClient();
+
+  // Parse URL params without useSearchParams (avoids Suspense requirement)
+  const getParams = () => {
+    if (typeof window === "undefined") return {};
+    const params = new URLSearchParams(window.location.search);
+    return {
+      redirect: params.get("redirect") || "/dashboard",
+      justSignedUp: params.get("registered") === "true",
+    };
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -28,18 +34,22 @@ function LoginForm() {
     setLoading(true);
 
     const { data, error: authError } = await supabase.auth.signInWithPassword({
-      email,
+      email: email.trim(),
       password,
     });
 
     if (authError) {
-      setError(authError.message === "Invalid login credentials"
-        ? "Incorrect email or password. Please try again."
-        : authError.message
+      setError(
+        authError.message === "Invalid login credentials"
+          ? "Incorrect email or password. Please try again."
+          : authError.message
       );
       setLoading(false);
       return;
     }
+
+    // Figure out where to send them
+    const { redirect } = getParams();
 
     const { data: profile } = await supabase
       .from("profiles")
@@ -47,143 +57,27 @@ function LoginForm() {
       .eq("id", data.user.id)
       .single();
 
-    // Check if this user is a delegate
+    // Delegates skip onboarding
     if (!profile?.onboarding_complete) {
-      const { data: delegateRecords } = await supabase
+      const { data: delRecs } = await supabase
         .from("delegates")
         .select("id")
         .eq("delegate_user_id", data.user.id)
         .eq("status", "active")
         .limit(1);
 
-      if (delegateRecords?.length > 0) {
-        // Full page navigation so cookies reach the server
+      if (delRecs?.length > 0) {
         window.location.href = redirect;
         return;
       }
     }
 
-    // Full page navigation — NOT router.push
-    // This ensures the fresh session cookies are sent to the middleware
+    // Full page navigation — ensures cookies reach the server
     window.location.href = profile?.onboarding_complete ? redirect : "/onboarding";
   };
 
-  return (
-    <>
-      {justSignedUp && (
-        <div style={{
-          background: "#065f4620", border: `1px solid ${t.accent}40`,
-          borderRadius: 10, padding: "14px 18px", marginBottom: 20,
-          color: t.accent, fontSize: 14, textAlign: "center",
-        }}>
-          Account created. Sign in to get started.
-        </div>
-      )}
+  const { justSignedUp } = typeof window !== "undefined" ? getParams() : {};
 
-      <div style={{
-        background: t.card, borderRadius: 16,
-        border: `1px solid ${t.border}`, padding: "36px 32px",
-      }}>
-        <h1 style={{
-          fontSize: 22, fontWeight: 600, color: t.bright,
-          marginBottom: 8, marginTop: 0,
-        }}>
-          Welcome back
-        </h1>
-        <p style={{ color: t.dim, fontSize: 14, marginTop: 0, marginBottom: 28 }}>
-          Sign in to your account
-        </p>
-
-        <form onSubmit={handleLogin}>
-          <div style={{ marginBottom: 18 }}>
-            <label style={{
-              display: "block", color: t.text, fontSize: 13,
-              fontWeight: 500, marginBottom: 6,
-            }}>
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              placeholder="coach@example.com"
-              style={{
-                width: "100%", padding: "12px 14px", borderRadius: 10,
-                border: `1px solid ${t.border}`, background: t.bg,
-                color: t.bright, fontSize: 15, fontFamily: font,
-                outline: "none", boxSizing: "border-box",
-                transition: "border-color 0.2s",
-              }}
-              onFocus={(e) => e.target.style.borderColor = t.accent}
-              onBlur={(e) => e.target.style.borderColor = t.border}
-            />
-          </div>
-
-          <div style={{ marginBottom: 24 }}>
-            <div style={{
-              display: "flex", justifyContent: "space-between",
-              alignItems: "center", marginBottom: 6,
-            }}>
-              <label style={{
-                color: t.text, fontSize: 13, fontWeight: 500,
-              }}>
-                Password
-              </label>
-              <Link href="/forgot-password" style={{
-                color: t.accent, fontSize: 12, textDecoration: "none",
-              }}>
-                Forgot password?
-              </Link>
-            </div>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              placeholder="••••••••"
-              style={{
-                width: "100%", padding: "12px 14px", borderRadius: 10,
-                border: `1px solid ${t.border}`, background: t.bg,
-                color: t.bright, fontSize: 15, fontFamily: font,
-                outline: "none", boxSizing: "border-box",
-                transition: "border-color 0.2s",
-              }}
-              onFocus={(e) => e.target.style.borderColor = t.accent}
-              onBlur={(e) => e.target.style.borderColor = t.border}
-            />
-          </div>
-
-          {error && (
-            <div style={{
-              background: "#ef444415", border: `1px solid ${t.red}30`,
-              borderRadius: 8, padding: "10px 14px", marginBottom: 18,
-              color: t.red, fontSize: 13,
-            }}>
-              {error}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              width: "100%", padding: "14px 0", borderRadius: 10,
-              border: "none", background: loading ? t.accentDim : t.accent,
-              color: "#fff", fontSize: 15, fontWeight: 600,
-              fontFamily: font, cursor: loading ? "not-allowed" : "pointer",
-              transition: "background 0.2s", opacity: loading ? 0.7 : 1,
-            }}
-          >
-            {loading ? "Signing in..." : "Sign In"}
-          </button>
-        </form>
-      </div>
-    </>
-  );
-}
-
-export default function LoginPage() {
   return (
     <div style={{
       minHeight: "100vh", background: t.bg, display: "flex",
@@ -205,11 +99,113 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <Suspense fallback={
-          <div style={{ textAlign: "center", color: t.dim, padding: 40 }}>Loading...</div>
-        }>
-          <LoginForm />
-        </Suspense>
+        {justSignedUp && (
+          <div style={{
+            background: "#065f4620", border: `1px solid ${t.accent}40`,
+            borderRadius: 10, padding: "14px 18px", marginBottom: 20,
+            color: t.accent, fontSize: 14, textAlign: "center",
+          }}>
+            Account created. Sign in to get started.
+          </div>
+        )}
+
+        <div style={{
+          background: t.card, borderRadius: 16,
+          border: `1px solid ${t.border}`, padding: "36px 32px",
+        }}>
+          <h1 style={{
+            fontSize: 22, fontWeight: 600, color: t.bright,
+            marginBottom: 8, marginTop: 0,
+          }}>
+            Welcome back
+          </h1>
+          <p style={{ color: t.dim, fontSize: 14, marginTop: 0, marginBottom: 28 }}>
+            Sign in to your account
+          </p>
+
+          <form onSubmit={handleLogin}>
+            <div style={{ marginBottom: 18 }}>
+              <label style={{
+                display: "block", color: t.text, fontSize: 13,
+                fontWeight: 500, marginBottom: 6,
+              }}>
+                Email
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                placeholder="coach@example.com"
+                style={{
+                  width: "100%", padding: "12px 14px", borderRadius: 10,
+                  border: `1px solid ${t.border}`, background: t.bg,
+                  color: t.bright, fontSize: 15, fontFamily: font,
+                  outline: "none", boxSizing: "border-box",
+                  transition: "border-color 0.2s",
+                }}
+                onFocus={(e) => e.target.style.borderColor = t.accent}
+                onBlur={(e) => e.target.style.borderColor = t.border}
+              />
+            </div>
+
+            <div style={{ marginBottom: 24 }}>
+              <div style={{
+                display: "flex", justifyContent: "space-between",
+                alignItems: "center", marginBottom: 6,
+              }}>
+                <label style={{ color: t.text, fontSize: 13, fontWeight: 500 }}>
+                  Password
+                </label>
+                <Link href="/forgot-password" style={{
+                  color: t.accent, fontSize: 12, textDecoration: "none",
+                }}>
+                  Forgot password?
+                </Link>
+              </div>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                placeholder="••••••••"
+                style={{
+                  width: "100%", padding: "12px 14px", borderRadius: 10,
+                  border: `1px solid ${t.border}`, background: t.bg,
+                  color: t.bright, fontSize: 15, fontFamily: font,
+                  outline: "none", boxSizing: "border-box",
+                  transition: "border-color 0.2s",
+                }}
+                onFocus={(e) => e.target.style.borderColor = t.accent}
+                onBlur={(e) => e.target.style.borderColor = t.border}
+              />
+            </div>
+
+            {error && (
+              <div style={{
+                background: "#ef444415", border: `1px solid ${t.red}30`,
+                borderRadius: 8, padding: "10px 14px", marginBottom: 18,
+                color: t.red, fontSize: 13,
+              }}>
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                width: "100%", padding: "14px 0", borderRadius: 10,
+                border: "none", background: loading ? t.accentDim : t.accent,
+                color: "#fff", fontSize: 15, fontWeight: 600,
+                fontFamily: font, cursor: loading ? "not-allowed" : "pointer",
+                transition: "background 0.2s", opacity: loading ? 0.7 : 1,
+              }}
+            >
+              {loading ? "Signing in..." : "Sign In"}
+            </button>
+          </form>
+        </div>
 
         <p style={{
           textAlign: "center", marginTop: 24, color: t.dim, fontSize: 14,
