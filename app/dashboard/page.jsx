@@ -619,7 +619,9 @@ export default function DashboardPage() {
   const showScope = scopeTabs.includes(tab);
 
   // ═══ LOADING ═══
-  if (loading || !profile?.onboarding_complete) {
+  // Only gate on auth loading — the useEffect above handles onboarding redirect for coaches.
+  // Delegates (who have onboarding_complete=false) must be allowed through.
+  if (loading || !user) {
     return (
       <div style={{ minHeight: "100vh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: font }}>
         <div style={{ color: t.dim, fontSize: 16 }}>Loading...</div>
@@ -1492,5 +1494,6 @@ export default function DashboardPage() {
     </div>
   );
 }
+
 
 
