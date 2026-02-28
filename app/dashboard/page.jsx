@@ -435,7 +435,7 @@ function EmptyState({ icon, title, subtitle }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function DashboardPage() {
-  const { user, profile, club, loading, signOut, supabase } = useAuth();
+  const { user, profile, club, loading, signOut, supabase, isDelegate, delegateOf } = useAuth();
   const router = useRouter();
 
   // Keeper management state
@@ -459,19 +459,34 @@ export default function DashboardPage() {
 
   // ═══ AUTH GUARD ═══
   useEffect(() => {
-    if (!loading && profile && !profile.onboarding_complete) router.push("/onboarding");
-  }, [loading, profile]);
+    if (!loading && profile && !profile.onboarding_complete && !isDelegate) router.push("/onboarding");
+  }, [loading, profile, isDelegate]);
 
   // ═══ FETCH KEEPERS ═══
   const fetchKeepers = async () => {
     if (!user) return;
-    const { data } = await supabase
-      .from("keepers").select("*")
-      .eq("coach_id", user.id).eq("active", true)
-      .order("created_at", { ascending: true });
-    if (data) {
-      setKeepers(data);
-      if (!selectedKeeper && data.length > 0) setSelectedKeeper(data[0].id);
+
+    if (isDelegate && delegateOf?.dashboard_access) {
+      // Delegate: fetch only keepers they have dashboard access to
+      const { data } = await supabase
+        .from("keepers").select("*")
+        .eq("coach_id", delegateOf.coach_id).eq("active", true)
+        .in("id", delegateOf.dashboard_keepers)
+        .order("created_at", { ascending: true });
+      if (data) {
+        setKeepers(data);
+        if (!selectedKeeper && data.length > 0) setSelectedKeeper(data[0].id);
+      }
+    } else {
+      // Coach: fetch all their keepers
+      const { data } = await supabase
+        .from("keepers").select("*")
+        .eq("coach_id", user.id).eq("active", true)
+        .order("created_at", { ascending: true });
+      if (data) {
+        setKeepers(data);
+        if (!selectedKeeper && data.length > 0) setSelectedKeeper(data[0].id);
+      }
     }
     setLoadingKeepers(false);
   };
@@ -481,10 +496,12 @@ export default function DashboardPage() {
     if (!user) return;
     setLoadingData(true);
 
+    const coachId = isDelegate && delegateOf ? delegateOf.coach_id : user.id;
+
     const [matchRes, goalRes, attrRes] = await Promise.all([
-      supabase.from("matches").select("*").eq("coach_id", user.id).order("match_date", { ascending: true }),
-      supabase.from("goals_conceded").select("*").eq("coach_id", user.id),
-      supabase.from("match_attributes").select("*").eq("coach_id", user.id),
+      supabase.from("matches").select("*").eq("coach_id", coachId).order("match_date", { ascending: true }),
+      supabase.from("goals_conceded").select("*").eq("coach_id", coachId),
+      supabase.from("match_attributes").select("*").eq("coach_id", coachId),
     ]);
 
     if (matchRes.data) setAllMatches(matchRes.data);
@@ -494,11 +511,11 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    if (user && profile?.onboarding_complete) {
+    if (user && (profile?.onboarding_complete || (isDelegate && delegateOf?.dashboard_access))) {
       fetchKeepers();
       fetchAnalyticsData();
     }
-  }, [user, profile]);
+  }, [user, profile, isDelegate, delegateOf]);
 
   // ═══ KEEPER MANAGEMENT ═══
   const handleAddKeeper = async (keeperData) => {
@@ -637,6 +654,11 @@ export default function DashboardPage() {
           </span>
         </Link>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {!isDelegate && <Link href="/staff" style={{
+            padding: "8px 14px", borderRadius: 8, border: `1px solid ${t.border}`,
+            background: "transparent", color: t.dim, fontSize: 12, textDecoration: "none", fontFamily: font,
+            display: "flex", alignItems: "center", gap: 4,
+          }}>👥 Staff</Link>}
           <Link href="/pitchside" style={{
             padding: "8px 14px", borderRadius: 8, background: primaryColor, color: "#fff",
             fontSize: 12, fontWeight: 600, textDecoration: "none", display: "flex", alignItems: "center", gap: 4,
@@ -653,6 +675,21 @@ export default function DashboardPage() {
       </div>
 
       <div style={{ maxWidth: 960, margin: "0 auto", padding: "20px 16px" }}>
+
+        {/* ═══ DELEGATE BANNER ═══ */}
+        {isDelegate && delegateOf && (
+          <div style={{
+            padding: "10px 16px", borderRadius: 10, marginBottom: 16,
+            background: t.cyan + "08", border: `1px solid ${t.cyan}22`,
+            display: "flex", alignItems: "center", gap: 10,
+          }}>
+            <span style={{ fontSize: 16 }}>📊</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: t.cyan }}>Viewing as {delegateOf.role?.replace("_", " ")}</div>
+              <div style={{ fontSize: 10, color: t.dim }}>Managed by {delegateOf.coach_name} · {delegateOf.club?.name || "Club"}</div>
+            </div>
+          </div>
+        )}
 
         {/* ═══ ROSTER VIEW ═══ */}
         {view === "roster" && (
@@ -676,12 +713,12 @@ export default function DashboardPage() {
 
             <Card s={{ marginBottom: 20 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                <Sec icon="🧤">Your Goalkeepers</Sec>
-                <button onClick={() => setShowKeeperModal(true)} style={{
-                  padding: "8px 16px", borderRadius: 8, background: primaryColor + "18",
-                  border: `1px solid ${primaryColor}44`, color: primaryColor,
+                <Sec icon="🧤">{isDelegate ? "Assigned Keepers" : "Your Goalkeepers"}</Sec>
+                {!isDelegate && <button onClick={() => setShowKeeperModal(true)} style={{
+                  padding: "8px 16px", borderRadius: 8, background: t.accent,
+                  border: "none", color: "#fff",
                   fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: font,
-                }}>+ Add Keeper</button>
+                }}>+ Add Keeper</button>}
               </div>
               {loadingKeepers ? (
                 <div style={{ color: t.dim, fontSize: 13, padding: "20px 0", textAlign: "center" }}>Loading roster...</div>
@@ -735,7 +772,7 @@ export default function DashboardPage() {
                 <div style={{ fontSize: 11, color: t.dim, marginTop: 4 }}>Track live GK performance</div>
               </Link>
               <Link href="/pitchside" style={{ flex: 1, minWidth: 200, padding: "20px 16px", borderRadius: 14, background: t.card, border: `1px solid ${t.border}`, textDecoration: "none", textAlign: "center" }}>
-                <div style={{ fontSize: 28, marginBottom: 8 }}>🏋️</div>
+                <div style={{ fontSize: 28, marginBottom: 8 }}>🔶</div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: t.bright }}>Log Training</div>
                 <div style={{ fontSize: 11, color: t.dim, marginTop: 4 }}>Capture session data</div>
               </Link>
@@ -1455,4 +1492,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
 
