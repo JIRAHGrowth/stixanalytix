@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 export async function middleware(request) {
   const { pathname } = request.nextUrl;
 
-  // Skip middleware entirely for API routes and auth callback
+  // Skip API routes, auth callbacks, and static files
   if (pathname.startsWith('/api') || pathname.startsWith('/auth')) {
     return NextResponse.next();
   }
@@ -32,55 +32,27 @@ export async function middleware(request) {
     }
   );
 
-  // Try to refresh the auth token
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  // Refresh the session — this is the middleware's primary job
+  const { data: { user } } = await supabase.auth.getUser();
 
-  // ── Auth pages (login, signup) ──
-  // If user lands here with a stale cookie, do NOT redirect — just let the page load.
-  // The login page clears stale sessions on mount (client-side).
-  const authPaths = ['/login', '/signup', '/forgot-password'];
-  const isAuthRoute = authPaths.some(p => pathname.startsWith(p));
-
-  if (isAuthRoute) {
-    // If user is genuinely authenticated (no error, valid user), redirect them out
-    if (!authError && user) {
-      const url = request.nextUrl.clone();
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('onboarding_complete')
-        .eq('id', user.id)
-        .single();
-
-      const { data: delegateRecords } = await supabase
-        .from('delegates')
-        .select('id')
-        .eq('delegate_user_id', user.id)
-        .eq('status', 'active')
-        .limit(1);
-
-      const isDelegateOnly = delegateRecords?.length > 0 && !profile?.onboarding_complete;
-
-      if (isDelegateOnly) {
-        url.pathname = '/dashboard';
-      } else {
-        url.pathname = profile?.onboarding_complete ? '/dashboard' : '/onboarding';
-      }
-      return NextResponse.redirect(url);
-    }
-
-    // Stale cookie or no session — just let the login page load
-    return supabaseResponse;
-  }
-
-  // ── Protected routes ──
+  // Protected routes → must be logged in
   const protectedPaths = ['/dashboard', '/pitchside', '/onboarding', '/staff'];
-  const isProtectedRoute = protectedPaths.some(p => pathname.startsWith(p));
+  const isProtected = protectedPaths.some(p => pathname.startsWith(p));
 
-  if (isProtectedRoute && (!user || authError)) {
+  if (isProtected && !user) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('redirect', pathname);
+    return NextResponse.redirect(url);
+  }
+
+  // Auth pages → if already logged in, send to dashboard
+  const authPaths = ['/login', '/signup'];
+  const isAuthPage = authPaths.some(p => pathname.startsWith(p));
+
+  if (isAuthPage && user) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/dashboard';
     return NextResponse.redirect(url);
   }
 
