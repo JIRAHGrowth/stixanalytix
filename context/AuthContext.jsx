@@ -10,6 +10,10 @@ export function AuthProvider({ children }) {
   const [club, setClub] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Delegate state
+  const [delegateOf, setDelegateOf] = useState(null); // { coach_id, coach_name, club, role, pitchside_keepers, dashboard_keepers, dashboard_access }
+  const [isDelegate, setIsDelegate] = useState(false);
+
   const supabase = createClient();
 
   useEffect(() => {
@@ -36,6 +40,8 @@ export function AuthProvider({ children }) {
           setUser(null);
           setProfile(null);
           setClub(null);
+          setDelegateOf(null);
+          setIsDelegate(false);
         }
         setLoading(false);
       }
@@ -54,7 +60,7 @@ export function AuthProvider({ children }) {
     if (profileData) {
       setProfile(profileData);
 
-      // Also fetch club if onboarding is complete
+      // Fetch club if onboarding is complete (user is a coach)
       if (profileData.onboarding_complete) {
         const { data: clubData } = await supabase
           .from("clubs")
@@ -64,6 +70,57 @@ export function AuthProvider({ children }) {
 
         if (clubData) setClub(clubData);
       }
+
+      // Check if this user is a delegate for another coach
+      await fetchDelegateStatus(userId);
+    }
+  };
+
+  const fetchDelegateStatus = async (userId) => {
+    const { data: delegateRecords } = await supabase
+      .from("delegates")
+      .select("*")
+      .eq("delegate_user_id", userId)
+      .eq("status", "active");
+
+    if (delegateRecords && delegateRecords.length > 0) {
+      // For now, use the first active delegation
+      // Future: support multiple coach delegations
+      const d = delegateRecords[0];
+
+      // Fetch the coach's profile and club for display
+      const { data: coachProfile } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", d.coach_id)
+        .single();
+
+      const { data: coachClub } = await supabase
+        .from("clubs")
+        .select("*")
+        .eq("coach_id", d.coach_id)
+        .single();
+
+      setDelegateOf({
+        delegate_id: d.id,
+        coach_id: d.coach_id,
+        coach_name: coachProfile?.full_name || "Coach",
+        club: coachClub,
+        role: d.role,
+        pitchside_keepers: d.pitchside_keepers || [],
+        dashboard_keepers: d.dashboard_keepers || [],
+        dashboard_access: d.dashboard_access || false,
+      });
+      setIsDelegate(true);
+
+      // If the delegate user hasn't completed onboarding (they're not a coach),
+      // set the club from their coach so the app has context
+      if (!club && coachClub) {
+        setClub(coachClub);
+      }
+    } else {
+      setDelegateOf(null);
+      setIsDelegate(false);
     }
   };
 
@@ -72,6 +129,8 @@ export function AuthProvider({ children }) {
     setUser(null);
     setProfile(null);
     setClub(null);
+    setDelegateOf(null);
+    setIsDelegate(false);
     window.location.href = "/";
   };
 
@@ -90,6 +149,9 @@ export function AuthProvider({ children }) {
       signOut,
       refreshProfile,
       supabase,
+      // Delegate context
+      delegateOf,
+      isDelegate,
     }}>
       {children}
     </AuthContext.Provider>
@@ -103,3 +165,4 @@ export function useAuth() {
   }
   return context;
 }
+
