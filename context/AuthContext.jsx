@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useContext, useEffect, useState, useRef } from "react";
+import { createContext, useContext, useEffect, useState, useRef, useCallback } from "react";
 import { createClient } from "@/lib/supabase-browser";
 
 const AuthContext = createContext({});
@@ -9,118 +9,140 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null);
   const [club, setClub] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [authStuck, setAuthStuck] = useState(false);
 
   // Delegate state
   const [delegateOf, setDelegateOf] = useState(null);
   const [isDelegate, setIsDelegate] = useState(false);
 
-  // Use a ref so we create the client once, not on every render
+  // Single Supabase client instance
   const supabaseRef = useRef(null);
   if (!supabaseRef.current) {
     supabaseRef.current = createClient();
   }
   const supabase = supabaseRef.current;
 
+  // Track if we've resolved auth
+  const resolvedRef = useRef(false);
+
+  const clearAllState = useCallback(() => {
+    setUser(null);
+    setProfile(null);
+    setClub(null);
+    setDelegateOf(null);
+    setIsDelegate(false);
+    setLoading(false);
+    resolvedRef.current = true;
+  }, []);
+
+  // Force clear — nuclear option called from the UI
+  const forceClearSession = useCallback(async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      // Ignore
+    }
+    // Also hit the server-side cookie clear endpoint
+    try {
+      await fetch("/api/clear-session", { method: "POST" });
+    } catch (e) {
+      // Ignore
+    }
+    clearAllState();
+    window.location.href = "/login";
+  }, [supabase, clearAllState]);
+
   useEffect(() => {
     let mounted = true;
 
-    const getSession = async () => {
+    const initAuth = async () => {
       try {
-        // First try to get the session (this refreshes the token if needed)
+        // Use getSession first — it reads from cookies/memory, fast
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
+        if (!mounted) return;
+
         if (sessionError || !session) {
-          // No valid session — clear everything cleanly
-          if (mounted) {
-            setUser(null);
-            setProfile(null);
-            setClub(null);
-            setDelegateOf(null);
-            setIsDelegate(false);
-            setLoading(false);
-          }
+          // No session at all — clean state, not stuck
+          clearAllState();
           return;
         }
 
-        // Session is valid — now get the user (server-verified)
-        const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
+        // Session exists — verify with the server
+        const { data: { user: verifiedUser }, error: userError } = await supabase.auth.getUser();
 
-        if (userError || !currentUser) {
-          // Token exists but is invalid/expired — force sign out to clear stale cookies
-          await supabase.auth.signOut();
-          if (mounted) {
-            setUser(null);
-            setProfile(null);
-            setClub(null);
-            setDelegateOf(null);
-            setIsDelegate(false);
-            setLoading(false);
+        if (!mounted) return;
+
+        if (userError || !verifiedUser) {
+          // Stale session — force clear
+          try {
+            await supabase.auth.signOut();
+          } catch (e) {
+            // If signOut fails, hit the API
+            try { await fetch("/api/clear-session", { method: "POST" }); } catch (e2) {}
           }
+          clearAllState();
           return;
         }
+
+        // User is verified — load their data
+        setUser(verifiedUser);
+        await fetchProfile(verifiedUser.id);
 
         if (mounted) {
-          setUser(currentUser);
-          await fetchProfile(currentUser.id);
           setLoading(false);
+          resolvedRef.current = true;
         }
+
       } catch (err) {
         console.error("Auth init error:", err);
-        // On any error, clear state so the user isn't stuck
-        if (mounted) {
-          setUser(null);
-          setProfile(null);
-          setClub(null);
-          setDelegateOf(null);
-          setIsDelegate(false);
-          setLoading(false);
-        }
+        if (mounted) clearAllState();
       }
     };
 
-    getSession();
+    initAuth();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!mounted) return;
 
-        if (event === "SIGNED_OUT" || event === "TOKEN_REFRESHED" && !session) {
-          setUser(null);
-          setProfile(null);
-          setClub(null);
-          setDelegateOf(null);
-          setIsDelegate(false);
-          setLoading(false);
+        if (event === "SIGNED_OUT") {
+          clearAllState();
           return;
         }
 
         if (session?.user) {
           setUser(session.user);
           await fetchProfile(session.user.id);
+          setLoading(false);
+          resolvedRef.current = true;
         } else {
-          setUser(null);
-          setProfile(null);
-          setClub(null);
-          setDelegateOf(null);
-          setIsDelegate(false);
+          clearAllState();
         }
-        setLoading(false);
       }
     );
 
-    // Safety net: never stay loading for more than 5 seconds
-    const timeout = setTimeout(() => {
-      if (mounted && loading) {
-        console.warn("Auth loading timeout — clearing state");
-        setLoading(false);
+    // Safety net #1: Show "stuck" UI after 4 seconds
+    const stuckTimer = setTimeout(() => {
+      if (mounted && !resolvedRef.current) {
+        setAuthStuck(true);
       }
-    }, 5000);
+    }, 4000);
+
+    // Safety net #2: Force clear after 8 seconds
+    const forceTimer = setTimeout(() => {
+      if (mounted && !resolvedRef.current) {
+        console.warn("Auth force timeout — clearing session");
+        clearAllState();
+      }
+    }, 8000);
 
     return () => {
       mounted = false;
       subscription.unsubscribe();
-      clearTimeout(timeout);
+      clearTimeout(stuckTimer);
+      clearTimeout(forceTimer);
     };
   }, []);
 
@@ -140,7 +162,6 @@ export function AuthProvider({ children }) {
 
       setProfile(profileData);
 
-      // Fetch club if onboarding is complete (user is a coach)
       if (profileData.onboarding_complete) {
         const { data: clubData } = await supabase
           .from("clubs")
@@ -151,7 +172,6 @@ export function AuthProvider({ children }) {
         if (clubData) setClub(clubData);
       }
 
-      // Check if this user is a delegate for another coach
       await fetchDelegateStatus(userId);
     } catch (err) {
       console.error("Profile fetch error:", err);
@@ -213,7 +233,10 @@ export function AuthProvider({ children }) {
     } catch (err) {
       console.error("Sign out error:", err);
     }
-    // Always clear state, even if signOut throws
+    try {
+      await fetch("/api/clear-session", { method: "POST" });
+    } catch (e) {}
+
     setUser(null);
     setProfile(null);
     setClub(null);
@@ -234,8 +257,10 @@ export function AuthProvider({ children }) {
       profile,
       club,
       loading,
+      authStuck,
       signOut,
       refreshProfile,
+      forceClearSession,
       supabase,
       delegateOf,
       isDelegate,
