@@ -29,7 +29,7 @@ export async function middleware(request) {
   const { data: { user } } = await supabase.auth.getUser();
 
   // Protected routes - redirect to login if not authenticated
-  const protectedPaths = ['/dashboard', '/pitchside', '/onboarding'];
+  const protectedPaths = ['/dashboard', '/pitchside', '/onboarding', '/staff'];
   const isProtectedRoute = protectedPaths.some(path =>
     request.nextUrl.pathname.startsWith(path)
   );
@@ -56,7 +56,21 @@ export async function middleware(request) {
       .eq('id', user.id)
       .single();
 
-    url.pathname = profile?.onboarding_complete ? '/dashboard' : '/onboarding';
+    // Check if user is a delegate (might not have completed onboarding)
+    const { data: delegateRecords } = await supabase
+      .from('delegates')
+      .select('id')
+      .eq('delegate_user_id', user.id)
+      .eq('status', 'active')
+      .limit(1);
+
+    const isDelegateOnly = delegateRecords?.length > 0 && !profile?.onboarding_complete;
+
+    if (isDelegateOnly) {
+      url.pathname = '/dashboard';
+    } else {
+      url.pathname = profile?.onboarding_complete ? '/dashboard' : '/onboarding';
+    }
     return NextResponse.redirect(url);
   }
 
@@ -69,3 +83,4 @@ export const config = {
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };
+
