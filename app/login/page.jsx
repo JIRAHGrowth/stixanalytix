@@ -48,6 +48,23 @@ function LoginForm() {
       .eq("id", data.user.id)
       .single();
 
+    // Check if this user is a delegate (they might not have completed coach onboarding)
+    if (!profile?.onboarding_complete) {
+      const { data: delegateRecords } = await supabase
+        .from("delegates")
+        .select("id")
+        .eq("delegate_user_id", data.user.id)
+        .eq("status", "active")
+        .limit(1);
+
+      if (delegateRecords?.length > 0) {
+        // Delegate user — send to dashboard, not onboarding
+        router.push(redirect);
+        router.refresh();
+        return;
+      }
+    }
+
     router.push(profile?.onboarding_complete ? redirect : "/onboarding");
     router.refresh();
   };
@@ -207,4 +224,5 @@ export default function LoginPage() {
     </div>
   );
 }
+
 
