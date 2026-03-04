@@ -414,6 +414,98 @@ export default function PitchsidePage() {
   const [showSetup, setShowSetup] = useState(false);
   const [saveError, setSaveError] = useState("");
 
+  // ─── Auto-save & recovery
+  const AUTOSAVE_KEY = "stix_pitchside_autosave";
+  const [recoveryData, setRecoveryData] = useState(null);
+  const [showRecovery, setShowRecovery] = useState(false);
+  const [autoSaveStatus, setAutoSaveStatus] = useState(null); // null | "saving" | "saved"
+
+  // Check for saved session on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(AUTOSAVE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Only offer recovery if the session is from the last 24 hours
+        const savedAt = new Date(parsed._savedAt);
+        const hoursSince = (Date.now() - savedAt.getTime()) / (1000 * 60 * 60);
+        if (hoursSince < 24 && parsed.phase && parsed.phase !== "setup" && parsed.phase !== "saved") {
+          setRecoveryData(parsed);
+          setShowRecovery(true);
+        } else if (hoursSince >= 24) {
+          // Stale session — clean up
+          localStorage.removeItem(AUTOSAVE_KEY);
+        }
+      }
+    } catch (e) {
+      console.error("Recovery check failed:", e);
+      localStorage.removeItem(AUTOSAVE_KEY);
+    }
+  }, []);
+
+  // Restore a saved session
+  const restoreSession = () => {
+    if (!recoveryData) return;
+    try {
+      if (recoveryData.phase) setPhase(recoveryData.phase === "saving" ? "attributes" : recoveryData.phase);
+      if (recoveryData.selectedKeeperId) setSelectedKeeperId(recoveryData.selectedKeeperId);
+      if (recoveryData.sessionType) setSessionType(recoveryData.sessionType);
+      if (recoveryData.opponent != null) setOpponent(recoveryData.opponent);
+      if (recoveryData.homeAway) setHomeAway(recoveryData.homeAway);
+      if (recoveryData.matchDate) setMatchDate(recoveryData.matchDate);
+      if (recoveryData.minutesPlayed) setMinutesPlayed(recoveryData.minutesPlayed);
+      if (recoveryData.half) setHalf(recoveryData.half);
+      if (recoveryData.halves) setHalves(recoveryData.halves);
+      if (recoveryData.events) setEvents(recoveryData.events);
+      if (recoveryData.goalsFor != null) setGoalsFor(recoveryData.goalsFor);
+      if (recoveryData.result) setResult(recoveryData.result);
+      if (recoveryData.halfExtras) setHalfExtras(recoveryData.halfExtras);
+      if (recoveryData.attrs) setAttrs(recoveryData.attrs);
+      if (recoveryData.psoAttempts) setPsoAttempts(recoveryData.psoAttempts);
+      if (recoveryData.psoSaves) setPsoSaves(recoveryData.psoSaves);
+      if (recoveryData.wasSub) setWasSub(recoveryData.wasSub);
+      if (recoveryData.subReason) setSubReason(recoveryData.subReason);
+      if (recoveryData.subMinute) setSubMinute(recoveryData.subMinute);
+    } catch (e) {
+      console.error("Session restore failed:", e);
+    }
+    setShowRecovery(false);
+    setRecoveryData(null);
+  };
+
+  const discardSession = () => {
+    localStorage.removeItem(AUTOSAVE_KEY);
+    setShowRecovery(false);
+    setRecoveryData(null);
+  };
+
+  // Auto-save match state to localStorage on every meaningful change
+  useEffect(() => {
+    // Only auto-save once we're past setup (there's data worth saving)
+    if (phase === "setup" || phase === "saved") return;
+
+    const saveTimer = setTimeout(() => {
+      try {
+        const snapshot = {
+          _savedAt: new Date().toISOString(),
+          _keeperName: keepers.find(k => k.id === selectedKeeperId)?.name || "Unknown",
+          _opponent: opponent || (sessionType === "training" ? "Training" : ""),
+          phase, selectedKeeperId, sessionType, opponent, homeAway, matchDate, minutesPlayed,
+          half, halves, events, goalsFor, result, halfExtras, attrs,
+          psoAttempts, psoSaves, wasSub, subReason, subMinute,
+        };
+        localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(snapshot));
+        setAutoSaveStatus("saved");
+        // Fade out the indicator after 2 seconds
+        setTimeout(() => setAutoSaveStatus(null), 2000);
+      } catch (e) {
+        console.error("Auto-save failed:", e);
+      }
+    }, 500); // Debounce: wait 500ms after last change before saving
+
+    return () => clearTimeout(saveTimer);
+  }, [phase, half, halves, events, goalsFor, result, halfExtras, attrs, psoAttempts, psoSaves, wasSub, subReason, subMinute]);
+
   // ─── Load keepers
   useEffect(() => {
     const fetchKeepers = async () => {
@@ -630,6 +722,8 @@ export default function PitchsidePage() {
       const { error: attrError } = await supabase.from("match_attributes").insert(attrRow);
       if (attrError) throw attrError;
 
+      // Clear auto-save — data is safely in Supabase now
+      try { localStorage.removeItem(AUTOSAVE_KEY); } catch (e) {}
       setPhase("saved");
     } catch (err) {
       console.error("Save error:", err);
@@ -646,6 +740,36 @@ export default function PitchsidePage() {
     return (
       <div style={{ minHeight: "100vh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: font }}>
         <div style={{ color: t.dim }}>Loading...</div>
+      </div>
+    );
+  }
+
+  // ═══ RECOVERY MODAL ═══════════════════════════════════════════════════════
+  if (showRecovery && recoveryData) {
+    const savedAt = new Date(recoveryData._savedAt);
+    const timeStr = savedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const dateStr = savedAt.toLocaleDateString([], { month: "short", day: "numeric" });
+    return (
+      <div style={{ minHeight: "100vh", background: t.bg, fontFamily: font, color: t.text, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+        <div style={{ background: t.card, borderRadius: 20, padding: 28, maxWidth: 400, width: "100%", border: `1px solid ${t.border}`, textAlign: "center" }}>
+          <div style={{ width: 56, height: 56, borderRadius: 14, background: t.gold + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, margin: "0 auto 16px" }}>⚠️</div>
+          <h2 style={{ fontSize: 20, fontWeight: 800, color: t.bright, margin: "0 0 8px" }}>Unsaved Session Found</h2>
+          <p style={{ fontSize: 13, color: t.dim, margin: "0 0 20px", lineHeight: 1.5 }}>
+            {recoveryData._keeperName || "Keeper"} vs {recoveryData._opponent || "Unknown"}<br />
+            Last saved {dateStr} at {timeStr}<br />
+            {recoveryData.events?.length || 0} events recorded • {recoveryData.phase === "attributes" ? "At attribute ratings" : `In ${recoveryData.half || "H1"}`}
+          </p>
+          <button onClick={restoreSession} style={{
+            width: "100%", padding: 16, borderRadius: 12, border: "none",
+            background: t.accent, color: "#fff", fontSize: 15, fontWeight: 700,
+            cursor: "pointer", fontFamily: font, marginBottom: 10, minHeight: 52,
+          }}>Resume This Session</button>
+          <button onClick={discardSession} style={{
+            width: "100%", padding: 14, borderRadius: 12,
+            border: `1px solid ${t.border}`, background: "transparent",
+            color: t.dim, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: font, minHeight: 48,
+          }}>Discard & Start Fresh</button>
+        </div>
       </div>
     );
   }
@@ -873,6 +997,7 @@ export default function PitchsidePage() {
 
         <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
           <button onClick={() => {
+            try { localStorage.removeItem(AUTOSAVE_KEY); } catch (e) {}
             setPhase("setup"); setSelectedKeeperId(null); setOpponent("");
             setHalves({ "H1": emptyH(), "H2": emptyH(), "ET": emptyH() });
             setHalfExtras({ "H1": initHalfExtra(), "H2": initHalfExtra(), "ET": initHalfExtra() });
@@ -924,7 +1049,8 @@ export default function PitchsidePage() {
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {lastSave && <span style={{ fontSize: 9, color: t.green, background: t.green + "18", padding: "2px 6px", borderRadius: 4 }}>✓ {lastSave}</span>}
+            {autoSaveStatus === "saved" && <span style={{ fontSize: 9, color: t.accent, background: t.accent + "18", padding: "2px 6px", borderRadius: 4, transition: "opacity 0.5s" }}>💾 saved</span>}
+            {lastSave && !autoSaveStatus && <span style={{ fontSize: 9, color: t.green, background: t.green + "18", padding: "2px 6px", borderRadius: 4 }}>✓ {lastSave}</span>}
             <button onClick={() => setShowSetup(true)} style={{ background: t.bg, border: `1px solid ${t.border}`, borderRadius: 6, padding: "6px 10px", fontSize: 11, color: t.dim, cursor: "pointer", minHeight: 32 }}>⚙</button>
           </div>
         </div>
@@ -1272,5 +1398,6 @@ export default function PitchsidePage() {
     </div>
   );
 }
+
 
 
