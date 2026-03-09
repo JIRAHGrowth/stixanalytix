@@ -48,8 +48,6 @@ const svC = v => v >= .800 ? t.green : v >= .700 ? t.accent : v >= .650 ? t.yell
 const ratC = v => v >= 4.0 ? t.green : v >= 3.5 ? t.accent : v >= 3.0 ? t.yellow : t.red;
 
 // ═══ AGGREGATION ENGINE ═════════════════════════════════════════════════════
-// Takes raw match rows and computes the same data shape the prototype used
-
 function aggregateMatches(matches) {
   if (!matches.length) return null;
   const gp = matches.length;
@@ -58,14 +56,13 @@ function aggregateMatches(matches) {
   const sv = sum("saves");
   const ga = sum("goals_conceded");
   const svPct = sot > 0 ? sv / sot : 0;
-  const min = gp * 90; // approximate
+  const min = gp * 90;
   const gaa = gp > 0 ? ga / gp : 0;
   const wins = matches.filter(m => m.result === "W").length;
   const draws = matches.filter(m => m.result === "D").length;
   const losses = matches.filter(m => m.result === "L").length;
   const cs = matches.filter(m => m.goals_conceded === 0 && m.session_type === "match").length;
   const csPct = gp > 0 ? cs / gp : 0;
-
   return {
     gp, min, sot, saves: sv, ga, svPct, gaa, cs, csPct, w: wins, d: draws, l: losses,
     saveTypes: {
@@ -121,18 +118,15 @@ function aggregateAttrs(attrRows) {
 
 function getQuarter(dateStr) {
   const m = new Date(dateStr).getMonth();
-  if (m < 3) return "Q3"; // Jan-Mar → season Q3
-  if (m < 6) return "Q4"; // Apr-Jun → season Q4
-  if (m < 9) return "Q1"; // Jul-Sep → season Q1
-  return "Q2"; // Oct-Dec → season Q2
+  if (m < 3) return "Q3";
+  if (m < 6) return "Q4";
+  if (m < 9) return "Q1";
+  return "Q2";
 }
 
 function aggregateQuarterly(matches) {
   const qs = { Q1: [], Q2: [], Q3: [], Q4: [] };
-  matches.forEach(m => {
-    const q = getQuarter(m.match_date);
-    qs[q].push(m);
-  });
+  matches.forEach(m => { const q = getQuarter(m.match_date); qs[q].push(m); });
   const result = {};
   Object.entries(qs).forEach(([q, ms]) => {
     if (!ms.length) { result[q] = { gp: 0 }; return; }
@@ -142,7 +136,6 @@ function aggregateQuarterly(matches) {
   return result;
 }
 
-// Build match log for the Matches tab
 function buildMatchLog(matches) {
   return [...matches]
     .sort((a, b) => new Date(b.match_date) - new Date(a.match_date))
@@ -166,34 +159,24 @@ function buildMatchLog(matches) {
 function genAlerts(keeperName, seasonAgg, l5Agg, seasonGoals, l5Goals, sznAttrs, l5Attrs) {
   const a = [];
   if (!seasonAgg || !l5Agg) return a;
-
-  // Save % declining
   if (l5Agg.svPct < seasonAgg.svPct - 0.03)
     a.push({ type: "warning", cat: "Performance", title: "Save % Declining",
       detail: `Last 5: ${pct(l5Agg.svPct)} vs Season: ${pct(seasonAgg.svPct)}`,
       action: "Review positioning in recent film" });
-
-  // GAA trending up
   if (l5Agg.gaa > seasonAgg.gaa + 0.25)
     a.push({ type: "warning", cat: "Performance", title: "GAA Trending Up",
       detail: `Last 5: ${dec(l5Agg.gaa)} vs Season: ${dec(seasonAgg.gaa)}`,
       action: "Analyze goal quality — saveable or defensive?" });
-
-  // Cross claiming dropping
   const sznClaimPct = seasonAgg.crosses.total > 0 ? (seasonAgg.crosses.claimed / seasonAgg.crosses.total) * 100 : 0;
   const l5ClaimPct = l5Agg.crosses.total > 0 ? (l5Agg.crosses.claimed / l5Agg.crosses.total) * 100 : 0;
   if (sznClaimPct > 0 && l5ClaimPct < sznClaimPct - 10)
     a.push({ type: "warning", cat: "Technical", title: "Cross Claiming Dropping",
       detail: `Claim rate fell ${sznClaimPct.toFixed(0)}% → ${l5ClaimPct.toFixed(0)}%`,
       action: "Judgment of flight, starting position, CB communication" });
-
-  // Errors leading to goal
   if (seasonAgg.handling.errGoal >= 2)
     a.push({ type: "alert", cat: "Technical", title: `${seasonAgg.handling.errGoal} Errors → Goals`,
       detail: "Direct errors leading to goals this season",
       action: "Isolate error types: handling, distribution, or positioning" });
-
-  // Rebound control slipping
   const sznRBtotal = seasonAgg.rebounds.controlled + seasonAgg.rebounds.dangerous;
   const l5RBtotal = l5Agg.rebounds.controlled + l5Agg.rebounds.dangerous;
   if (sznRBtotal > 0 && l5RBtotal > 0) {
@@ -204,24 +187,18 @@ function genAlerts(keeperName, seasonAgg, l5Agg, seasonGoals, l5Goals, sznAttrs,
         detail: `Controlled rebound % dropped from ${sznCtrl.toFixed(0)}% to ${l5Ctrl.toFixed(0)}%`,
         action: "Focus on angle recovery and shot parrying technique" });
   }
-
-  // Composure declining
   if (sznAttrs?.composure && l5Attrs?.composure && l5Attrs.composure < sznAttrs.composure - 0.3)
     a.push({ type: "alert", cat: "Mental", title: "Composure Trending Down",
       detail: `Season avg ${sznAttrs.composure.toFixed(1)} → Last 5 avg ${l5Attrs.composure.toFixed(1)}`,
       action: "1-on-1 about confidence. Watch body language." });
-
-  // Compete level rising (positive)
   if (sznAttrs?.compete_level && l5Attrs?.compete_level && l5Attrs.compete_level > sznAttrs.compete_level + 0.2)
     a.push({ type: "positive", cat: "Mental", title: "Compete Level Rising",
       detail: `Season ${sznAttrs.compete_level.toFixed(1)} → Last 5 ${l5Attrs.compete_level.toFixed(1)}`,
       action: "Reinforce with positive feedback" });
-
   return a;
 }
 
 // ═══ UI COMPONENTS ══════════════════════════════════════════════════════════
-
 function Chip({ label, selected, onClick, color }) {
   const c = color || t.accent;
   return (
@@ -320,9 +297,7 @@ function GoalHeatmap({ zones, title }) {
     <div>
       {title && <div style={{ fontSize: 10, color: t.dim, marginBottom: 8, textAlign: "center" }}>{title}</div>}
       <svg viewBox="0 0 104 84" style={{ width: "100%", maxWidth: 280, display: "block", margin: "0 auto" }}>
-        {/* Goal frame */}
         <rect x="2" y="2" width="100" height="80" rx="2" fill="none" stroke={t.border} strokeWidth="1.5" />
-        {/* Zones */}
         {Object.entries(ZONE_POSITIONS).map(([zone, pos]) => {
           const count = zones[zone] || 0;
           const intensity = count / maxVal;
@@ -430,6 +405,465 @@ function EmptyState({ icon, title, subtitle }) {
   );
 }
 
+// ═══ SINGLE GAME VIEW ═══════════════════════════════════════════════════════
+function SingleGameView({ match, goals, logRow, keeperName, primaryColor, onBack, onReport }) {
+  if (!match) return (
+    <div style={{ padding: 32, color: t.dim, textAlign: "center" }}>
+      Match data unavailable.
+      <button onClick={onBack} style={{ marginTop: 16, display: "block", margin: "16px auto 0", padding: "8px 20px", background: t.accent, color: "#000", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: font }}>← Back</button>
+    </div>
+  );
+
+  const pc = primaryColor || t.accent;
+  const svPct = match.shots_on_target > 0 ? (match.saves / match.shots_on_target * 100).toFixed(1) : "–";
+  const resultColor = logRow.res === "W" ? t.green : logRow.res === "L" ? t.red : t.yellow;
+  const isMatch = match.session_type === "match";
+
+  const saveTypes = [
+    { label: "Catch", val: match.saves_catch || 0 },
+    { label: "Parry", val: match.saves_parry || 0 },
+    { label: "Dive",  val: match.saves_dive  || 0 },
+    { label: "Block", val: match.saves_block || 0 },
+    { label: "Tip",   val: match.saves_tip   || 0 },
+    { label: "Punch", val: match.saves_punch || 0 },
+  ].filter(s => s.val > 0);
+  const maxSave = Math.max(...saveTypes.map(s => s.val), 1);
+
+  const goalZones = {};
+  goals.forEach(g => { if (g.goal_zone) goalZones[g.goal_zone] = (goalZones[g.goal_zone] || 0) + 1; });
+
+  const distRows = [
+    { name: "GK Short", att: match.dist_gk_short_att || 0, suc: match.dist_gk_short_suc || 0 },
+    { name: "GK Long",  att: match.dist_gk_long_att  || 0, suc: match.dist_gk_long_suc  || 0 },
+    { name: "Throws",   att: match.dist_throws_att   || 0, suc: match.dist_throws_suc   || 0 },
+    { name: "Passes",   att: match.dist_passes_att   || 0, suc: match.dist_passes_suc   || 0 },
+  ].filter(d => d.att > 0);
+
+  const notes = match.coaching_notes || match.notes || null;
+  const focus = match.coach_focus || match.session_focus || null;
+
+  return (
+    <div style={{ fontFamily: font, color: t.text }}>
+      {/* Header bar */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+        <button onClick={onBack} style={{ background: "none", border: `1px solid ${t.border}`, borderRadius: 8, padding: "8px 14px", color: t.dim, fontSize: 12, cursor: "pointer", fontFamily: font }}>
+          ← Back to Matches
+        </button>
+        <button onClick={() => onReport(match)} style={{ background: pc, border: "none", borderRadius: 8, padding: "8px 14px", color: "#000", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: font }}>
+          📄 Generate Report
+        </button>
+      </div>
+
+      {/* Match header */}
+      <Card s={{ marginBottom: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: t.bright }}>{logRow.opp}</div>
+            <div style={{ fontSize: 12, color: t.dim, marginTop: 2 }}>{logRow.date} · {logRow.ha} · {isMatch ? "Match" : "Training"}</div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {isMatch && <div style={{ fontSize: 22, fontWeight: 800, color: resultColor }}>{logRow.score || "–"}</div>}
+            {isMatch && (
+              <div style={{ padding: "4px 10px", borderRadius: 6, background: resultColor + "22", color: resultColor, fontSize: 12, fontWeight: 700 }}>{logRow.res}</div>
+            )}
+            {match.goals_conceded === 0 && isMatch && (
+              <div style={{ padding: "4px 10px", borderRadius: 6, background: t.green + "22", color: t.green, fontSize: 11, fontWeight: 700 }}>CS ✓</div>
+            )}
+          </div>
+        </div>
+      </Card>
+
+      {/* Key stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))", gap: 8, marginBottom: 12 }}>
+        {[
+          { label: "SOT",     val: match.shots_on_target ?? "–" },
+          { label: "Saves",   val: match.saves ?? "–" },
+          { label: "GA",      val: match.goals_conceded ?? "–" },
+          { label: "Sv%",     val: svPct !== "–" ? svPct + "%" : "–" },
+          { label: "1v1 W",   val: match.one_v_one_won != null ? `${match.one_v_one_won}/${match.one_v_one_faced || 0}` : "–" },
+          { label: "Err→Gol", val: match.errors_leading_to_goal ?? 0 },
+        ].map(s => (
+          <div key={s.label} style={{ background: t.card, border: `1px solid ${t.border}`, borderRadius: 8, padding: "10px 8px", textAlign: "center" }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: t.bright }}>{s.val}</div>
+            <div style={{ fontSize: 9, color: t.dim, marginTop: 2, textTransform: "uppercase", letterSpacing: 0.5 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+        {saveTypes.length > 0 && (
+          <Card>
+            <Sec icon="🧤">Save Types</Sec>
+            {saveTypes.map(s => (
+              <div key={s.label} style={{ marginBottom: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 3 }}>
+                  <span style={{ color: t.text }}>{s.label}</span>
+                  <span style={{ color: t.bright, fontWeight: 600 }}>{s.val}</span>
+                </div>
+                <div style={{ height: 6, background: t.bg, borderRadius: 3 }}>
+                  <div style={{ height: "100%", width: `${(s.val / maxSave) * 100}%`, background: pc, borderRadius: 3 }} />
+                </div>
+              </div>
+            ))}
+          </Card>
+        )}
+        <Card>
+          <GoalHeatmap zones={goalZones} title={match.goals_conceded > 0 ? `${match.goals_conceded} Goal${match.goals_conceded !== 1 ? "s" : ""} Conceded` : "Clean Sheet"} />
+        </Card>
+      </div>
+
+      {goals.length > 0 && (
+        <Card s={{ marginBottom: 12 }}>
+          <Sec icon="⚽">Goal Analysis</Sec>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 10, color: t.dim, marginBottom: 6, textTransform: "uppercase" }}>Rank</div>
+              {["Saveable", "Difficult", "Unsaveable"].map(r => {
+                const cnt = goals.filter(g => g.goal_rank === r).length;
+                return cnt > 0 ? (
+                  <div key={r} style={{ fontSize: 11, display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <span style={{ color: t.text }}>{r}</span>
+                    <span style={{ fontWeight: 700, color: r === "Saveable" ? t.red : r === "Difficult" ? t.yellow : t.dim }}>{cnt}</span>
+                  </div>
+                ) : null;
+              })}
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: t.dim, marginBottom: 6, textTransform: "uppercase" }}>Source</div>
+              {["Open Play", "Corner", "Free Kick", "Penalty"].map(s => {
+                const cnt = goals.filter(g => g.goal_source === s).length;
+                return cnt > 0 ? (
+                  <div key={s} style={{ fontSize: 11, display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <span style={{ color: t.text }}>{s}</span>
+                    <span style={{ fontWeight: 700, color: t.bright }}>{cnt}</span>
+                  </div>
+                ) : null;
+              })}
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: t.dim, marginBottom: 6, textTransform: "uppercase" }}>Shot Type</div>
+              {["Foot", "Header", "Deflection"].map(s => {
+                const cnt = goals.filter(g => g.shot_type === s).length;
+                return cnt > 0 ? (
+                  <div key={s} style={{ fontSize: 11, display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <span style={{ color: t.text }}>{s}</span>
+                    <span style={{ fontWeight: 700, color: t.bright }}>{cnt}</span>
+                  </div>
+                ) : null;
+              })}
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {distRows.length > 0 && (
+        <Card s={{ marginBottom: 12 }}>
+          <Sec icon="🎯">Distribution Accuracy</Sec>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 8 }}>
+            {distRows.map(d => {
+              const p = d.att > 0 ? Math.round(d.suc / d.att * 100) : null;
+              return (
+                <div key={d.name} style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: p >= 80 ? t.green : p >= 60 ? t.accent : t.yellow }}>{p != null ? p + "%" : "–"}</div>
+                  <div style={{ fontSize: 10, color: t.dim, marginTop: 2 }}>{d.name}</div>
+                  <div style={{ fontSize: 10, color: t.text, marginTop: 1 }}>{d.suc}/{d.att}</div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      <Card s={{ marginBottom: 12 }}>
+        <Sec icon="🏃">Physical & Crosses</Sec>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 10, color: t.dim, marginBottom: 8, textTransform: "uppercase" }}>Sweeper</div>
+            {[
+              { label: "Clearances",    val: match.sweeper_clearances },
+              { label: "Interceptions", val: match.sweeper_interceptions },
+              { label: "Tackles",       val: match.sweeper_tackles },
+            ].map(x => (
+              <div key={x.label} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 5 }}>
+                <span style={{ color: t.text }}>{x.label}</span>
+                <span style={{ fontWeight: 700, color: t.bright }}>{x.val ?? 0}</span>
+              </div>
+            ))}
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: t.dim, marginBottom: 8, textTransform: "uppercase" }}>Crosses</div>
+            {[
+              { label: "Claimed", val: match.crosses_claimed },
+              { label: "Punched", val: match.crosses_punched },
+              { label: "Missed",  val: match.crosses_missed },
+            ].map(x => (
+              <div key={x.label} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 5 }}>
+                <span style={{ color: t.text }}>{x.label}</span>
+                <span style={{ fontWeight: 700, color: t.bright }}>{x.val ?? 0}</span>
+              </div>
+            ))}
+            {(match.crosses_total > 0) && (
+              <div style={{ marginTop: 6, fontSize: 11, color: t.dim, borderTop: `1px solid ${t.border}`, paddingTop: 6 }}>
+                Claim rate: <span style={{ color: t.bright, fontWeight: 700 }}>
+                  {Math.round((match.crosses_claimed || 0) / match.crosses_total * 100)}%
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      </Card>
+
+      {notes && (
+        <Card s={{ borderLeft: `3px solid ${pc}` }}>
+          <Sec icon="📋">Coaching Notes</Sec>
+          <p style={{ fontSize: 12, color: t.text, lineHeight: 1.7, margin: 0 }}>{notes}</p>
+          {focus && (
+            <div style={{ marginTop: 10, background: pc + "15", borderRadius: 6, padding: "8px 12px", fontSize: 11, color: pc }}>
+              <strong>Session Focus:</strong> {focus}
+            </div>
+          )}
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ═══ REPORT VIEW ════════════════════════════════════════════════════════════
+function ReportView({ keeper, keeperData, alerts, targetGame, primaryColor, onBack }) {
+  const pc = primaryColor || t.accent;
+  if (!keeper || !keeperData) return null;
+
+  const s = keeperData.season;
+  const l = keeperData.l5;
+  const sG = keeperData.seasonGoals;
+  const sA = keeperData.sznAttrs;
+  const l5A = keeperData.l5Attrs;
+  const log = keeperData.matchLog || [];
+  const isSingleGame = !!targetGame;
+  const gm = isSingleGame ? targetGame : null;
+  const svPct = gm ? (gm.shots_on_target > 0 ? (gm.saves / gm.shots_on_target * 100).toFixed(1) : null) : null;
+
+  const radarData = CORE_ATTRS.map(k => ({
+    attr: ATTR_LABELS[k],
+    Season: sA?.[k] ? sA[k] * 20 : null,
+    "Last 5": l5A?.[k] ? l5A[k] * 20 : null,
+  })).filter(r => r.Season != null || r["Last 5"] != null);
+
+  const pageStyle = {
+    background: "#fff", color: "#111",
+    fontFamily: "'DM Sans', sans-serif",
+    width: "794px", minHeight: "1123px",
+    padding: "32px 36px", boxSizing: "border-box",
+    position: "relative", margin: "0 auto 24px",
+    boxShadow: "0 4px 32px rgba(0,0,0,0.3)",
+  };
+
+  return (
+    <div style={{ background: "#0a0a0f", minHeight: "100vh", padding: "20px", fontFamily: font }}>
+      {/* Controls */}
+      <div className="no-print" style={{ display: "flex", gap: 12, marginBottom: 20, justifyContent: "center" }}>
+        <button onClick={onBack} style={{ padding: "10px 20px", background: t.card, border: `1px solid ${t.border}`, color: t.text, borderRadius: 8, cursor: "pointer", fontFamily: font, fontSize: 13 }}>
+          ← Back to Dashboard
+        </button>
+        <button onClick={() => window.print()} style={{ padding: "10px 24px", background: pc, border: "none", color: "#000", borderRadius: 8, cursor: "pointer", fontFamily: font, fontSize: 13, fontWeight: 700 }}>
+          🖨️ Print / Save as PDF
+        </button>
+      </div>
+
+      {/* PAGE 1 */}
+      <div style={pageStyle} className="print-page">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `3px solid ${pc}`, paddingBottom: 12, marginBottom: 20 }}>
+          <div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: "#111" }}>
+              {keeper.name}
+              {isSingleGame && <span style={{ fontSize: 14, fontWeight: 500, color: "#555", marginLeft: 12 }}>vs {gm.opponent || "–"}</span>}
+            </div>
+            <div style={{ fontSize: 12, color: "#666", marginTop: 2 }}>Goalkeeper Performance Report · StixAnalytix</div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: pc }}>{isSingleGame ? "Match Report" : "Season Report"}</div>
+            <div style={{ fontSize: 11, color: "#888" }}>{new Date().toLocaleDateString("en-GB")}</div>
+          </div>
+        </div>
+
+        {/* Key stats */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8, marginBottom: 20 }}>
+          {(isSingleGame ? [
+            { label: "SOT",    val: gm.shots_on_target ?? "–" },
+            { label: "Saves",  val: gm.saves ?? "–" },
+            { label: "GA",     val: gm.goals_conceded ?? "–" },
+            { label: "Sv%",    val: svPct ? svPct + "%" : "–" },
+            { label: "1v1 Won",val: gm.one_v_one_won ?? "–" },
+            { label: "Err→G",  val: gm.errors_leading_to_goal ?? 0 },
+          ] : [
+            { label: "GP",    val: s?.gp ?? "–" },
+            { label: "Sv%",   val: s ? pct(s.svPct) : "–" },
+            { label: "GAA",   val: s ? dec(s.gaa, 2) : "–" },
+            { label: "CS%",   val: s ? pct(s.csPct) : "–" },
+            { label: "W-D-L", val: s ? `${s.w}-${s.d}-${s.l}` : "–" },
+            { label: "Saves", val: s?.saves ?? "–" },
+          ]).map(x => (
+            <div key={x.label} style={{ background: "#f5f5f7", borderRadius: 8, padding: "10px 8px", textAlign: "center" }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: "#111" }}>{x.val}</div>
+              <div style={{ fontSize: 9, color: "#888", marginTop: 2, textTransform: "uppercase", letterSpacing: 0.5 }}>{x.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Radar + Heatmap */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
+          {radarData.length > 0 && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Attribute Profile</div>
+              <ResponsiveContainer width="100%" height={220}>
+                <RadarChart data={radarData}>
+                  <PolarGrid stroke="#ddd" />
+                  <PolarAngleAxis dataKey="attr" tick={{ fontSize: 8, fill: "#555" }} />
+                  <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
+                  <Radar name="Season" dataKey="Season" stroke={pc} fill={pc} fillOpacity={0.15} strokeWidth={2} />
+                  <Radar name="Last 5" dataKey="Last 5" stroke="#f97316" fill="#f97316" fillOpacity={0.1} strokeWidth={2} strokeDasharray="4 2" />
+                  <Legend wrapperStyle={{ fontSize: 10, color: "#555" }} />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Goals Conceded — Zone Map</div>
+            <GoalHeatmap zones={sG?.zones || {}} />
+          </div>
+        </div>
+
+        {/* Distribution */}
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Distribution Accuracy</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            {[
+              { name: "GK Short",      att: s?.distribution?.gkShort?.att,      suc: s?.distribution?.gkShort?.suc },
+              { name: "GK Long",       att: s?.distribution?.gkLong?.att,       suc: s?.distribution?.gkLong?.suc },
+              { name: "Throws",        att: s?.distribution?.throws?.att,       suc: s?.distribution?.throws?.suc },
+              { name: "Passes",        att: s?.distribution?.passes?.att,       suc: s?.distribution?.passes?.suc },
+              { name: "Under Pressure",att: s?.distribution?.underPressure?.att, suc: s?.distribution?.underPressure?.suc },
+            ].filter(d => d.att > 0).map(d => {
+              const p = d.att > 0 ? Math.round(d.suc / d.att * 100) : 0;
+              return (
+                <div key={d.name} style={{ marginBottom: 6 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 3, color: "#333" }}>
+                    <span>{d.name}</span><span style={{ fontWeight: 700 }}>{p}%</span>
+                  </div>
+                  <div style={{ height: 6, background: "#eee", borderRadius: 3 }}>
+                    <div style={{ height: "100%", width: p + "%", background: p >= 80 ? "#22c55e" : p >= 60 ? pc : "#f97316", borderRadius: 3 }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div style={{ position: "absolute", bottom: 24, left: 36, right: 36, borderTop: "1px solid #ddd", paddingTop: 10, display: "flex", justifyContent: "space-between", fontSize: 9, color: "#aaa" }}>
+          <span>StixAnalytix · Goalkeeper Coaching Intelligence</span>
+          <span>Page 1 of 2</span>
+        </div>
+      </div>
+
+      {/* PAGE 2 */}
+      <div style={pageStyle} className="print-page">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `3px solid ${pc}`, paddingBottom: 12, marginBottom: 20 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#111" }}>{keeper.name} — {isSingleGame ? "Match" : "Season"} Report (cont.)</div>
+          <div style={{ fontSize: 11, color: "#888" }}>StixAnalytix</div>
+        </div>
+
+        {/* Season vs Last 5 */}
+        {!isSingleGame && s && l && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Season vs Last 5 Comparison</div>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+              <thead>
+                <tr style={{ background: "#f5f5f7" }}>
+                  {["Metric", "Season", "Last 5"].map(h => (
+                    <th key={h} style={{ padding: "8px 10px", textAlign: h === "Metric" ? "left" : "center", color: "#555", fontWeight: 700, borderBottom: "1px solid #ddd" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  { label: "Save %",       szn: pct(s.svPct),  l5v: pct(l.svPct) },
+                  { label: "GAA",          szn: dec(s.gaa, 2), l5v: dec(l.gaa, 2) },
+                  { label: "CS %",         szn: pct(s.csPct),  l5v: pct(l.csPct) },
+                  { label: "Saves / Game", szn: dec(s.gp > 0 ? s.saves/s.gp : null, 1), l5v: dec(l.gp > 0 ? l.saves/l.gp : null, 1) },
+                  { label: "1v1 Win %",    szn: s.oneV1?.faced > 0 ? pct(s.oneV1.won/s.oneV1.faced) : "–", l5v: l.oneV1?.faced > 0 ? pct(l.oneV1.won/l.oneV1.faced) : "–" },
+                  { label: "Cross Claim%", szn: s.crosses?.total > 0 ? pct(s.crosses.claimed/s.crosses.total) : "–", l5v: l.crosses?.total > 0 ? pct(l.crosses.claimed/l.crosses.total) : "–" },
+                ].map((row, i) => (
+                  <tr key={i} style={{ borderBottom: "1px solid #f0f0f0" }}>
+                    <td style={{ padding: "7px 10px", color: "#333" }}>{row.label}</td>
+                    <td style={{ padding: "7px 10px", textAlign: "center", fontWeight: 600, color: "#111" }}>{row.szn}</td>
+                    <td style={{ padding: "7px 10px", textAlign: "center", fontWeight: 600, color: pc }}>{row.l5v}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Alerts */}
+        {alerts?.length > 0 && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Active Coaching Alerts</div>
+            {alerts.slice(0, 5).map((al, i) => (
+              <div key={i} style={{ padding: "8px 12px", borderRadius: 6, marginBottom: 6, background: al.type === "positive" ? "#f0fdf4" : al.type === "alert" ? "#fef2f2" : "#fff7ed", borderLeft: `3px solid ${al.type === "positive" ? "#22c55e" : al.type === "alert" ? "#ef4444" : "#f97316"}` }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: al.type === "positive" ? "#15803d" : al.type === "alert" ? "#dc2626" : "#c2410c" }}>{al.title}</div>
+                <div style={{ fontSize: 10, color: "#555", marginTop: 2 }}>{al.detail} · {al.action}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Match log */}
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Recent Match Log</div>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
+            <thead>
+              <tr style={{ background: "#f5f5f7" }}>
+                {["Date", "Opponent", "H/A", "Res", "Score", "SOT", "Sv", "GA", "Sv%"].map(h => (
+                  <th key={h} style={{ padding: "6px 8px", textAlign: "center", color: "#666", fontWeight: 700, borderBottom: "1px solid #ddd" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {log.slice(0, 10).map((m, i) => (
+                <tr key={i} style={{ borderBottom: "1px solid #f0f0f0" }}>
+                  <td style={{ padding: "5px 8px", color: "#555", textAlign: "center" }}>{m.date}</td>
+                  <td style={{ padding: "5px 8px", fontWeight: 600, color: "#222" }}>{m.opp}</td>
+                  <td style={{ padding: "5px 8px", textAlign: "center", color: "#777" }}>{m.ha}</td>
+                  <td style={{ padding: "5px 8px", textAlign: "center", fontWeight: 700, color: m.res === "W" ? "#16a34a" : m.res === "L" ? "#dc2626" : "#d97706" }}>{m.res}</td>
+                  <td style={{ padding: "5px 8px", textAlign: "center", color: "#333" }}>{m.score}</td>
+                  <td style={{ padding: "5px 8px", textAlign: "center", color: "#555" }}>{m.sot}</td>
+                  <td style={{ padding: "5px 8px", textAlign: "center", color: "#555" }}>{m.sv}</td>
+                  <td style={{ padding: "5px 8px", textAlign: "center", color: m.ga > 0 ? "#dc2626" : "#16a34a", fontWeight: 600 }}>{m.ga}</td>
+                  <td style={{ padding: "5px 8px", textAlign: "center", fontWeight: 600, color: "#333" }}>{m.svP != null ? pct(m.svP) : "–"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div style={{ position: "absolute", bottom: 24, left: 36, right: 36, borderTop: "1px solid #ddd", paddingTop: 10, display: "flex", justifyContent: "space-between", fontSize: 9, color: "#aaa" }}>
+          <span>StixAnalytix · Goalkeeper Coaching Intelligence</span>
+          <span>Page 2 of 2</span>
+        </div>
+      </div>
+
+      <style>{`
+        @media print {
+          .no-print { display: none !important; }
+          body { background: white !important; margin: 0 !important; }
+          .print-page { page-break-after: always; box-shadow: none !important; margin: 0 !important; }
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN DASHBOARD
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -438,36 +872,34 @@ export default function DashboardPage() {
   const { user, profile, club, loading, signOut, supabase, isDelegate, delegateOf } = useAuth();
   const router = useRouter();
 
-  // Keeper management state
   const [keepers, setKeepers] = useState([]);
   const [loadingKeepers, setLoadingKeepers] = useState(true);
   const [showKeeperModal, setShowKeeperModal] = useState(false);
   const [editingKeeper, setEditingKeeper] = useState(null);
 
-  // Analytics state
+  // ── NEW: drill-down & report state ──
+  const [selectedGame, setSelectedGame] = useState(null);
+  const [reportMode, setReportMode] = useState(false);
+  const [reportGame, setReportGame] = useState(null);
+
   const [allMatches, setAllMatches] = useState([]);
   const [allGoals, setAllGoals] = useState([]);
   const [allAttrs, setAllAttrs] = useState([]);
   const [loadingData, setLoadingData] = useState(true);
 
-  // View state
   const [selectedKeeper, setSelectedKeeper] = useState(null);
   const [tab, setTab] = useState("overview");
   const [scope, setScope] = useState("season");
   const [cmpKeeper, setCmpKeeper] = useState(null);
-  const [view, setView] = useState("analytics"); // "analytics" | "roster"
+  const [view, setView] = useState("analytics");
 
-  // ═══ AUTH GUARD ═══
   useEffect(() => {
     if (!loading && profile && !profile.onboarding_complete && !isDelegate) router.push("/onboarding");
   }, [loading, profile, isDelegate]);
 
-  // ═══ FETCH KEEPERS ═══
   const fetchKeepers = async () => {
     if (!user) return;
-
     if (isDelegate && delegateOf?.dashboard_access) {
-      // Delegate: fetch only keepers they have dashboard access to
       const { data } = await supabase
         .from("keepers").select("*")
         .eq("coach_id", delegateOf.coach_id).eq("active", true)
@@ -478,7 +910,6 @@ export default function DashboardPage() {
         if (!selectedKeeper && data.length > 0) setSelectedKeeper(data[0].id);
       }
     } else {
-      // Coach: fetch all their keepers
       const { data } = await supabase
         .from("keepers").select("*")
         .eq("coach_id", user.id).eq("active", true)
@@ -491,19 +922,15 @@ export default function DashboardPage() {
     setLoadingKeepers(false);
   };
 
-  // ═══ FETCH ALL ANALYTICS DATA ═══
   const fetchAnalyticsData = async () => {
     if (!user) return;
     setLoadingData(true);
-
     const coachId = isDelegate && delegateOf ? delegateOf.coach_id : user.id;
-
     const [matchRes, goalRes, attrRes] = await Promise.all([
       supabase.from("matches").select("*").eq("coach_id", coachId).order("match_date", { ascending: true }),
       supabase.from("goals_conceded").select("*").eq("coach_id", coachId),
       supabase.from("match_attributes").select("*").eq("coach_id", coachId),
     ]);
-
     if (matchRes.data) setAllMatches(matchRes.data);
     if (goalRes.data) setAllGoals(goalRes.data);
     if (attrRes.data) setAllAttrs(attrRes.data);
@@ -517,7 +944,6 @@ export default function DashboardPage() {
     }
   }, [user, profile, isDelegate, delegateOf]);
 
-  // ═══ KEEPER MANAGEMENT ═══
   const handleAddKeeper = async (keeperData) => {
     const { error } = await supabase.from("keepers").insert({
       ...keeperData, coach_id: user.id, club_id: club.id, active: true,
@@ -537,21 +963,17 @@ export default function DashboardPage() {
     if (!error) { setEditingKeeper(null); fetchKeepers(); }
   };
 
-  // ═══ COMPUTED DATA (per selected keeper) ═══
   const keeperData = useMemo(() => {
     if (!selectedKeeper) return null;
-
     const kMatches = allMatches.filter(m => m.keeper_id === selectedKeeper);
     const matchIds = new Set(kMatches.map(m => m.id));
     const kGoals = allGoals.filter(g => matchIds.has(g.match_id));
     const kAttrs = allAttrs.filter(a => a.keeper_id === selectedKeeper);
-
     const sorted = [...kMatches].sort((a, b) => new Date(b.match_date) - new Date(a.match_date));
     const last5 = sorted.slice(0, 5);
     const l5Ids = new Set(last5.map(m => m.id));
     const l5Goals = kGoals.filter(g => l5Ids.has(g.match_id));
     const l5Attrs = kAttrs.filter(a => l5Ids.has(a.match_id));
-
     return {
       matches: kMatches,
       sorted,
@@ -567,7 +989,6 @@ export default function DashboardPage() {
     };
   }, [selectedKeeper, allMatches, allGoals, allAttrs]);
 
-  // Compare keeper data
   const cmpData = useMemo(() => {
     if (!cmpKeeper) return null;
     const kMatches = allMatches.filter(m => m.keeper_id === cmpKeeper);
@@ -585,7 +1006,6 @@ export default function DashboardPage() {
     };
   }, [cmpKeeper, allMatches, allGoals, allAttrs]);
 
-  // Alerts
   const alerts = useMemo(() => {
     if (!keeperData?.season || !keeperData?.l5) return [];
     const kp = keepers.find(k => k.id === selectedKeeper);
@@ -594,7 +1014,19 @@ export default function DashboardPage() {
       keeperData.sznAttrs, keeperData.l5Attrs);
   }, [keeperData, selectedKeeper, keepers]);
 
-  // ═══ DERIVED VALUES ═══
+  // ── NEW: drill-down & report helpers ──
+  const openReport = (game = null) => {
+    setReportGame(game);
+    setReportMode(true);
+  };
+
+  const openGameDrillDown = (logRow) => {
+    if (!keeperData) return;
+    const match = keeperData.matches.find(m => m.id === logRow.id);
+    const goals = allGoals.filter(g => g.match_id === logRow.id);
+    setSelectedGame({ match, goals, logRow });
+  };
+
   const isL5 = scope === "l5";
   const d = keeperData;
   const s = d && (isL5 ? d.l5 : d.season);
@@ -618,9 +1050,6 @@ export default function DashboardPage() {
   const scopeTabs = ["goals", "distribution", "crosses", "sweeper", "attributes"];
   const showScope = scopeTabs.includes(tab);
 
-  // ═══ LOADING ═══
-  // Only gate on auth loading — the useEffect above handles onboarding redirect for coaches.
-  // Delegates (who have onboarding_complete=false) must be allowed through.
   if (loading || !user) {
     return (
       <div style={{ minHeight: "100vh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: font }}>
@@ -629,62 +1058,49 @@ export default function DashboardPage() {
     );
   }
 
+  // ── NEW: Report mode early return ──
+  if (reportMode) return (
+    <ReportView
+      keeper={keepers.find(k => k.id === selectedKeeper)}
+      keeperData={keeperData}
+      alerts={alerts}
+      targetGame={reportGame}
+      primaryColor={club?.primary_color || t.accent}
+      onBack={() => { setReportMode(false); setReportGame(null); }}
+    />
+  );
+
   const primaryColor = club?.primary_color || t.accent;
   const selectedKeeperObj = keepers.find(k => k.id === selectedKeeper);
   const cmpKeeperObj = keepers.find(k => k.id === cmpKeeper);
 
-  // Distribution helper for bar charts
   const distData = s ? [
-    { name: "GK Short", att: s.distribution.gkShort.att, suc: s.distribution.gkShort.suc, pct: s.distribution.gkShort.att > 0 ? (s.distribution.gkShort.suc / s.distribution.gkShort.att * 100) : 0 },
-    { name: "GK Long", att: s.distribution.gkLong.att, suc: s.distribution.gkLong.suc, pct: s.distribution.gkLong.att > 0 ? (s.distribution.gkLong.suc / s.distribution.gkLong.att * 100) : 0 },
-    { name: "Throws", att: s.distribution.throws.att, suc: s.distribution.throws.suc, pct: s.distribution.throws.att > 0 ? (s.distribution.throws.suc / s.distribution.throws.att * 100) : 0 },
-    { name: "Passes", att: s.distribution.passes.att, suc: s.distribution.passes.suc, pct: s.distribution.passes.att > 0 ? (s.distribution.passes.suc / s.distribution.passes.att * 100) : 0 },
-    { name: "Under Pressure", att: s.distribution.underPressure.att, suc: s.distribution.underPressure.suc, pct: s.distribution.underPressure.att > 0 ? (s.distribution.underPressure.suc / s.distribution.underPressure.att * 100) : 0 },
+    { name: "GK Short",      att: s.distribution.gkShort.att,       suc: s.distribution.gkShort.suc,      pct: s.distribution.gkShort.att > 0 ? (s.distribution.gkShort.suc / s.distribution.gkShort.att * 100) : 0 },
+    { name: "GK Long",       att: s.distribution.gkLong.att,        suc: s.distribution.gkLong.suc,       pct: s.distribution.gkLong.att > 0 ? (s.distribution.gkLong.suc / s.distribution.gkLong.att * 100) : 0 },
+    { name: "Throws",        att: s.distribution.throws.att,        suc: s.distribution.throws.suc,       pct: s.distribution.throws.att > 0 ? (s.distribution.throws.suc / s.distribution.throws.att * 100) : 0 },
+    { name: "Passes",        att: s.distribution.passes.att,        suc: s.distribution.passes.suc,       pct: s.distribution.passes.att > 0 ? (s.distribution.passes.suc / s.distribution.passes.att * 100) : 0 },
+    { name: "Under Pressure",att: s.distribution.underPressure.att, suc: s.distribution.underPressure.suc, pct: s.distribution.underPressure.att > 0 ? (s.distribution.underPressure.suc / s.distribution.underPressure.att * 100) : 0 },
   ] : [];
 
   return (
     <div style={{ minHeight: "100vh", background: t.bg, fontFamily: font }}>
-      {/* ═══ HEADER ═══ */}
-      <div style={{
-        display: "flex", justifyContent: "space-between", alignItems: "center",
-        padding: "12px 20px", borderBottom: `1px solid ${t.border}`,
-        maxWidth: 960, margin: "0 auto",
-      }}>
+      {/* HEADER */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px", borderBottom: `1px solid ${t.border}`, maxWidth: 960, margin: "0 auto" }}>
         <Link href="/" style={{ textDecoration: "none" }}>
-          <span style={{ fontSize: 20, fontWeight: 700, color: t.bright }}>
-            Stix<span style={{ color: t.accent }}>Analytix</span>
-          </span>
+          <span style={{ fontSize: 20, fontWeight: 700, color: t.bright }}>Stix<span style={{ color: t.accent }}>Analytix</span></span>
         </Link>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {!isDelegate && <Link href="/staff" style={{
-            padding: "8px 14px", borderRadius: 8, border: `1px solid ${t.border}`,
-            background: "transparent", color: t.dim, fontSize: 12, textDecoration: "none", fontFamily: font,
-            display: "flex", alignItems: "center", gap: 4,
-          }}>👥 Staff</Link>}
-          <Link href="/pitchside" style={{
-            padding: "8px 14px", borderRadius: 8, background: primaryColor, color: "#fff",
-            fontSize: 12, fontWeight: 600, textDecoration: "none", display: "flex", alignItems: "center", gap: 4,
-          }}>📱 Pitchside</Link>
-          <button onClick={() => setView(view === "analytics" ? "roster" : "analytics")} style={{
-            padding: "8px 14px", borderRadius: 8, border: `1px solid ${t.border}`,
-            background: "transparent", color: t.dim, fontSize: 12, fontFamily: font, cursor: "pointer",
-          }}>{view === "analytics" ? "👥 Roster" : "📊 Analytics"}</button>
-          <button onClick={signOut} style={{
-            padding: "8px 14px", borderRadius: 8, border: `1px solid ${t.border}`,
-            background: "transparent", color: t.dim, fontSize: 12, fontFamily: font, cursor: "pointer",
-          }}>Sign Out</button>
+          {!isDelegate && <Link href="/staff" style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 12, textDecoration: "none", fontFamily: font, display: "flex", alignItems: "center", gap: 4 }}>👥 Staff</Link>}
+          <Link href="/pitchside" style={{ padding: "8px 14px", borderRadius: 8, background: primaryColor, color: "#fff", fontSize: 12, fontWeight: 600, textDecoration: "none", display: "flex", alignItems: "center", gap: 4 }}>📱 Pitchside</Link>
+          <button onClick={() => setView(view === "analytics" ? "roster" : "analytics")} style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 12, fontFamily: font, cursor: "pointer" }}>{view === "analytics" ? "👥 Roster" : "📊 Analytics"}</button>
+          <button onClick={signOut} style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 12, fontFamily: font, cursor: "pointer" }}>Sign Out</button>
         </div>
       </div>
 
       <div style={{ maxWidth: 960, margin: "0 auto", padding: "20px 16px" }}>
 
-        {/* ═══ DELEGATE BANNER ═══ */}
         {isDelegate && delegateOf && (
-          <div style={{
-            padding: "10px 16px", borderRadius: 10, marginBottom: 16,
-            background: t.cyan + "08", border: `1px solid ${t.cyan}22`,
-            display: "flex", alignItems: "center", gap: 10,
-          }}>
+          <div style={{ padding: "10px 16px", borderRadius: 10, marginBottom: 16, background: t.cyan + "08", border: `1px solid ${t.cyan}22`, display: "flex", alignItems: "center", gap: 10 }}>
             <span style={{ fontSize: 16 }}>📊</span>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: t.cyan }}>Viewing as {delegateOf.role?.replace("_", " ")}</div>
@@ -693,71 +1109,43 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* ═══ ROSTER VIEW ═══ */}
+        {/* ROSTER VIEW */}
         {view === "roster" && (
           <div>
-            <div style={{
-              background: `linear-gradient(135deg, ${primaryColor}15, ${primaryColor}05)`,
-              borderRadius: 16, padding: "24px 20px", border: `1px solid ${primaryColor}30`, marginBottom: 24,
-            }}>
+            <div style={{ background: `linear-gradient(135deg, ${primaryColor}15, ${primaryColor}05)`, borderRadius: 16, padding: "24px 20px", border: `1px solid ${primaryColor}30`, marginBottom: 24 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                <div style={{
-                  width: 48, height: 48, borderRadius: 12,
-                  background: `linear-gradient(135deg, ${primaryColor}, ${club?.secondary_color || t.accentDim})`,
-                  display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22,
-                }}>⚽</div>
+                <div style={{ width: 48, height: 48, borderRadius: 12, background: `linear-gradient(135deg, ${primaryColor}, ${club?.secondary_color || t.accentDim})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>⚽</div>
                 <div>
                   <h1 style={{ fontSize: 20, fontWeight: 700, color: t.bright, margin: "0 0 2px" }}>{club?.name || "Your Club"}</h1>
                   <p style={{ fontSize: 12, color: t.dim, margin: 0 }}>{profile?.full_name} · {keepers.length} keeper{keepers.length !== 1 ? "s" : ""}</p>
                 </div>
               </div>
             </div>
-
             <Card s={{ marginBottom: 20 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                 <Sec icon="🧤">{isDelegate ? "Assigned Keepers" : "Your Goalkeepers"}</Sec>
-                {!isDelegate && <button onClick={() => setShowKeeperModal(true)} style={{
-                  padding: "8px 16px", borderRadius: 8, background: t.accent,
-                  border: "none", color: "#fff",
-                  fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: font,
-                }}>+ Add Keeper</button>}
+                {!isDelegate && <button onClick={() => setShowKeeperModal(true)} style={{ padding: "8px 16px", borderRadius: 8, background: t.accent, border: "none", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: font }}>+ Add Keeper</button>}
               </div>
               {loadingKeepers ? (
                 <div style={{ color: t.dim, fontSize: 13, padding: "20px 0", textAlign: "center" }}>Loading roster...</div>
               ) : keepers.length === 0 ? (
                 <div style={{ color: t.dim, fontSize: 13, padding: "20px 0", textAlign: "center" }}>
                   No keepers yet.
-                  <button onClick={() => setShowKeeperModal(true)} style={{
-                    display: "block", margin: "12px auto 0", padding: "10px 20px", borderRadius: 8,
-                    background: primaryColor, border: "none", color: "#fff",
-                    fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: font,
-                  }}>Add Your First Goalkeeper</button>
+                  <button onClick={() => setShowKeeperModal(true)} style={{ display: "block", margin: "12px auto 0", padding: "10px 20px", borderRadius: 8, background: primaryColor, border: "none", color: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: font }}>Add Your First Goalkeeper</button>
                 </div>
               ) : (
                 keepers.map((k, i) => {
                   const kMatches = allMatches.filter(m => m.keeper_id === k.id);
                   const kAgg = aggregateMatches(kMatches);
                   return (
-                    <div key={k.id} style={{
-                      display: "flex", alignItems: "center", gap: 14, padding: "14px 0",
-                      borderTop: i > 0 ? `1px solid ${t.border}22` : "none", cursor: "pointer",
-                    }} onClick={() => setEditingKeeper(k)}>
-                      <div style={{
-                        width: 42, height: 42, borderRadius: 10,
-                        background: `linear-gradient(135deg, ${primaryColor}, ${club?.secondary_color || t.accentDim})`,
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: 12, fontWeight: 900, color: "#fff",
-                      }}>#{k.number || "?"}</div>
+                    <div key={k.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 0", borderTop: i > 0 ? `1px solid ${t.border}22` : "none", cursor: "pointer" }} onClick={() => setEditingKeeper(k)}>
+                      <div style={{ width: 42, height: 42, borderRadius: 10, background: `linear-gradient(135deg, ${primaryColor}, ${club?.secondary_color || t.accentDim})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 900, color: "#fff" }}>#{k.number || "?"}</div>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 14, fontWeight: 600, color: t.bright }}>{k.name}</div>
-                        <div style={{ fontSize: 11, color: t.dim }}>
-                          {[k.role, k.catch_hand ? `${k.catch_hand} footed` : null, kAgg ? `${kAgg.gp} games` : "0 games"].filter(Boolean).join(" · ")}
-                        </div>
+                        <div style={{ fontSize: 11, color: t.dim }}>{[k.role, k.catch_hand ? `${k.catch_hand} footed` : null, kAgg ? `${kAgg.gp} games` : "0 games"].filter(Boolean).join(" · ")}</div>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        {kAgg && kAgg.gp > 0 && (
-                          <span style={{ fontSize: 12, fontWeight: 700, color: svC(kAgg.svPct) }}>{pct(kAgg.svPct)}</span>
-                        )}
+                        {kAgg && kAgg.gp > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: svC(kAgg.svPct) }}>{pct(kAgg.svPct)}</span>}
                         <span style={{ fontSize: 14, color: t.dim }}>✎</span>
                       </div>
                     </div>
@@ -765,8 +1153,6 @@ export default function DashboardPage() {
                 })
               )}
             </Card>
-
-            {/* Quick actions */}
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
               <Link href="/pitchside" style={{ flex: 1, minWidth: 200, padding: "20px 16px", borderRadius: 14, background: t.card, border: `1px solid ${t.border}`, textDecoration: "none", textAlign: "center" }}>
                 <div style={{ fontSize: 28, marginBottom: 8 }}>⚽</div>
@@ -782,28 +1168,23 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* ═══ ANALYTICS VIEW ═══ */}
+        {/* ANALYTICS VIEW */}
         {view === "analytics" && (
           <div>
-            {/* Keeper selector */}
+            {/* Keeper selector + Report button */}
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
               <select
                 value={selectedKeeper || ""}
-                onChange={e => { setSelectedKeeper(e.target.value); setTab("overview"); setScope("season"); setCmpKeeper(null); }}
-                style={{
-                  background: t.card, border: `1px solid ${t.border}`, borderRadius: 8,
-                  padding: "10px 14px", color: t.bright, fontSize: 13, fontWeight: 600,
-                  cursor: "pointer", fontFamily: font, flex: 1, minWidth: 180,
-                }}
+                onChange={e => { setSelectedKeeper(e.target.value); setTab("overview"); setScope("season"); setCmpKeeper(null); setSelectedGame(null); setReportMode(false); }}
+                style={{ background: t.card, border: `1px solid ${t.border}`, borderRadius: 8, padding: "10px 14px", color: t.bright, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: font, flex: 1, minWidth: 180 }}
               >
-                {keepers.map(k => (
-                  <option key={k.id} value={k.id}>#{k.number || "?"} {k.name}</option>
-                ))}
+                {keepers.map(k => <option key={k.id} value={k.id}>#{k.number || "?"} {k.name}</option>)}
               </select>
-              {selectedKeeperObj && (
-                <div style={{ fontSize: 11, color: t.dim }}>
-                  {selectedKeeperObj.role} · {selectedKeeperObj.catch_hand ? `${selectedKeeperObj.catch_hand} footed` : ""}
-                </div>
+              {selectedKeeperObj && <div style={{ fontSize: 11, color: t.dim }}>{selectedKeeperObj.role} · {selectedKeeperObj.catch_hand ? `${selectedKeeperObj.catch_hand} footed` : ""}</div>}
+              {selectedKeeper && keeperData?.season && (
+                <button onClick={() => openReport(null)} style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 11, cursor: "pointer", fontFamily: font }}>
+                  📄 Report
+                </button>
               )}
               {loadingData && <div style={{ fontSize: 11, color: t.gold }}>Loading data...</div>}
             </div>
@@ -811,43 +1192,27 @@ export default function DashboardPage() {
             {/* Tabs */}
             <div style={{ display: "flex", gap: 4, overflowX: "auto", paddingBottom: 8, marginBottom: 12 }}>
               {TABS.map(tb => (
-                <button key={tb.id} onClick={() => { setTab(tb.id); if (!scopeTabs.includes(tb.id)) setScope("season"); }}
-                  style={{
-                    background: tab === tb.id ? t.accent + "18" : "transparent",
-                    border: `1px solid ${tab === tb.id ? t.accent + "44" : "transparent"}`,
-                    borderRadius: 7, padding: "6px 10px", color: tab === tb.id ? t.accent : t.dim,
-                    fontSize: 10, fontWeight: 600, cursor: "pointer", display: "flex",
-                    alignItems: "center", gap: 4, whiteSpace: "nowrap", fontFamily: font, position: "relative",
-                  }}>
+                <button key={tb.id} onClick={() => { setTab(tb.id); setSelectedGame(null); if (!scopeTabs.includes(tb.id)) setScope("season"); }}
+                  style={{ background: tab === tb.id ? t.accent + "18" : "transparent", border: `1px solid ${tab === tb.id ? t.accent + "44" : "transparent"}`, borderRadius: 7, padding: "6px 10px", color: tab === tb.id ? t.accent : t.dim, fontSize: 10, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap", fontFamily: font, position: "relative" }}>
                   <span style={{ fontSize: 12 }}>{tb.icon}</span>{tb.label}
                   {(tb.badge || 0) > 0 && (
-                    <span style={{
-                      position: "absolute", top: -3, right: -3, width: 14, height: 14, borderRadius: 7,
-                      background: t.red, color: "#fff", fontSize: 7, fontWeight: 700,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>{tb.badge}</span>
+                    <span style={{ position: "absolute", top: -3, right: -3, width: 14, height: 14, borderRadius: 7, background: t.red, color: "#fff", fontSize: 7, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{tb.badge}</span>
                   )}
                 </button>
               ))}
             </div>
 
-            {/* Scope toggle */}
             {showScope && <ScopeToggle scope={scope} setScope={setScope} />}
 
-            {/* No keeper selected */}
             {!selectedKeeper && <EmptyState icon="👆" title="Select a Keeper" subtitle="Choose a goalkeeper from the dropdown to view analytics." />}
-
-            {/* No matches yet */}
             {selectedKeeper && !hasMatches && tab !== "compare" && (
-              <EmptyState icon="📱" title="No Sessions Logged Yet"
-                subtitle={`Head to Pitchside to log a match or training session for ${selectedKeeperObj?.name || "this keeper"}.`} />
+              <EmptyState icon="📱" title="No Sessions Logged Yet" subtitle={`Head to Pitchside to log a match or training session for ${selectedKeeperObj?.name || "this keeper"}.`} />
             )}
 
-            {/* ═══ OVERVIEW ═══ */}
+            {/* OVERVIEW */}
             {hasMatches && s && tab === "overview" && (
               <div>
                 <Sec icon="📊">Season Overview — {selectedKeeperObj?.name}</Sec>
-                {/* Stat cards row */}
                 <Card s={{ marginBottom: 14 }}>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(70px, 1fr))", gap: 4 }}>
                     <StatBox label="GP" value={d.season.gp} />
@@ -857,8 +1222,6 @@ export default function DashboardPage() {
                     <StatBox label="W-D-L" value={`${d.season.w}-${d.season.d}-${d.season.l}`} />
                   </div>
                 </Card>
-
-                {/* Key metrics */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
                   <Card>
                     <div style={{ fontSize: 10, color: t.dim, marginBottom: 6 }}>Distribution Accuracy</div>
@@ -889,46 +1252,34 @@ export default function DashboardPage() {
                     </div>
                   </Card>
                 </div>
-
-                {/* Alerts preview */}
                 {alerts.length > 0 && (
                   <Card s={{ marginBottom: 14 }}>
                     <Sec icon="⚡">Coaching Alerts ({alerts.length})</Sec>
                     {alerts.slice(0, 3).map((al, i) => (
-                      <div key={i} style={{
-                        padding: "10px 12px", borderRadius: 8, marginBottom: 6,
-                        background: al.type === "positive" ? t.green + "11" : al.type === "alert" ? t.red + "11" : t.orange + "11",
-                        border: `1px solid ${al.type === "positive" ? t.green + "33" : al.type === "alert" ? t.red + "33" : t.orange + "33"}`,
-                      }}>
+                      <div key={i} style={{ padding: "10px 12px", borderRadius: 8, marginBottom: 6, background: al.type === "positive" ? t.green + "11" : al.type === "alert" ? t.red + "11" : t.orange + "11", border: `1px solid ${al.type === "positive" ? t.green + "33" : al.type === "alert" ? t.red + "33" : t.orange + "33"}` }}>
                         <div style={{ fontSize: 11, fontWeight: 700, color: al.type === "positive" ? t.green : al.type === "alert" ? t.red : t.orange }}>{al.title}</div>
                         <div style={{ fontSize: 10, color: t.dim, marginTop: 2 }}>{al.detail}</div>
                       </div>
                     ))}
-                    {alerts.length > 3 && (
-                      <button onClick={() => setTab("caution")} style={{
-                        background: "none", border: "none", color: t.accent, fontSize: 11,
-                        cursor: "pointer", fontFamily: font, padding: "4px 0",
-                      }}>View all {alerts.length} alerts →</button>
-                    )}
+                    {alerts.length > 3 && <button onClick={() => setTab("caution")} style={{ background: "none", border: "none", color: t.accent, fontSize: 11, cursor: "pointer", fontFamily: font, padding: "4px 0" }}>View all {alerts.length} alerts →</button>}
                   </Card>
                 )}
-
-                {/* Recent matches */}
                 {d.matchLog.length > 0 && (
                   <Card>
                     <Sec icon="📋">Recent Matches</Sec>
                     <div style={{ overflowX: "auto" }}>
                       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 480 }}>
                         <thead>
-                          <tr>
-                            {["Date", "Opp", "H/A", "Result", "Score", "SOT", "Sv", "GA", "Sv%"].map(h => (
-                              <th key={h} style={{ textAlign: "center", padding: "7px 6px", color: t.dim, borderBottom: `1px solid ${t.border}`, fontSize: 9 }}>{h}</th>
-                            ))}
-                          </tr>
+                          <tr>{["Date", "Opp", "H/A", "Result", "Score", "SOT", "Sv", "GA", "Sv%"].map(h => <th key={h} style={{ textAlign: "center", padding: "7px 6px", color: t.dim, borderBottom: `1px solid ${t.border}`, fontSize: 9 }}>{h}</th>)}</tr>
                         </thead>
                         <tbody>
                           {d.matchLog.slice(0, 5).map((m, i) => (
-                            <tr key={i}>
+                            <tr key={i}
+                              onClick={() => { setTab("matches"); openGameDrillDown(m); }}
+                              style={{ cursor: "pointer" }}
+                              onMouseEnter={e => e.currentTarget.style.background = t.cardAlt}
+                              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                            >
                               <td style={{ padding: "7px 6px", color: t.text, textAlign: "center", borderBottom: `1px solid ${t.border}22` }}>{m.date}</td>
                               <td style={{ padding: "7px 6px", color: t.bright, fontWeight: 600, textAlign: "center", borderBottom: `1px solid ${t.border}22` }}>{m.opp}</td>
                               <td style={{ padding: "7px 6px", color: t.dim, textAlign: "center", borderBottom: `1px solid ${t.border}22` }}>{m.type === "training" ? "T" : m.ha}</td>
@@ -943,55 +1294,66 @@ export default function DashboardPage() {
                         </tbody>
                       </table>
                     </div>
-                    {d.matchLog.length > 5 && (
-                      <button onClick={() => setTab("matches")} style={{
-                        background: "none", border: "none", color: t.accent, fontSize: 11,
-                        cursor: "pointer", fontFamily: font, padding: "8px 0 0",
-                      }}>View all {d.matchLog.length} matches →</button>
-                    )}
+                    {d.matchLog.length > 5 && <button onClick={() => setTab("matches")} style={{ background: "none", border: "none", color: t.accent, fontSize: 11, cursor: "pointer", fontFamily: font, padding: "8px 0 0" }}>View all {d.matchLog.length} matches →</button>}
                   </Card>
                 )}
               </div>
             )}
 
-            {/* ═══ MATCHES ═══ */}
+            {/* MATCHES */}
             {hasMatches && tab === "matches" && (
               <div>
-                <Sec icon="📋">Match Log — {selectedKeeperObj?.name}</Sec>
-                <Card s={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 520 }}>
-                    <thead>
-                      <tr>
-                        {["Date", "Type", "Opp", "H/A", "Res", "Score", "SOT", "Sv", "GA", "Sv%", "CS"].map(h => (
-                          <th key={h} style={{ textAlign: "center", padding: "7px 5px", color: t.dim, borderBottom: `1px solid ${t.border}`, fontSize: 9 }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {d.matchLog.map((m, i) => (
-                        <tr key={i} style={{ background: i % 2 === 0 ? "transparent" : t.cardAlt + "44" }}>
-                          <td style={{ padding: "7px 5px", color: t.text, textAlign: "center" }}>{m.date}</td>
-                          <td style={{ padding: "7px 5px", textAlign: "center" }}>
-                            <span style={{ fontSize: 8, padding: "2px 6px", borderRadius: 4, background: m.type === "match" ? t.accent + "22" : t.gold + "22", color: m.type === "match" ? t.accent : t.gold }}>{m.type === "match" ? "M" : "T"}</span>
-                          </td>
-                          <td style={{ padding: "7px 5px", color: t.bright, fontWeight: 600, textAlign: "center" }}>{m.opp}</td>
-                          <td style={{ padding: "7px 5px", color: t.dim, textAlign: "center" }}>{m.type === "training" ? "—" : m.ha}</td>
-                          <td style={{ padding: "7px 5px", textAlign: "center", color: m.res === "W" ? t.green : m.res === "L" ? t.red : t.dim, fontWeight: 600 }}>{m.res}</td>
-                          <td style={{ padding: "7px 5px", color: t.text, textAlign: "center" }}>{m.score}</td>
-                          <td style={{ padding: "7px 5px", color: t.text, textAlign: "center" }}>{m.sot}</td>
-                          <td style={{ padding: "7px 5px", color: t.text, textAlign: "center" }}>{m.sv}</td>
-                          <td style={{ padding: "7px 5px", color: m.ga > 0 ? t.red : t.green, textAlign: "center", fontWeight: 600 }}>{m.ga}</td>
-                          <td style={{ padding: "7px 5px", textAlign: "center", color: m.svP != null ? svC(m.svP) : t.dim, fontWeight: 600 }}>{m.svP != null ? pct(m.svP) : "—"}</td>
-                          <td style={{ padding: "7px 5px", textAlign: "center" }}>{m.cs ? <span style={{ color: t.green }}>✓</span> : ""}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </Card>
+                {selectedGame ? (
+                  <SingleGameView
+                    match={selectedGame.match}
+                    goals={selectedGame.goals}
+                    logRow={selectedGame.logRow}
+                    keeperName={selectedKeeperObj?.name}
+                    primaryColor={primaryColor}
+                    onBack={() => setSelectedGame(null)}
+                    onReport={(match) => {
+                      setSelectedGame(null);
+                      openReport(match);
+                    }}
+                  />
+                ) : (
+                  <>
+                    <Sec icon="📋">Match Log — {selectedKeeperObj?.name} · click any row to drill in</Sec>
+                    <Card s={{ overflowX: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 520 }}>
+                        <thead>
+                          <tr>{["Date", "Type", "Opp", "H/A", "Res", "Score", "SOT", "Sv", "GA", "Sv%", "CS"].map(h => <th key={h} style={{ textAlign: "center", padding: "7px 5px", color: t.dim, borderBottom: `1px solid ${t.border}`, fontSize: 9 }}>{h}</th>)}</tr>
+                        </thead>
+                        <tbody>
+                          {d.matchLog.map((m, i) => (
+                            <tr key={i}
+                              onClick={() => openGameDrillDown(m)}
+                              style={{ background: i % 2 === 0 ? "transparent" : t.cardAlt + "44", cursor: "pointer" }}
+                              onMouseEnter={e => e.currentTarget.style.background = t.cardAlt}
+                              onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? "transparent" : t.cardAlt + "44"}
+                            >
+                              <td style={{ padding: "7px 5px", color: t.text, textAlign: "center" }}>{m.date}</td>
+                              <td style={{ padding: "7px 5px", textAlign: "center" }}><span style={{ fontSize: 8, padding: "2px 6px", borderRadius: 4, background: m.type === "match" ? t.accent + "22" : t.gold + "22", color: m.type === "match" ? t.accent : t.gold }}>{m.type === "match" ? "M" : "T"}</span></td>
+                              <td style={{ padding: "7px 5px", color: t.bright, fontWeight: 600, textAlign: "center" }}>{m.opp}</td>
+                              <td style={{ padding: "7px 5px", color: t.dim, textAlign: "center" }}>{m.type === "training" ? "—" : m.ha}</td>
+                              <td style={{ padding: "7px 5px", textAlign: "center", color: m.res === "W" ? t.green : m.res === "L" ? t.red : t.dim, fontWeight: 600 }}>{m.res}</td>
+                              <td style={{ padding: "7px 5px", color: t.text, textAlign: "center" }}>{m.score}</td>
+                              <td style={{ padding: "7px 5px", color: t.text, textAlign: "center" }}>{m.sot}</td>
+                              <td style={{ padding: "7px 5px", color: t.text, textAlign: "center" }}>{m.sv}</td>
+                              <td style={{ padding: "7px 5px", color: m.ga > 0 ? t.red : t.green, textAlign: "center", fontWeight: 600 }}>{m.ga}</td>
+                              <td style={{ padding: "7px 5px", textAlign: "center", color: m.svP != null ? svC(m.svP) : t.dim, fontWeight: 600 }}>{m.svP != null ? pct(m.svP) : "—"}</td>
+                              <td style={{ padding: "7px 5px", textAlign: "center" }}>{m.cs ? <span style={{ color: t.green }}>✓</span> : ""}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </Card>
+                  </>
+                )}
               </div>
             )}
 
-            {/* ═══ CAUTION ═══ */}
+            {/* CAUTION */}
             {hasMatches && tab === "caution" && (
               <div>
                 <Sec icon="⚡">Coaching Alerts — {selectedKeeperObj?.name}</Sec>
@@ -1001,12 +1363,7 @@ export default function DashboardPage() {
                   alerts.map((al, i) => (
                     <Card key={i} s={{ marginBottom: 12 }}>
                       <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                        <div style={{
-                          width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-                          background: al.type === "positive" ? t.green + "22" : al.type === "alert" ? t.red + "22" : t.orange + "22",
-                          display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16,
-                          border: `1px solid ${al.type === "positive" ? t.green + "44" : al.type === "alert" ? t.red + "44" : t.orange + "44"}`,
-                        }}>
+                        <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: al.type === "positive" ? t.green + "22" : al.type === "alert" ? t.red + "22" : t.orange + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, border: `1px solid ${al.type === "positive" ? t.green + "44" : al.type === "alert" ? t.red + "44" : t.orange + "44"}` }}>
                           {al.type === "positive" ? "📈" : al.type === "alert" ? "🚨" : "⚠️"}
                         </div>
                         <div style={{ flex: 1 }}>
@@ -1024,7 +1381,7 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {/* ═══ GOALS ═══ */}
+            {/* GOALS */}
             {hasMatches && s && tab === "goals" && (
               <div>
                 <Sec icon="🥅">Goals Analysis — {scopeLabel}</Sec>
@@ -1035,10 +1392,7 @@ export default function DashboardPage() {
                     {dGoals?.sources && Object.entries(dGoals.sources).length > 0 ? (
                       <ResponsiveContainer width="100%" height={180}>
                         <PieChart>
-                          <Pie data={Object.entries(dGoals.sources).map(([name, value]) => ({ name, value }))}
-                            cx="50%" cy="50%" outerRadius={65} dataKey="value" label={({ name, value }) => `${name}: ${value}`}
-                            labelLine={{ stroke: t.dim, strokeWidth: 0.5 }}
-                            style={{ fontSize: 9 }}>
+                          <Pie data={Object.entries(dGoals.sources).map(([name, value]) => ({ name, value }))} cx="50%" cy="50%" outerRadius={65} dataKey="value" label={({ name, value }) => `${name}: ${value}`} labelLine={{ stroke: t.dim, strokeWidth: 0.5 }} style={{ fontSize: 9 }}>
                             {Object.keys(dGoals.sources).map((_, i) => <Cell key={i} fill={PAL[i % PAL.length]} />)}
                           </Pie>
                           <Tooltip {...ttS} />
@@ -1047,7 +1401,6 @@ export default function DashboardPage() {
                     ) : <div style={{ color: t.dim, fontSize: 11, textAlign: "center", padding: 20 }}>No goals conceded</div>}
                   </Card>
                 </div>
-
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 14 }}>
                   <Card>
                     <div style={{ fontSize: 10, color: t.dim, marginBottom: 8 }}>Saveability</div>
@@ -1060,18 +1413,12 @@ export default function DashboardPage() {
                   <Card>
                     <div style={{ fontSize: 10, color: t.dim, marginBottom: 8 }}>Shot Type & Positioning</div>
                     {dGoals?.shotTypes && Object.entries(dGoals.shotTypes).length > 0 && (
-                      <div style={{ marginBottom: 10 }}>
-                        {Object.entries(dGoals.shotTypes).map(([type, count]) => (
-                          <PBar key={type} label={type} value={count} max={Math.max(...Object.values(dGoals.shotTypes), 1)} suf="" color={t.cyan} />
-                        ))}
-                      </div>
+                      <div style={{ marginBottom: 10 }}>{Object.entries(dGoals.shotTypes).map(([type, count]) => <PBar key={type} label={type} value={count} max={Math.max(...Object.values(dGoals.shotTypes), 1)} suf="" color={t.cyan} />)}</div>
                     )}
                     {dGoals?.positioning && Object.entries(dGoals.positioning).length > 0 && (
                       <div>
                         <div style={{ fontSize: 9, color: t.dim, marginBottom: 4, marginTop: 8 }}>GK Position at Goal</div>
-                        {Object.entries(dGoals.positioning).map(([pos, count]) => (
-                          <PBar key={pos} label={pos} value={count} max={Math.max(...Object.values(dGoals.positioning), 1)} suf="" color={t.purple} />
-                        ))}
+                        {Object.entries(dGoals.positioning).map(([pos, count]) => <PBar key={pos} label={pos} value={count} max={Math.max(...Object.values(dGoals.positioning), 1)} suf="" color={t.purple} />)}
                       </div>
                     )}
                     {(!dGoals?.shotTypes || Object.keys(dGoals.shotTypes).length === 0) && <div style={{ color: t.dim, fontSize: 11, textAlign: "center", padding: 12 }}>No data</div>}
@@ -1080,7 +1427,7 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {/* ═══ DISTRIBUTION ═══ */}
+            {/* DISTRIBUTION */}
             {hasMatches && s && tab === "distribution" && (
               <div>
                 <Sec icon="📐">Distribution — {scopeLabel}</Sec>
@@ -1099,15 +1446,13 @@ export default function DashboardPage() {
                 </Card>
                 <Card>
                   <div style={{ fontSize: 10, color: t.dim, marginBottom: 10 }}>Accuracy Breakdown</div>
-                  {distData.filter(d => d.att > 0).map(d => (
-                    <PBar key={d.name} label={d.name} value={d.pct} color={d.pct >= 80 ? t.green : d.pct >= 60 ? t.accent : t.yellow} />
-                  ))}
+                  {distData.filter(d => d.att > 0).map(d => <PBar key={d.name} label={d.name} value={d.pct} color={d.pct >= 80 ? t.green : d.pct >= 60 ? t.accent : t.yellow} />)}
                   {distData.every(d => d.att === 0) && <div style={{ color: t.dim, fontSize: 11, textAlign: "center", padding: 16 }}>No distribution data logged yet</div>}
                 </Card>
               </div>
             )}
 
-            {/* ═══ CROSSES ═══ */}
+            {/* CROSSES */}
             {hasMatches && s && tab === "crosses" && (
               <div>
                 <Sec icon="✈️">Cross Handling — {scopeLabel}</Sec>
@@ -1119,26 +1464,15 @@ export default function DashboardPage() {
                       <StatBox label="Punched" value={s.crosses.punched} color={t.gold} />
                       <StatBox label="Missed" value={s.crosses.missed} color={t.red} />
                     </div>
-                    {s.crosses.total > 0 && (
-                      <PBar label="Claim Rate" value={(s.crosses.claimed / s.crosses.total) * 100}
-                        color={(s.crosses.claimed / s.crosses.total) >= 0.7 ? t.green : t.yellow} />
-                    )}
+                    {s.crosses.total > 0 && <PBar label="Claim Rate" value={(s.crosses.claimed / s.crosses.total) * 100} color={(s.crosses.claimed / s.crosses.total) >= 0.7 ? t.green : t.yellow} />}
                   </Card>
                   <Card>
                     <div style={{ fontSize: 10, color: t.dim, marginBottom: 8 }}>Breakdown</div>
                     {s.crosses.total > 0 ? (
                       <ResponsiveContainer width="100%" height={180}>
                         <PieChart>
-                          <Pie data={[
-                            { name: "Claimed", value: s.crosses.claimed },
-                            { name: "Punched", value: s.crosses.punched },
-                            { name: "Missed", value: s.crosses.missed },
-                          ].filter(d => d.value > 0)} cx="50%" cy="50%" outerRadius={65} dataKey="value"
-                            label={({ name, value }) => `${name}: ${value}`} labelLine={{ stroke: t.dim, strokeWidth: 0.5 }}
-                            style={{ fontSize: 9 }}>
-                            <Cell fill={t.green} />
-                            <Cell fill={t.gold} />
-                            <Cell fill={t.red} />
+                          <Pie data={[{ name: "Claimed", value: s.crosses.claimed }, { name: "Punched", value: s.crosses.punched }, { name: "Missed", value: s.crosses.missed }].filter(d => d.value > 0)} cx="50%" cy="50%" outerRadius={65} dataKey="value" label={({ name, value }) => `${name}: ${value}`} labelLine={{ stroke: t.dim, strokeWidth: 0.5 }} style={{ fontSize: 9 }}>
+                            <Cell fill={t.green} /><Cell fill={t.gold} /><Cell fill={t.red} />
                           </Pie>
                           <Tooltip {...ttS} />
                         </PieChart>
@@ -1150,11 +1484,7 @@ export default function DashboardPage() {
                   <Card>
                     <Sec icon="📈">Season vs Last 5</Sec>
                     <ResponsiveContainer width="100%" height={180}>
-                      <BarChart data={[
-                        { name: "Claimed", Season: d.season.crosses.claimed, "Last 5": d.l5.crosses.claimed },
-                        { name: "Punched", Season: d.season.crosses.punched, "Last 5": d.l5.crosses.punched },
-                        { name: "Missed", Season: d.season.crosses.missed, "Last 5": d.l5.crosses.missed },
-                      ]}>
+                      <BarChart data={[{ name: "Claimed", Season: d.season.crosses.claimed, "Last 5": d.l5.crosses.claimed }, { name: "Punched", Season: d.season.crosses.punched, "Last 5": d.l5.crosses.punched }, { name: "Missed", Season: d.season.crosses.missed, "Last 5": d.l5.crosses.missed }]}>
                         <CartesianGrid strokeDasharray="3 3" stroke={t.border} />
                         <XAxis dataKey="name" tick={{ fill: t.dim, fontSize: 9 }} />
                         <YAxis tick={{ fill: t.dim, fontSize: 9 }} />
@@ -1169,7 +1499,7 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {/* ═══ SWEEPER ═══ */}
+            {/* SWEEPER */}
             {hasMatches && s && tab === "sweeper" && (
               <div>
                 <Sec icon="🏃">Sweeper & Rebounds — {scopeLabel}</Sec>
@@ -1190,24 +1520,14 @@ export default function DashboardPage() {
                       <StatBox label="Controlled" value={s.rebounds.controlled} color={t.green} />
                       <StatBox label="Dangerous" value={s.rebounds.dangerous} color={t.red} />
                     </div>
-                    {(s.rebounds.controlled + s.rebounds.dangerous) > 0 && (
-                      <PBar label="Control Rate"
-                        value={(s.rebounds.controlled / (s.rebounds.controlled + s.rebounds.dangerous)) * 100}
-                        color={(s.rebounds.controlled / (s.rebounds.controlled + s.rebounds.dangerous)) >= 0.75 ? t.green : t.yellow} />
-                    )}
+                    {(s.rebounds.controlled + s.rebounds.dangerous) > 0 && <PBar label="Control Rate" value={(s.rebounds.controlled / (s.rebounds.controlled + s.rebounds.dangerous)) * 100} color={(s.rebounds.controlled / (s.rebounds.controlled + s.rebounds.dangerous)) >= 0.75 ? t.green : t.yellow} />}
                   </Card>
                 </div>
                 {d.season && d.l5 && (
                   <Card>
                     <Sec icon="📈">Season vs Last 5</Sec>
                     <ResponsiveContainer width="100%" height={200}>
-                      <BarChart data={[
-                        { name: "Clearances", Season: d.season.sweeper.clearances, "Last 5": d.l5.sweeper.clearances },
-                        { name: "Intercepts", Season: d.season.sweeper.interceptions, "Last 5": d.l5.sweeper.interceptions },
-                        { name: "Tackles", Season: d.season.sweeper.tackles, "Last 5": d.l5.sweeper.tackles },
-                        { name: "RB Ctrl", Season: d.season.rebounds.controlled, "Last 5": d.l5.rebounds.controlled },
-                        { name: "RB Danger", Season: d.season.rebounds.dangerous, "Last 5": d.l5.rebounds.dangerous },
-                      ]}>
+                      <BarChart data={[{ name: "Clearances", Season: d.season.sweeper.clearances, "Last 5": d.l5.sweeper.clearances }, { name: "Intercepts", Season: d.season.sweeper.interceptions, "Last 5": d.l5.sweeper.interceptions }, { name: "Tackles", Season: d.season.sweeper.tackles, "Last 5": d.l5.sweeper.tackles }, { name: "RB Ctrl", Season: d.season.rebounds.controlled, "Last 5": d.l5.rebounds.controlled }, { name: "RB Danger", Season: d.season.rebounds.dangerous, "Last 5": d.l5.rebounds.dangerous }]}>
                         <CartesianGrid strokeDasharray="3 3" stroke={t.border} />
                         <XAxis dataKey="name" tick={{ fill: t.dim, fontSize: 8 }} />
                         <YAxis tick={{ fill: t.dim, fontSize: 9 }} />
@@ -1222,7 +1542,7 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {/* ═══ ATTRIBUTES ═══ */}
+            {/* ATTRIBUTES */}
             {hasMatches && tab === "attributes" && (
               <div>
                 <Sec icon="⭐">Attributes — {scopeLabel}</Sec>
@@ -1231,12 +1551,7 @@ export default function DashboardPage() {
                     <Card>
                       <div style={{ fontSize: 10, color: t.dim, marginBottom: 6 }}>Core Attributes — Season vs Last 5</div>
                       <ResponsiveContainer width="100%" height={260}>
-                        <RadarChart data={CORE_ATTRS.map(k => ({
-                          attr: ATTR_LABELS[k],
-                          Season: d.sznAttrs?.[k] || 0,
-                          "Last 5": d.l5Attrs?.[k] || 0,
-                          fullMark: 5,
-                        }))}>
+                        <RadarChart data={CORE_ATTRS.map(k => ({ attr: ATTR_LABELS[k], Season: d.sznAttrs?.[k] || 0, "Last 5": d.l5Attrs?.[k] || 0, fullMark: 5 }))}>
                           <PolarGrid stroke={t.border} />
                           <PolarAngleAxis dataKey="attr" tick={{ fill: t.dim, fontSize: 7 }} />
                           <PolarRadiusAxis angle={90} domain={[0, 5]} tick={{ fill: t.dim, fontSize: 7 }} />
@@ -1251,20 +1566,14 @@ export default function DashboardPage() {
                       {ATTR_KEYS.filter(k => dAttrs[k] != null).sort((a, b) => (dAttrs[b] || 0) - (dAttrs[a] || 0)).map(k => (
                         <div key={k} style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 2 }}>
                           <div style={{ width: 95, fontSize: 9, color: t.dim, textAlign: "right", flexShrink: 0 }}>{ATTR_LABELS[k]}</div>
-                          <div style={{ flex: 1, height: 10, background: t.bg, borderRadius: 3, overflow: "hidden" }}>
-                            <div style={{ width: `${(dAttrs[k] / 5) * 100}%`, height: "100%", borderRadius: 3, background: ratC(dAttrs[k]) }} />
-                          </div>
+                          <div style={{ flex: 1, height: 10, background: t.bg, borderRadius: 3, overflow: "hidden" }}><div style={{ width: `${(dAttrs[k] / 5) * 100}%`, height: "100%", borderRadius: 3, background: ratC(dAttrs[k]) }} /></div>
                           <div style={{ width: 28, fontSize: 9, color: t.bright, fontWeight: 600, textAlign: "right" }}>{dAttrs[k]?.toFixed(1)}</div>
                           <TrendBadge cur={d.l5Attrs?.[k]} prev={d.sznAttrs?.[k]} />
                         </div>
                       ))}
                     </Card>
                   </div>
-                ) : (
-                  <EmptyState icon="⭐" title="No Attribute Ratings" subtitle="Rate keeper attributes after each match in Pitchside." />
-                )}
-
-                {/* Save types */}
+                ) : <EmptyState icon="⭐" title="No Attribute Ratings" subtitle="Rate keeper attributes after each match in Pitchside." />}
                 {s && (
                   <Card>
                     <Sec icon="🧤">Save Types ({scopeLabel})</Sec>
@@ -1286,7 +1595,7 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {/* ═══ QUARTERLY ═══ */}
+            {/* QUARTERLY */}
             {hasMatches && tab === "quarterly" && d.quarterly && (
               <div>
                 <Sec icon="📅">Quarterly Breakdown</Sec>
@@ -1295,9 +1604,7 @@ export default function DashboardPage() {
                     <thead>
                       <tr>
                         <th style={{ textAlign: "left", padding: "7px 8px", color: t.dim, borderBottom: `1px solid ${t.border}` }}>Metric</th>
-                        {["Q1", "Q2", "Q3", "Q4"].map(q => (
-                          <th key={q} style={{ textAlign: "center", padding: "7px 8px", color: t.dim, borderBottom: `1px solid ${t.border}` }}>{q}</th>
-                        ))}
+                        {["Q1", "Q2", "Q3", "Q4"].map(q => <th key={q} style={{ textAlign: "center", padding: "7px 8px", color: t.dim, borderBottom: `1px solid ${t.border}` }}>{q}</th>)}
                       </tr>
                     </thead>
                     <tbody>
@@ -1312,13 +1619,7 @@ export default function DashboardPage() {
                           <td style={{ padding: "7px 8px", color: t.text, borderBottom: `1px solid ${t.border}22` }}>{r.l}</td>
                           {["Q1", "Q2", "Q3", "Q4"].map(q => {
                             const v = d.quarterly[q]?.[r.k];
-                            return (
-                              <td key={q} style={{
-                                textAlign: "center", padding: "7px 8px",
-                                color: v == null || (v === 0 && r.k === "gp") ? t.dim : t.bright,
-                                borderBottom: `1px solid ${t.border}22`,
-                              }}>{r.f(v)}</td>
-                            );
+                            return <td key={q} style={{ textAlign: "center", padding: "7px 8px", color: v == null || (v === 0 && r.k === "gp") ? t.dim : t.bright, borderBottom: `1px solid ${t.border}22` }}>{r.f(v)}</td>;
                           })}
                         </tr>
                       ))}
@@ -1328,11 +1629,7 @@ export default function DashboardPage() {
                 <Card>
                   <Sec icon="📈">Trends</Sec>
                   <ResponsiveContainer width="100%" height={200}>
-                    <LineChart data={["Q1", "Q2", "Q3", "Q4"].map(q => ({
-                      q,
-                      svPct: d.quarterly[q]?.svPct ? d.quarterly[q].svPct * 100 : null,
-                      gaa: d.quarterly[q]?.gaa || null,
-                    }))}>
+                    <LineChart data={["Q1", "Q2", "Q3", "Q4"].map(q => ({ q, svPct: d.quarterly[q]?.svPct ? d.quarterly[q].svPct * 100 : null, gaa: d.quarterly[q]?.gaa || null }))}>
                       <CartesianGrid strokeDasharray="3 3" stroke={t.border} />
                       <XAxis dataKey="q" tick={{ fill: t.dim, fontSize: 9 }} />
                       <YAxis yAxisId="sv" domain={[0, 100]} tick={{ fill: t.dim, fontSize: 9 }} />
@@ -1347,7 +1644,7 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {/* ═══ COMPARE ═══ */}
+            {/* COMPARE */}
             {tab === "compare" && (
               <div>
                 <Sec icon="⚖️">Head-to-Head</Sec>
@@ -1355,55 +1652,37 @@ export default function DashboardPage() {
                   <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                     <div style={{ flex: 1, minWidth: 140 }}>
                       <div style={{ fontSize: 8, color: t.dim }}>Primary</div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: t.accent }}>
-                        #{selectedKeeperObj?.number || "?"} {selectedKeeperObj?.name}
-                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: t.accent }}>#{selectedKeeperObj?.number || "?"} {selectedKeeperObj?.name}</div>
                     </div>
                     <div style={{ fontSize: 16, color: t.dim }}>vs</div>
                     <div style={{ flex: 1, minWidth: 140 }}>
                       <div style={{ fontSize: 8, color: t.dim }}>Compare to</div>
-                      <select value={cmpKeeper || ""} onChange={e => setCmpKeeper(e.target.value || null)}
-                        style={{ width: "100%", background: t.bg, border: `1px solid ${t.border}`, borderRadius: 6, padding: "7px 9px", color: t.bright, fontSize: 11, cursor: "pointer", fontFamily: font }}>
+                      <select value={cmpKeeper || ""} onChange={e => setCmpKeeper(e.target.value || null)} style={{ width: "100%", background: t.bg, border: `1px solid ${t.border}`, borderRadius: 6, padding: "7px 9px", color: t.bright, fontSize: 11, cursor: "pointer", fontFamily: font }}>
                         <option value="">Select keeper...</option>
-                        {keepers.filter(k => k.id !== selectedKeeper).map(k => (
-                          <option key={k.id} value={k.id}>#{k.number || "?"} {k.name}</option>
-                        ))}
+                        {keepers.filter(k => k.id !== selectedKeeper).map(k => <option key={k.id} value={k.id}>#{k.number || "?"} {k.name}</option>)}
                       </select>
                     </div>
                   </div>
                 </Card>
-
                 {cmpData?.season && d?.season ? (
                   <div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 }}>
                       <Card>
                         <Sec icon="📊">Season Stats</Sec>
                         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-                          <thead>
-                            <tr>
-                              <th style={{ textAlign: "left", padding: "5px 0", color: t.dim }}></th>
-                              <th style={{ textAlign: "center", color: t.accent, fontSize: 9 }}>{selectedKeeperObj?.name?.split(" ")[0]}</th>
-                              <th style={{ textAlign: "center", color: t.gold, fontSize: 9 }}>{cmpKeeperObj?.name?.split(" ")[0]}</th>
-                            </tr>
-                          </thead>
+                          <thead><tr><th style={{ textAlign: "left", padding: "5px 0", color: t.dim }}></th><th style={{ textAlign: "center", color: t.accent, fontSize: 9 }}>{selectedKeeperObj?.name?.split(" ")[0]}</th><th style={{ textAlign: "center", color: t.gold, fontSize: 9 }}>{cmpKeeperObj?.name?.split(" ")[0]}</th></tr></thead>
                           <tbody>
                             {[
-                              { l: "GP", v1: d.season.gp, v2: cmpData.season.gp },
-                              { l: "Sv%", v1: d.season.svPct, v2: cmpData.season.svPct, f: pct, b: "high" },
-                              { l: "GAA", v1: d.season.gaa, v2: cmpData.season.gaa, f: dec, b: "low" },
-                              { l: "CS%", v1: d.season.csPct, v2: cmpData.season.csPct, f: pct, b: "high" },
-                              { l: "Cross%", v1: d.season.crosses.total > 0 ? d.season.crosses.claimed / d.season.crosses.total : 0, v2: cmpData.season.crosses.total > 0 ? cmpData.season.crosses.claimed / cmpData.season.crosses.total : 0, f: pct, b: "high" },
-                              { l: "1v1 Win%", v1: d.season.oneV1.faced > 0 ? d.season.oneV1.won / d.season.oneV1.faced : 0, v2: cmpData.season.oneV1.faced > 0 ? cmpData.season.oneV1.won / cmpData.season.oneV1.faced : 0, f: pct, b: "high" },
+                              { l: "GP",       v1: d.season.gp,      v2: cmpData.season.gp },
+                              { l: "Sv%",      v1: d.season.svPct,   v2: cmpData.season.svPct,  f: pct, b: "high" },
+                              { l: "GAA",      v1: d.season.gaa,     v2: cmpData.season.gaa,    f: dec, b: "low" },
+                              { l: "CS%",      v1: d.season.csPct,   v2: cmpData.season.csPct,  f: pct, b: "high" },
+                              { l: "Cross%",   v1: d.season.crosses.total > 0 ? d.season.crosses.claimed/d.season.crosses.total : 0, v2: cmpData.season.crosses.total > 0 ? cmpData.season.crosses.claimed/cmpData.season.crosses.total : 0, f: pct, b: "high" },
+                              { l: "1v1 Win%", v1: d.season.oneV1.faced > 0 ? d.season.oneV1.won/d.season.oneV1.faced : 0, v2: cmpData.season.oneV1.faced > 0 ? cmpData.season.oneV1.won/cmpData.season.oneV1.faced : 0, f: pct, b: "high" },
                             ].map(r => {
                               const fmt = r.f || (v => v);
                               const b1 = r.b === "high" ? r.v1 > r.v2 : r.b === "low" ? r.v1 < r.v2 : false;
-                              return (
-                                <tr key={r.l}>
-                                  <td style={{ padding: "5px 0", color: t.dim }}>{r.l}</td>
-                                  <td style={{ textAlign: "center", color: b1 ? t.green : t.bright, fontWeight: b1 ? 700 : 400 }}>{fmt(r.v1)}</td>
-                                  <td style={{ textAlign: "center", color: !b1 ? t.green : t.bright, fontWeight: !b1 ? 700 : 400 }}>{fmt(r.v2)}</td>
-                                </tr>
-                              );
+                              return <tr key={r.l}><td style={{ padding: "5px 0", color: t.dim }}>{r.l}</td><td style={{ textAlign: "center", color: b1 ? t.green : t.bright, fontWeight: b1 ? 700 : 400 }}>{fmt(r.v1)}</td><td style={{ textAlign: "center", color: !b1 ? t.green : t.bright, fontWeight: !b1 ? 700 : 400 }}>{fmt(r.v2)}</td></tr>;
                             })}
                           </tbody>
                         </table>
@@ -1411,44 +1690,25 @@ export default function DashboardPage() {
                       <Card>
                         <Sec icon="🏃">Sweeper & Rebounds</Sec>
                         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
-                          <thead>
-                            <tr>
-                              <th style={{ textAlign: "left", padding: "5px 0", color: t.dim }}></th>
-                              <th style={{ textAlign: "center", color: t.accent, fontSize: 9 }}>{selectedKeeperObj?.name?.split(" ")[0]}</th>
-                              <th style={{ textAlign: "center", color: t.gold, fontSize: 9 }}>{cmpKeeperObj?.name?.split(" ")[0]}</th>
-                            </tr>
-                          </thead>
+                          <thead><tr><th style={{ textAlign: "left", padding: "5px 0", color: t.dim }}></th><th style={{ textAlign: "center", color: t.accent, fontSize: 9 }}>{selectedKeeperObj?.name?.split(" ")[0]}</th><th style={{ textAlign: "center", color: t.gold, fontSize: 9 }}>{cmpKeeperObj?.name?.split(" ")[0]}</th></tr></thead>
                           <tbody>
                             {[
-                              { l: "Sweeper", v1: d.season.sweeper.clearances + d.season.sweeper.interceptions + d.season.sweeper.tackles, v2: cmpData.season.sweeper.clearances + cmpData.season.sweeper.interceptions + cmpData.season.sweeper.tackles, b: "high" },
-                              { l: "RB Ctrl%", v1: (d.season.rebounds.controlled + d.season.rebounds.dangerous) > 0 ? d.season.rebounds.controlled / (d.season.rebounds.controlled + d.season.rebounds.dangerous) : 0, v2: (cmpData.season.rebounds.controlled + cmpData.season.rebounds.dangerous) > 0 ? cmpData.season.rebounds.controlled / (cmpData.season.rebounds.controlled + cmpData.season.rebounds.dangerous) : 0, f: pct, b: "high" },
+                              { l: "Sweeper", v1: d.season.sweeper.clearances+d.season.sweeper.interceptions+d.season.sweeper.tackles, v2: cmpData.season.sweeper.clearances+cmpData.season.sweeper.interceptions+cmpData.season.sweeper.tackles, b: "high" },
+                              { l: "RB Ctrl%", v1: (d.season.rebounds.controlled+d.season.rebounds.dangerous)>0?d.season.rebounds.controlled/(d.season.rebounds.controlled+d.season.rebounds.dangerous):0, v2: (cmpData.season.rebounds.controlled+cmpData.season.rebounds.dangerous)>0?cmpData.season.rebounds.controlled/(cmpData.season.rebounds.controlled+cmpData.season.rebounds.dangerous):0, f: pct, b: "high" },
                             ].map(r => {
                               const fmt = r.f || (v => v);
                               const b1 = r.b === "high" ? r.v1 > r.v2 : false;
-                              return (
-                                <tr key={r.l}>
-                                  <td style={{ padding: "5px 0", color: t.dim }}>{r.l}</td>
-                                  <td style={{ textAlign: "center", color: b1 ? t.green : t.bright, fontWeight: b1 ? 700 : 400 }}>{fmt(r.v1)}</td>
-                                  <td style={{ textAlign: "center", color: !b1 ? t.green : t.bright, fontWeight: !b1 ? 700 : 400 }}>{fmt(r.v2)}</td>
-                                </tr>
-                              );
+                              return <tr key={r.l}><td style={{ padding: "5px 0", color: t.dim }}>{r.l}</td><td style={{ textAlign: "center", color: b1 ? t.green : t.bright, fontWeight: b1 ? 700 : 400 }}>{fmt(r.v1)}</td><td style={{ textAlign: "center", color: !b1 ? t.green : t.bright, fontWeight: !b1 ? 700 : 400 }}>{fmt(r.v2)}</td></tr>;
                             })}
                           </tbody>
                         </table>
                       </Card>
                     </div>
-
-                    {/* Compare radar */}
                     {d.sznAttrs && cmpData.sznAttrs && (
                       <Card s={{ marginBottom: 16 }}>
                         <Sec icon="⭐">Attributes</Sec>
                         <ResponsiveContainer width="100%" height={280}>
-                          <RadarChart data={CORE_ATTRS.map(k => ({
-                            attr: ATTR_LABELS[k],
-                            [selectedKeeperObj?.name?.split(" ")[0] || "A"]: d.sznAttrs[k] || 0,
-                            [cmpKeeperObj?.name?.split(" ")[0] || "B"]: cmpData.sznAttrs[k] || 0,
-                            fullMark: 5,
-                          }))}>
+                          <RadarChart data={CORE_ATTRS.map(k => ({ attr: ATTR_LABELS[k], [selectedKeeperObj?.name?.split(" ")[0] || "A"]: d.sznAttrs[k] || 0, [cmpKeeperObj?.name?.split(" ")[0] || "B"]: cmpData.sznAttrs[k] || 0, fullMark: 5 }))}>
                             <PolarGrid stroke={t.border} />
                             <PolarAngleAxis dataKey="attr" tick={{ fill: t.dim, fontSize: 8 }} />
                             <PolarRadiusAxis angle={90} domain={[0, 5]} tick={{ fill: t.dim, fontSize: 7 }} />
@@ -1459,16 +1719,12 @@ export default function DashboardPage() {
                         </ResponsiveContainer>
                       </Card>
                     )}
-
-                    {/* Compare heatmaps */}
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                       <Card><GoalHeatmap zones={d.seasonGoals?.zones} title={`${selectedKeeperObj?.name?.split(" ")[0]} Goals`} /></Card>
                       <Card><GoalHeatmap zones={cmpData.seasonGoals?.zones} title={`${cmpKeeperObj?.name?.split(" ")[0]} Goals`} /></Card>
                     </div>
                   </div>
-                ) : (
-                  <EmptyState icon="⚖️" title="Select a Keeper to Compare" subtitle="Choose a second goalkeeper from the dropdown above." />
-                )}
+                ) : <EmptyState icon="⚖️" title="Select a Keeper to Compare" subtitle="Choose a second goalkeeper from the dropdown above." />}
               </div>
             )}
 
@@ -1476,24 +1732,13 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Footer */}
       <div style={{ textAlign: "center", padding: 14, borderTop: `1px solid ${t.border}`, fontSize: 8, color: t.dim }}>
         StixAnalytix · Built for coaching professionals
       </div>
 
-      {/* ═══ MODALS ═══ */}
-      {showKeeperModal && (
-        <KeeperModal keeper={null} primaryColor={primaryColor}
-          onClose={() => setShowKeeperModal(false)} onSave={handleAddKeeper} />
-      )}
-      {editingKeeper && (
-        <KeeperModal keeper={editingKeeper} primaryColor={primaryColor}
-          onClose={() => setEditingKeeper(null)} onSave={handleEditKeeper}
-          onDeactivate={handleDeactivateKeeper} />
-      )}
+      {showKeeperModal && <KeeperModal keeper={null} primaryColor={primaryColor} onClose={() => setShowKeeperModal(false)} onSave={handleAddKeeper} />}
+      {editingKeeper && <KeeperModal keeper={editingKeeper} primaryColor={primaryColor} onClose={() => setEditingKeeper(null)} onSave={handleEditKeeper} onDeactivate={handleDeactivateKeeper} />}
     </div>
   );
 }
-
-
 
