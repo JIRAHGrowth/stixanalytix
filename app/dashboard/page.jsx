@@ -406,6 +406,146 @@ function EmptyState({ icon, title, subtitle }) {
 }
 
 // ═══ SINGLE GAME VIEW ═══════════════════════════════════════════════════════
+// ═══ SHOT CROSS-REFERENCE ════════════════════════════════════════════════════
+const ORIGINS = ["Inside Box", "Outside Box", "Penalty Spot", "Right Channel", "Left Channel", "Central", "Header Zone"];
+const NET_ZONES = ["High L", "High C", "High R", "Mid L", "Mid C", "Mid R", "Low L", "Low C", "Low R"];
+const NET_ZONE_GRID = [
+  ["High L", "High C", "High R"],
+  ["Mid L",  "Mid C",  "Mid R"],
+  ["Low L",  "Low C",  "Low R"],
+];
+
+function ShotCrossRef({ goals }) {
+  const [activeOrigin, setActiveOrigin] = useState(null);
+
+  if (!goals || goals.length === 0) {
+    return (
+      <div style={{ textAlign: "center", padding: 32, color: t.dim, fontSize: 12 }}>
+        No goal data to cross-reference yet.
+      </div>
+    );
+  }
+
+  // Build origin → zone matrix from raw goals
+  const matrix = {};
+  const originsUsed = new Set();
+  const zonesUsed = new Set();
+
+  goals.forEach(g => {
+    const origin = g.shot_origin;
+    const zone = g.goal_zone;
+    if (!origin || !zone) return;
+    originsUsed.add(origin);
+    zonesUsed.add(zone);
+    if (!matrix[origin]) matrix[origin] = {};
+    matrix[origin][zone] = (matrix[origin][zone] || 0) + 1;
+  });
+
+  const usedOrigins = ORIGINS.filter(o => originsUsed.has(o));
+  // Also include any origins in data not in our preset list
+  originsUsed.forEach(o => { if (!ORIGINS.includes(o)) usedOrigins.push(o); });
+
+  if (usedOrigins.length === 0) {
+    return (
+      <div style={{ textAlign: "center", padding: 24, color: t.dim, fontSize: 12 }}>
+        Goal data exists but shot origin / net zone fields are not yet populated.
+      </div>
+    );
+  }
+
+  // When an origin is selected, show its net zone distribution
+  const selectedData = activeOrigin ? (matrix[activeOrigin] || {}) : null;
+  const selectedTotal = selectedData ? Object.values(selectedData).reduce((s, v) => s + v, 0) : 0;
+
+  // For the summary table: totals per origin
+  const originTotals = usedOrigins.map(o => ({
+    origin: o,
+    total: Object.values(matrix[o] || {}).reduce((s, v) => s + v, 0),
+    topZone: Object.entries(matrix[o] || {}).sort((a, b) => b[1] - a[1])[0]?.[0] || "—",
+  })).sort((a, b) => b.total - a.total);
+
+  const maxTotal = Math.max(...originTotals.map(o => o.total), 1);
+
+  return (
+    <div>
+      {/* Intro label */}
+      <div style={{ fontSize: 11, color: t.dim, marginBottom: 14, lineHeight: 1.5 }}>
+        Click a shot origin to see exactly where on the net those goals went. Reveals pattern vulnerabilities for targeted training.
+      </div>
+
+      {/* Origin summary bars — clickable */}
+      <div style={{ marginBottom: 16 }}>
+        {originTotals.map(({ origin, total, topZone }) => (
+          <div
+            key={origin}
+            onClick={() => setActiveOrigin(activeOrigin === origin ? null : origin)}
+            style={{
+              display: "flex", alignItems: "center", gap: 10, marginBottom: 6,
+              padding: "8px 10px", borderRadius: 8, cursor: "pointer",
+              background: activeOrigin === origin ? t.red + "18" : "transparent",
+              border: `1px solid ${activeOrigin === origin ? t.red + "55" : "transparent"}`,
+              transition: "all 0.12s",
+            }}
+          >
+            <div style={{ width: 110, fontSize: 11, color: activeOrigin === origin ? t.bright : t.text, fontWeight: activeOrigin === origin ? 700 : 400, flexShrink: 0 }}>{origin}</div>
+            <div style={{ flex: 1, height: 10, background: t.bg, borderRadius: 3, overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${(total / maxTotal) * 100}%`, background: activeOrigin === origin ? t.red : t.orange, borderRadius: 3, transition: "width 0.2s" }} />
+            </div>
+            <div style={{ width: 20, fontSize: 12, fontWeight: 700, color: t.bright, textAlign: "right" }}>{total}</div>
+            <div style={{ width: 60, fontSize: 9, color: t.dim, textAlign: "right" }}>→ {topZone}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Net zone breakdown for selected origin */}
+      {activeOrigin && selectedData && (
+        <div style={{ background: t.cardAlt, borderRadius: 10, padding: 16, border: `1px solid ${t.border}` }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: t.bright, marginBottom: 4 }}>
+            Goals from <span style={{ color: t.orange }}>{activeOrigin}</span> — where they went in
+          </div>
+          <div style={{ fontSize: 10, color: t.dim, marginBottom: 14 }}>
+            {selectedTotal} goal{selectedTotal !== 1 ? "s" : ""} conceded from this position
+          </div>
+
+          {/* 3×3 net grid */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, maxWidth: 260, margin: "0 auto 14px" }}>
+            {NET_ZONE_GRID.flat().map(zone => {
+              const count = selectedData[zone] || 0;
+              const pctVal = selectedTotal > 0 ? (count / selectedTotal) : 0;
+              const intensity = pctVal;
+              return (
+                <div key={zone} style={{
+                  background: count > 0 ? `rgba(239,68,68,${0.12 + intensity * 0.7})` : t.bg,
+                  border: `1px solid ${count > 0 ? t.red + "55" : t.border}`,
+                  borderRadius: 6, padding: "10px 4px", textAlign: "center",
+                }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: count > 0 ? t.bright : t.dim }}>{count}</div>
+                  <div style={{ fontSize: 8, color: t.dim, marginTop: 2 }}>{zone}</div>
+                  {count > 0 && <div style={{ fontSize: 8, color: t.red, fontWeight: 600 }}>{(pctVal * 100).toFixed(0)}%</div>}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Coaching insight */}
+          {selectedTotal >= 2 && (() => {
+            const top = Object.entries(selectedData).sort((a, b) => b[1] - a[1])[0];
+            const topPct = top ? ((top[1] / selectedTotal) * 100).toFixed(0) : 0;
+            const isHighDanger = top?.[0]?.startsWith("Low") || top?.[0]?.startsWith("Mid");
+            return (
+              <div style={{ background: t.red + "12", border: `1px solid ${t.red}33`, borderRadius: 8, padding: "10px 12px", fontSize: 11, color: t.text, lineHeight: 1.6 }}>
+                <span style={{ color: t.red, fontWeight: 700 }}>⚠ Pattern: </span>
+                {topPct}% of goals from <strong>{activeOrigin}</strong> go to the <strong>{top?.[0]}</strong> zone.
+                {isHighDanger ? " Low/mid goals often indicate positioning or set stance — drill this channel in training." : " High goals from this zone suggest poor starting position or late reaction — review set position."}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SingleGameView({ match, goals, logRow, keeperName, primaryColor, onBack, onReport }) {
   if (!match) return (
     <div style={{ padding: 32, color: t.dim, textAlign: "center" }}>
@@ -446,10 +586,10 @@ function SingleGameView({ match, goals, logRow, keeperName, primaryColor, onBack
     <div style={{ fontFamily: font, color: t.text }}>
       {/* Header bar */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-        <button onClick={onBack} style={{ background: "none", border: `1px solid ${t.border}`, borderRadius: 8, padding: "8px 14px", color: t.dim, fontSize: 12, cursor: "pointer", fontFamily: font }}>
+        <button onClick={onBack} style={{ background: t.cardAlt, border: `1px solid ${t.border}`, borderRadius: 8, padding: "8px 14px", color: t.bright, fontSize: 12, cursor: "pointer", fontFamily: font }}>
           ← Back to Matches
         </button>
-        <button onClick={() => onReport(match)} style={{ background: pc, border: "none", borderRadius: 8, padding: "8px 14px", color: "#000", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: font }}>
+        <button onClick={() => onReport(match)} style={{ background: t.accent, border: "none", borderRadius: 8, padding: "8px 16px", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: font, boxShadow: `0 0 12px ${t.accentGlow}` }}>
           📄 Generate Report
         </button>
       </div>
@@ -986,6 +1126,8 @@ export default function DashboardPage() {
       sznAttrs: aggregateAttrs(kAttrs),
       l5Attrs: aggregateAttrs(l5Attrs),
       last5Matches: last5,
+      rawGoals: kGoals,
+      rawL5Goals: l5Goals,
     };
   }, [selectedKeeper, allMatches, allGoals, allAttrs]);
 
@@ -1422,6 +1564,14 @@ export default function DashboardPage() {
                       </div>
                     )}
                     {(!dGoals?.shotTypes || Object.keys(dGoals.shotTypes).length === 0) && <div style={{ color: t.dim, fontSize: 11, textAlign: "center", padding: 12 }}>No data</div>}
+                  </Card>
+                </div>
+
+                {/* SHOT ORIGIN × NET ZONE CROSS-REFERENCE */}
+                <div style={{ marginTop: 14 }}>
+                  <Sec icon="🎯">Shot Origin vs Net Zone — Where Vulnerability Lives</Sec>
+                  <Card>
+                    <ShotCrossRef goals={isL5 ? d.rawL5Goals : d.rawGoals} />
                   </Card>
                 </div>
               </div>
