@@ -11,7 +11,7 @@ import {
 } from "recharts";
 
 // ═══ THEME ═══════════════════════════════════════════════════════════════════
-const t = {
+const tDark = {
   bg: "#070b0e", card: "#0f1419", cardAlt: "#151c22", border: "#1e2a32",
   accent: "#10b981", accentDim: "#065f46", accentGlow: "#10b98133",
   gold: "#d4a853", orange: "#f97316",
@@ -19,6 +19,15 @@ const t = {
   cyan: "#06b6d4", purple: "#a78bfa", teal: "#14b8a6", pink: "#f472b6",
   text: "#d1d9e0", dim: "#5c6b77", bright: "#f0f4f7",
 };
+const tLight = {
+  bg: "#f5f7fa", card: "#ffffff", cardAlt: "#f0f2f5", border: "#e2e8f0",
+  accent: "#10b981", accentDim: "#d1fae5", accentGlow: "#10b98122",
+  gold: "#b8860b", orange: "#ea580c",
+  red: "#dc2626", green: "#16a34a", yellow: "#ca8a04",
+  cyan: "#0891b2", purple: "#7c3aed", teal: "#0d9488", pink: "#db2777",
+  text: "#1e293b", dim: "#64748b", bright: "#0f172a",
+};
+let t = tDark;
 const font = "'DM Sans', -apple-system, sans-serif";
 const PAL = ["#10b981","#06b6d4","#eab308","#f97316","#ef4444","#a78bfa","#f472b6","#22c55e","#14b8a6","#38bdf8"];
 const ttS = { contentStyle: { background: t.card, border: `1px solid ${t.border}`, borderRadius: 8, fontSize: 10, color: t.text }, itemStyle: { color: t.text } };
@@ -41,6 +50,18 @@ const ATTR_LABELS = {
   composure:"Composure", compete_level:"Compete Level",
 };
 const CORE_ATTRS = ["shot_stopping","positioning","aerial_dominance","distribution","decision_making","composure","compete_level"];
+
+const ZONE_LABELS = {
+  "High L": "Top Left", "High C": "Top Center", "High R": "Top Right",
+  "Mid L": "Mid Left", "Mid C": "Mid Center", "Mid R": "Mid Right",
+  "Low L": "Low Left", "Low C": "Low Center", "Low R": "Low Right",
+};
+const ORIGIN_LABELS = {
+  "6yard": "6-Yard Box", "boxC": "Box (Center)", "boxL": "Box (Left)",
+  "boxR": "Box (Right)", "cornerL": "Wide Left", "cornerR": "Wide Right",
+  "outC": "Outside Box", "outL": "Outside Left", "outR": "Outside Right",
+  "penalty": "Penalty Spot",
+};
 
 // ═══ FORMATTING HELPERS ══════════════════════════════════════════════════════
 const pct = v => v != null && !isNaN(v) ? (v * 100).toFixed(1) + "%" : "—";
@@ -291,33 +312,79 @@ const ZONE_POSITIONS = {
 
 function GoalHeatmap({ zones, title }) {
   if (!zones || Object.keys(zones).length === 0) {
-    return <div style={{ textAlign: "center", padding: 24, color: t.dim, fontSize: 12 }}>No goal data yet</div>;
+    return <div style={{ textAlign: "center", padding: 24, color: t.dim, fontSize: 12 }}>No goal data</div>;
   }
   const maxVal = Math.max(...Object.values(zones), 1);
+  const grid = [["High L","High C","High R"],["Mid L","Mid C","Mid R"],["Low L","Low C","Low R"]];
   return (
     <div>
-      {title && <div style={{ fontSize: 10, color: t.dim, marginBottom: 8, textAlign: "center" }}>{title}</div>}
-      <svg viewBox="0 0 104 84" style={{ width: "100%", maxWidth: 280, display: "block", margin: "0 auto" }}>
-        <rect x="2" y="2" width="100" height="80" rx="2" fill="none" stroke={t.border} strokeWidth="1.5" />
-        {Object.entries(ZONE_POSITIONS).map(([zone, pos]) => {
-          const count = zones[zone] || 0;
-          const intensity = count / maxVal;
+      {title && <div style={{ fontSize: 11, color: t.dim, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>{title}</div>}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2, border: "2px solid " + t.border, borderRadius: 6, overflow: "hidden", maxWidth: 260, margin: "0 auto" }}>
+        {grid.flat().map(z => {
+          const v = zones[z] || 0;
+          const intensity = v > 0 ? 0.25 + (v / maxVal) * 0.75 : 0;
+          const label = ZONE_LABELS[z] || z;
           return (
-            <g key={zone}>
-              <rect x={pos.x} y={pos.y} width="28" height="22" rx="3"
-                fill={count > 0 ? `rgba(239,68,68,${0.15 + intensity * 0.6})` : t.bg}
-                stroke={t.border} strokeWidth="0.5" />
-              <text x={pos.x + 14} y={pos.y + 13} textAnchor="middle" dominantBaseline="middle"
-                fill={count > 0 ? t.bright : t.dim} fontSize="10" fontWeight="700">{count}</text>
+            <div key={z} style={{
+              aspectRatio: "1.2", display: "flex", flexDirection: "column",
+              alignItems: "center", justifyContent: "center",
+              background: v > 0 ? "rgba(239,68,68," + intensity + ")" : t.bg,
+              borderRight: z.includes("R") ? "none" : "1px solid " + t.border,
+              borderBottom: z.includes("Low") ? "none" : "1px solid " + t.border,
+            }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: v > 0 ? t.bright : t.dim }}>{v}</div>
+              <div style={{ fontSize: 8, color: t.dim, marginTop: 2 }}>{label}</div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PitchOriginMap({ origins, title }) {
+  if (!origins || Object.keys(origins).length === 0) {
+    return <div style={{ textAlign: "center", padding: 24, color: t.dim, fontSize: 12 }}>No origin data</div>;
+  }
+  const maxVal = Math.max(...Object.values(origins), 1);
+  const zones = [
+    { key: "cornerL", x: 5, y: 5, w: 15, h: 20, label: "Wide L" },
+    { key: "boxL", x: 20, y: 15, w: 18, h: 35, label: "Box L" },
+    { key: "6yard", x: 38, y: 25, w: 24, h: 22, label: "6-Yard" },
+    { key: "boxR", x: 62, y: 15, w: 18, h: 35, label: "Box R" },
+    { key: "cornerR", x: 80, y: 5, w: 15, h: 20, label: "Wide R" },
+    { key: "boxC", x: 28, y: 48, w: 44, h: 20, label: "Box Center" },
+    { key: "penalty", x: 42, y: 55, w: 16, h: 8, label: "Pen Spot" },
+    { key: "outC", x: 20, y: 68, w: 60, h: 22, label: "Outside Box" },
+    { key: "outL", x: 5, y: 50, w: 15, h: 40, label: "Out Left" },
+    { key: "outR", x: 80, y: 50, w: 15, h: 40, label: "Out Right" },
+  ];
+  return (
+    <div>
+      {title && <div style={{ fontSize: 11, color: t.dim, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>{title}</div>}
+      <svg viewBox="0 0 100 95" style={{ width: "100%", maxWidth: 280, display: "block", margin: "0 auto" }}>
+        <rect x="0" y="0" width="100" height="95" rx="2" fill={t.bg} stroke={t.border} strokeWidth="0.5" />
+        <line x1="0" y1="2" x2="100" y2="2" stroke={t.border} strokeWidth="1" />
+        <rect x="20" y="2" width="60" height="50" fill="none" stroke={t.dim} strokeWidth="0.4" strokeDasharray="2" />
+        <rect x="32" y="2" width="36" height="22" fill="none" stroke={t.dim} strokeWidth="0.4" strokeDasharray="2" />
+        <circle cx="50" cy="38" r="1" fill={t.dim} />
+        {zones.map(z => {
+          const v = origins[z.key] || 0;
+          const intensity = v > 0 ? 0.2 + (v / maxVal) * 0.7 : 0;
+          return (
+            <g key={z.key}>
+              {v > 0 && <rect x={z.x} y={z.y} width={z.w} height={z.h} rx="1" fill={"rgba(239,68,68," + intensity + ")"} />}
+              {v > 0 && <text x={z.x + z.w/2} y={z.y + z.h/2 - 2} textAnchor="middle" dominantBaseline="middle" fill={t.bright} fontSize="7" fontWeight="800">{v}</text>}
+              {v > 0 && <text x={z.x + z.w/2} y={z.y + z.h/2 + 6} textAnchor="middle" dominantBaseline="middle" fill={t.dim} fontSize="4">{z.label}</text>}
             </g>
           );
         })}
+        <text x="50" y="92" textAnchor="middle" fill={t.dim} fontSize="4">Goal Line</text>
       </svg>
     </div>
   );
 }
 
-// ═══ KEEPER MODAL ═══════════════════════════════════════════════════════════
 function KeeperModal({ keeper, onSave, onClose, onDeactivate, primaryColor }) {
   const [name, setName] = useState(keeper?.name || "");
   const [number, setNumber] = useState(keeper?.number?.toString() || "");
@@ -1150,6 +1217,8 @@ export default function DashboardPage() {
   const { user, profile, club, loading, signOut, supabase, isDelegate, delegateOf } = useAuth();
   const router = useRouter();
 
+  const [darkMode, setDarkMode] = useState(true);
+  t = darkMode ? tDark : tLight;
   const [keepers, setKeepers] = useState([]);
   const [loadingKeepers, setLoadingKeepers] = useState(true);
   const [showKeeperModal, setShowKeeperModal] = useState(false);
@@ -1508,127 +1577,268 @@ export default function DashboardPage() {
             </div>
 
             {showScope && <ScopeToggle scope={scope} setScope={setScope} />}
+            <button onClick={() => setDarkMode(!darkMode)} style={{
+              position: "fixed", top: 16, right: 16, zIndex: 9999,
+              background: t.card, border: "1px solid " + t.border, borderRadius: 8,
+              padding: "6px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+              color: t.text, fontSize: 12, fontWeight: 600, fontFamily: font,
+              boxShadow: "0 2px 8px rgba(0,0,0,0.15)"
+            }}>
+              {darkMode ? "☀️" : "🌙"} {darkMode ? "Light" : "Dark"}
+            </button>
 
             {!selectedKeeper && <EmptyState icon="👆" title="Select a Keeper" subtitle="Choose a goalkeeper from the dropdown to view analytics." />}
             {selectedKeeper && !hasMatches && tab !== "compare" && (
               <EmptyState icon="📱" title="No Sessions Logged Yet" subtitle={`Head to Pitchside to log a match or training session for ${selectedKeeperObj?.name || "this keeper"}.`} />
             )}
 
-            {/* OVERVIEW */}
-            {hasMatches && s && tab === "overview" && (
-              <div>
-                <Sec icon="📊">Season Overview — {selectedKeeperObj?.name}</Sec>
-                <Card s={{ marginBottom: 14 }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(70px, 1fr))", gap: 4 }}>
-                    <StatBox label="GP" value={d.season.gp} />
-                    <StatBox label="Sv%" value={pct(d.season.svPct)} color={svC(d.season.svPct)} sub={d.l5 ? <TrendBadge cur={d.l5.svPct * 100} prev={d.season.svPct * 100} suf="%" /> : null} />
-                    <StatBox label="GAA" value={dec(d.season.gaa)} sub={d.l5 ? <TrendBadge cur={d.l5.gaa} prev={d.season.gaa} inv /> : null} />
-                    <StatBox label="CS" value={d.season.cs} sub={pct(d.season.csPct)} />
-                    <StatBox label="W-D-L" value={`${d.season.w}-${d.season.d}-${d.season.l}`} />
-                  </div>
-                </Card>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
+{/* OVERVIEW */}
+          {tab === "overview" && s && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+
+              {/* Row 0: Key Stats */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: 8 }}>
+                <StatBox label="GP" value={s.gp} />
+                <StatBox label="Save %" value={(s.svPct * 100).toFixed(1) + "%"} color={s.svPct >= 0.7 ? t.green : s.svPct >= 0.5 ? t.yellow : t.red} />
+                <StatBox label="GAA" value={s.gaa.toFixed(2)} color={s.gaa <= 1 ? t.green : s.gaa <= 2 ? t.yellow : t.red} />
+                <StatBox label="CS" value={s.cs} />
+                <StatBox label="W-D-L" value={s.w + "-" + s.d + "-" + s.l} />
+              </div>
+
+              {/* Row 1: Goals In + Goals From */}
+              <Sec title="Goals Conceded">
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                   <Card>
-                    <div style={{ fontSize: 10, color: t.dim, marginBottom: 6 }}>Distribution Accuracy</div>
-                    {distData.filter(d => d.att > 0).map(d => (
-                      <PBar key={d.name} label={d.name} value={d.pct} color={d.pct >= 80 ? t.green : d.pct >= 60 ? t.accent : t.yellow} />
-                    ))}
-                    {distData.every(d => d.att === 0) && <div style={{ color: t.dim, fontSize: 11, textAlign: "center", padding: 12 }}>No distribution data</div>}
+                    <div style={{ fontSize: 13, fontWeight: 700, color: t.text, marginBottom: 12 }}>Where Goals Went In</div>
+                    <GoalHeatmap zones={dGoals ? dGoals.zones : {}} />
                   </Card>
                   <Card>
-                    <div style={{ fontSize: 10, color: t.dim, marginBottom: 6 }}>Key Actions</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                      <div style={{ textAlign: "center" }}>
-                        <div style={{ fontSize: 20, fontWeight: 800, color: t.bright }}>{s.crosses.claimed}</div>
-                        <div style={{ fontSize: 9, color: t.dim }}>Crosses Claimed</div>
-                      </div>
-                      <div style={{ textAlign: "center" }}>
-                        <div style={{ fontSize: 20, fontWeight: 800, color: t.bright }}>{s.oneV1.won}/{s.oneV1.faced}</div>
-                        <div style={{ fontSize: 9, color: t.dim }}>1v1 Won</div>
-                      </div>
-                      <div style={{ textAlign: "center" }}>
-                        <div style={{ fontSize: 20, fontWeight: 800, color: t.bright }}>{s.sweeper.clearances + s.sweeper.interceptions + s.sweeper.tackles}</div>
-                        <div style={{ fontSize: 9, color: t.dim }}>Sweeper Actions</div>
-                      </div>
-                      <div style={{ textAlign: "center" }}>
-                        <div style={{ fontSize: 20, fontWeight: 800, color: s.handling.errGoal > 0 ? t.red : t.green }}>{s.handling.errGoal}</div>
-                        <div style={{ fontSize: 9, color: t.dim }}>Errors → Goal</div>
-                      </div>
-                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: t.text, marginBottom: 12 }}>Where Goals Came From</div>
+                    <PitchOriginMap origins={dGoals ? dGoals.origins : {}} />
                   </Card>
                 </div>
-                {alerts.length > 0 && (
-                  <Card s={{ marginBottom: 14 }}>
-                    <Sec icon="⚡">Coaching Alerts ({alerts.length})</Sec>
-                    {alerts.slice(0, 3).map((al, i) => (
-                      <div key={i} style={{ padding: "10px 12px", borderRadius: 8, marginBottom: 6, background: al.type === "positive" ? t.green + "11" : al.type === "alert" ? t.red + "11" : t.orange + "11", border: `1px solid ${al.type === "positive" ? t.green + "33" : al.type === "alert" ? t.red + "33" : t.orange + "33"}` }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: al.type === "positive" ? t.green : al.type === "alert" ? t.red : t.orange }}>{al.title}</div>
-                        <div style={{ fontSize: 10, color: t.dim, marginTop: 2 }}>{al.detail}</div>
+              </Sec>
+
+              {/* Row 2: Shot Stopping */}
+              <Sec title="Shot Stopping">
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                  <Card>
+                    <div style={{ textAlign: "center", padding: 16, color: t.dim, fontSize: 12 }}>
+                      <div style={{ fontSize: 24, fontWeight: 800, color: t.accent }}>{s.saves}</div>
+                      <div style={{ marginTop: 4 }}>Total Saves from {s.sot} Shots on Target</div>
+                      <div style={{ marginTop: 8, fontSize: 20, fontWeight: 700, color: s.svPct >= 0.7 ? t.green : s.svPct >= 0.5 ? t.yellow : t.red }}>{(s.svPct * 100).toFixed(1)}%</div>
+                      <div style={{ fontSize: 10, color: t.dim }}>Save Percentage</div>
+                    </div>
+                  </Card>
+                  <Card>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: t.text, marginBottom: 12 }}>Save Types</div>
+                    {s.saveTypes && Object.entries(s.saveTypes).sort((a,b) => b[1] - a[1]).map(([type, count]) => (
+                      <div key={type} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                        <div style={{ width: 70, fontSize: 12, color: t.dim }}>{type}</div>
+                        <div style={{ flex: 1, height: 16, background: t.bg, borderRadius: 4, overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: (s.saves > 0 ? (count / s.saves * 100) : 0) + "%", background: t.accent, borderRadius: 4 }} />
+                        </div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: t.text, width: 28, textAlign: "right" }}>{count}</div>
                       </div>
                     ))}
-                    {alerts.length > 3 && <button onClick={() => setTab("caution")} style={{ background: "none", border: "none", color: t.accent, fontSize: 11, cursor: "pointer", fontFamily: font, padding: "4px 0" }}>View all {alerts.length} alerts →</button>}
                   </Card>
-                )}
-                {d.matchLog.length > 0 && (
-                  <Card>
-                    <Sec icon="📋">Recent Matches</Sec>
-                    <div style={{ overflowX: "auto" }}>
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 520 }}>
-                        <thead>
-                          <tr>{["Date", "Opp", "H/A", "Result", "Score", "SOT", "Sv", "GA", "Sv%", ""].map(h => <th key={h} style={{ textAlign: "center", padding: "7px 6px", color: t.dim, borderBottom: `1px solid ${t.border}`, fontSize: 9 }}>{h}</th>)}</tr>
-                        </thead>
-                        <tbody>
-                          {d.matchLog.slice(0, 5).map((m, i) => {
-                            const matchRecord = d.matches.find(x => x.id === m.id);
-                            return (
-                              <tr key={i}
-                                onClick={() => { setTab("matches"); openGameDrillDown(m); }}
-                                style={{ cursor: "pointer" }}
-                                onMouseEnter={e => e.currentTarget.style.background = t.cardAlt}
-                                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                              >
-                                <td style={{ padding: "7px 6px", color: t.text, textAlign: "center", borderBottom: `1px solid ${t.border}22` }}>{m.date}</td>
-                                <td style={{ padding: "7px 6px", color: t.bright, fontWeight: 600, textAlign: "center", borderBottom: `1px solid ${t.border}22` }}>{m.opp}</td>
-                                <td style={{ padding: "7px 6px", color: t.dim, textAlign: "center", borderBottom: `1px solid ${t.border}22` }}>{m.type === "training" ? "T" : m.ha}</td>
-                                <td style={{ padding: "7px 6px", textAlign: "center", borderBottom: `1px solid ${t.border}22`, color: m.res === "W" ? t.green : m.res === "L" ? t.red : t.dim, fontWeight: 600 }}>{m.res}</td>
-                                <td style={{ padding: "7px 6px", color: t.text, textAlign: "center", borderBottom: `1px solid ${t.border}22` }}>{m.score}</td>
-                                <td style={{ padding: "7px 6px", color: t.text, textAlign: "center", borderBottom: `1px solid ${t.border}22` }}>{m.sot}</td>
-                                <td style={{ padding: "7px 6px", color: t.text, textAlign: "center", borderBottom: `1px solid ${t.border}22` }}>{m.sv}</td>
-                                <td style={{ padding: "7px 6px", color: m.ga > 0 ? t.red : t.green, textAlign: "center", borderBottom: `1px solid ${t.border}22`, fontWeight: 600 }}>{m.ga}</td>
-                                <td style={{ padding: "7px 6px", textAlign: "center", borderBottom: `1px solid ${t.border}22`, color: m.svP != null ? svC(m.svP) : t.dim, fontWeight: 600 }}>{m.svP != null ? pct(m.svP) : "\u2014"}</td>
-                                <td style={{ padding: "7px 6px", textAlign: "center", borderBottom: `1px solid ${t.border}22` }}>
-                                  {!isDelegate && (
-                                    <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
-                                      <button
-                                        onClick={(e) => { e.stopPropagation(); setEditingMatch(matchRecord); }}
-                                        style={{ background: "none", border: "none", color: t.accent, cursor: "pointer", padding: "2px 4px", fontSize: 12 }}
-                                        title="Edit"
-                                      >
-                                        \u270f\ufe0f
-                                      </button>
-                                      <button
-                                        onClick={(e) => { e.stopPropagation(); setDeletingMatch(m); }}
-                                        style={{ background: "none", border: "none", color: t.red, cursor: "pointer", padding: "2px 4px", fontSize: 12 }}
-                                        title="Delete"
-                                      >
-                                        \ud83d\uddd1\ufe0f
-                                      </button>
-                                    </div>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                    {d.matchLog.length > 5 && <button onClick={() => setTab("matches")} style={{ background: "none", border: "none", color: t.accent, fontSize: 11, cursor: "pointer", fontFamily: font, padding: "8px 0 0" }}>View all {d.matchLog.length} matches →</button>}
-                  </Card>
-                )}
-              </div>
-            )}
+                </div>
+              </Sec>
 
-            {/* MATCHES */}
+              {/* Row 3: Savability + Shot Type & Positioning */}
+              <Sec title="Savability & Shot Analysis">
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                  <Card>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: t.text, marginBottom: 12 }}>Savability</div>
+                    {dGoals && dGoals.ranks && Object.keys(dGoals.ranks).length > 0 ? (
+                      <div>
+                        {Object.entries(dGoals.ranks).sort((a,b) => b[1] - a[1]).map(([rank, count]) => (
+                          <div key={rank} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                            <div style={{ width: 90, fontSize: 12, color: t.dim }}>{rank}</div>
+                            <div style={{ flex: 1, height: 16, background: t.bg, borderRadius: 4, overflow: "hidden" }}>
+                              <div style={{ height: "100%", width: (s.ga > 0 ? (count / s.ga * 100) : 0) + "%", background: rank === "Unsavable" ? t.purple : rank === "Difficult" ? t.orange : t.red, borderRadius: 4 }} />
+                            </div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: t.text, width: 28, textAlign: "right" }}>{count}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : <div style={{ textAlign: "center", padding: 16, color: t.dim, fontSize: 12 }}>No savability data</div>}
+                  </Card>
+                  <Card>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: t.text, marginBottom: 12 }}>Shot Type & Positioning</div>
+                    {dGoals && dGoals.shotTypes && Object.keys(dGoals.shotTypes).length > 0 && (
+                      <div style={{ marginBottom: 12 }}>
+                        <div style={{ fontSize: 11, color: t.dim, marginBottom: 6, textTransform: "uppercase" }}>Shot Type</div>
+                        {Object.entries(dGoals.shotTypes).sort((a,b) => b[1] - a[1]).map(([type, count]) => (
+                          <div key={type} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                            <div style={{ width: 80, fontSize: 12, color: t.dim }}>{type}</div>
+                            <div style={{ flex: 1, height: 14, background: t.bg, borderRadius: 4, overflow: "hidden" }}>
+                              <div style={{ height: "100%", width: (s.ga > 0 ? (count / s.ga * 100) : 0) + "%", background: t.cyan, borderRadius: 4 }} />
+                            </div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: t.text, width: 24, textAlign: "right" }}>{count}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {dGoals && dGoals.positioning && Object.keys(dGoals.positioning).length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 11, color: t.dim, marginBottom: 6, textTransform: "uppercase" }}>Positioning</div>
+                        {Object.entries(dGoals.positioning).sort((a,b) => b[1] - a[1]).map(([pos, count]) => (
+                          <div key={pos} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                            <div style={{ width: 80, fontSize: 12, color: t.dim }}>{pos}</div>
+                            <div style={{ flex: 1, height: 14, background: t.bg, borderRadius: 4, overflow: "hidden" }}>
+                              <div style={{ height: "100%", width: (s.ga > 0 ? (count / s.ga * 100) : 0) + "%", background: t.teal, borderRadius: 4 }} />
+                            </div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: t.text, width: 24, textAlign: "right" }}>{count}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {(!dGoals || (!dGoals.shotTypes && !dGoals.positioning)) && <div style={{ textAlign: "center", padding: 16, color: t.dim, fontSize: 12 }}>No shot analysis data</div>}
+                  </Card>
+                </div>
+              </Sec>
+
+              {/* Row 4: Distribution */}
+              <Sec title="Distribution">
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                  <Card>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: t.text, marginBottom: 12 }}>Distribution Summary</div>
+                    {s.distribution ? (
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                          <div style={{ textAlign: "center" }}>
+                            <div style={{ fontSize: 22, fontWeight: 800, color: t.accent }}>{s.distribution.total || 0}</div>
+                            <div style={{ fontSize: 10, color: t.dim }}>Total</div>
+                          </div>
+                          <div style={{ textAlign: "center" }}>
+                            <div style={{ fontSize: 22, fontWeight: 800, color: t.green }}>{s.distribution.accurate || 0}</div>
+                            <div style={{ fontSize: 10, color: t.dim }}>Accurate</div>
+                          </div>
+                          <div style={{ textAlign: "center" }}>
+                            <div style={{ fontSize: 22, fontWeight: 800, color: t.red }}>{s.distribution.inaccurate || 0}</div>
+                            <div style={{ fontSize: 10, color: t.dim }}>Inaccurate</div>
+                          </div>
+                        </div>
+                        <div style={{ height: 20, background: t.bg, borderRadius: 4, overflow: "hidden", display: "flex" }}>
+                          <div style={{ height: "100%", width: (s.distribution.total > 0 ? (s.distribution.accurate / s.distribution.total * 100) : 0) + "%", background: t.green }} />
+                          <div style={{ height: "100%", width: (s.distribution.total > 0 ? (s.distribution.inaccurate / s.distribution.total * 100) : 0) + "%", background: t.red }} />
+                        </div>
+                        <div style={{ textAlign: "center", marginTop: 6, fontSize: 12, color: t.dim }}>
+                          {s.distribution.total > 0 ? (s.distribution.accurate / s.distribution.total * 100).toFixed(0) + "% Accuracy" : "No data"}
+                        </div>
+                      </div>
+                    ) : <div style={{ textAlign: "center", padding: 16, color: t.dim, fontSize: 12 }}>No distribution data</div>}
+                  </Card>
+                  <Card>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: t.text, marginBottom: 12 }}>By Type</div>
+                    {s.distribution && s.distribution.types ? (
+                      Object.entries(s.distribution.types).sort((a,b) => b[1] - a[1]).map(([type, count]) => (
+                        <div key={type} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                          <div style={{ width: 80, fontSize: 12, color: t.dim }}>{type}</div>
+                          <div style={{ flex: 1, height: 16, background: t.bg, borderRadius: 4, overflow: "hidden" }}>
+                            <div style={{ height: "100%", width: (s.distribution.total > 0 ? (count / s.distribution.total * 100) : 0) + "%", background: t.cyan, borderRadius: 4 }} />
+                          </div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: t.text, width: 28, textAlign: "right" }}>{count}</div>
+                        </div>
+                      ))
+                    ) : <div style={{ textAlign: "center", padding: 16, color: t.dim, fontSize: 12 }}>No type breakdown</div>}
+                  </Card>
+                </div>
+              </Sec>
+
+              {/* Row 5: Crosses */}
+              <Sec title="Crosses">
+                <Card>
+                  {s.crosses ? (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, textAlign: "center" }}>
+                      {[
+                        { label: "Claimed", value: s.crosses.claimed || 0, color: t.green },
+                        { label: "Punched", value: s.crosses.punched || 0, color: t.cyan },
+                        { label: "Missed", value: s.crosses.missed || 0, color: t.red },
+                        { label: "Away", value: s.crosses.away || 0, color: t.dim },
+                      ].map(item => {
+                        const total = (s.crosses.claimed || 0) + (s.crosses.punched || 0) + (s.crosses.missed || 0) + (s.crosses.away || 0);
+                        return (
+                          <div key={item.label}>
+                            <div style={{ fontSize: 28, fontWeight: 800, color: item.color }}>{item.value}</div>
+                            <div style={{ fontSize: 11, color: t.dim, marginTop: 2 }}>{item.label}</div>
+                            <div style={{ fontSize: 10, color: t.dim }}>{total > 0 ? (item.value / total * 100).toFixed(0) + "%" : ""}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : <div style={{ textAlign: "center", padding: 16, color: t.dim, fontSize: 12 }}>No cross data</div>}
+                </Card>
+              </Sec>
+
+              {/* Row 6: Attributes */}
+              <Sec title="Attributes">
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                  <Card>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: t.text, marginBottom: 12 }}>Attribute Web</div>
+                    {dAttrs && Object.keys(dAttrs).length > 0 ? (
+                      <div style={{ position: "relative", width: "100%", maxWidth: 240, aspectRatio: "1", margin: "0 auto" }}>
+                        <svg viewBox="0 0 200 200" style={{ width: "100%", height: "100%" }}>
+                          {(() => {
+                            const attrs = Object.entries(dAttrs);
+                            const n = attrs.length;
+                            if (n === 0) return null;
+                            const cx = 100, cy = 100, r = 80;
+                            const levels = [0.25, 0.5, 0.75, 1];
+                            return (
+                              <>
+                                {levels.map(l => (
+                                  <polygon key={l} points={attrs.map(([,], i) => {
+                                    const angle = (Math.PI * 2 * i) / n - Math.PI / 2;
+                                    return (cx + r * l * Math.cos(angle)) + "," + (cy + r * l * Math.sin(angle));
+                                  }).join(" ")} fill="none" stroke={t.border} strokeWidth="0.5" />
+                                ))}
+                                {attrs.map(([name], i) => {
+                                  const angle = (Math.PI * 2 * i) / n - Math.PI / 2;
+                                  const lx = cx + (r + 16) * Math.cos(angle);
+                                  const ly = cy + (r + 16) * Math.sin(angle);
+                                  return <text key={name} x={lx} y={ly} textAnchor="middle" dominantBaseline="middle" fill={t.dim} fontSize="6">{name}</text>;
+                                })}
+                                <polygon points={attrs.map(([, val], i) => {
+                                  const angle = (Math.PI * 2 * i) / n - Math.PI / 2;
+                                  const v = Math.min(val / 10, 1);
+                                  return (cx + r * v * Math.cos(angle)) + "," + (cy + r * v * Math.sin(angle));
+                                }).join(" ")} fill={t.accentGlow} stroke={t.accent} strokeWidth="1.5" />
+                                {attrs.map(([, val], i) => {
+                                  const angle = (Math.PI * 2 * i) / n - Math.PI / 2;
+                                  const v = Math.min(val / 10, 1);
+                                  return <circle key={i} cx={cx + r * v * Math.cos(angle)} cy={cy + r * v * Math.sin(angle)} r="3" fill={t.accent} />;
+                                })}
+                              </>
+                            );
+                          })()}
+                        </svg>
+                      </div>
+                    ) : <div style={{ textAlign: "center", padding: 16, color: t.dim, fontSize: 12 }}>No attribute data</div>}
+                  </Card>
+                  <Card>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: t.text, marginBottom: 12 }}>Attribute Trends</div>
+                    {dAttrs && Object.keys(dAttrs).length > 0 ? (
+                      <div>
+                        {Object.entries(dAttrs).map(([name, val]) => (
+                          <div key={name} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                            <div style={{ width: 90, fontSize: 12, color: t.dim }}>{name}</div>
+                            <div style={{ flex: 1, height: 14, background: t.bg, borderRadius: 4, overflow: "hidden" }}>
+                              <div style={{ height: "100%", width: Math.min(val / 10 * 100, 100) + "%", background: val >= 7 ? t.green : val >= 4 ? t.yellow : t.red, borderRadius: 4 }} />
+                            </div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: t.text, width: 28, textAlign: "right" }}>{typeof val === "number" ? val.toFixed(1) : val}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : <div style={{ textAlign: "center", padding: 16, color: t.dim, fontSize: 12 }}>No attribute data</div>}
+                  </Card>
+                </div>
+              </Sec>
+
+            </div>
+          )}
+                      {/* MATCHES */}
             {hasMatches && tab === "matches" && (
               <div>
                 {selectedGame ? (
@@ -1681,14 +1891,14 @@ export default function DashboardPage() {
                                         style={{ background: "none", border: "none", color: t.accent, cursor: "pointer", padding: "2px 4px", fontSize: 12 }}
                                         title="Edit"
                                       >
-                                        \u270f\ufe0f
+                                        ✏️
                                       </button>
                                       <button
                                         onClick={(e) => { e.stopPropagation(); setDeletingMatch(m); }}
                                         style={{ background: "none", border: "none", color: t.red, cursor: "pointer", padding: "2px 4px", fontSize: 12 }}
                                         title="Delete"
                                       >
-                                        \ud83d\uddd1\ufe0f
+                                        🗑️
                                       </button>
                                     </div>
                                   )}
