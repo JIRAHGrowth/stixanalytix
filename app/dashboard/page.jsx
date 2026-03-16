@@ -348,16 +348,16 @@ function PitchOriginMap({ origins, title }) {
   }
   const maxVal = Math.max(...Object.values(origins), 1);
   const zones = [
-    { key: "cornerL", x: 5, y: 5, w: 15, h: 20, label: "Wide L" },
-    { key: "boxL", x: 20, y: 15, w: 18, h: 35, label: "Box L" },
+    { key: "cornerL", x: 5, y: 5, w: 15, h: 20, label: "Corner L" },
+    { key: "boxL", x: 20, y: 15, w: 18, h: 35, label: "Left Ch." },
     { key: "6yard", x: 38, y: 25, w: 24, h: 22, label: "6-Yard" },
-    { key: "boxR", x: 62, y: 15, w: 18, h: 35, label: "Box R" },
-    { key: "cornerR", x: 80, y: 5, w: 15, h: 20, label: "Wide R" },
-    { key: "boxC", x: 28, y: 48, w: 44, h: 20, label: "Box Center" },
+    { key: "boxR", x: 62, y: 15, w: 18, h: 35, label: "Right Ch." },
+    { key: "cornerR", x: 80, y: 5, w: 15, h: 20, label: "Corner R" },
+    { key: "boxC", x: 28, y: 48, w: 44, h: 20, label: "Central" },
     { key: "penalty", x: 42, y: 55, w: 16, h: 8, label: "Pen Spot" },
-    { key: "outC", x: 20, y: 68, w: 60, h: 22, label: "Outside Box" },
-    { key: "outL", x: 5, y: 50, w: 15, h: 40, label: "Out Left" },
-    { key: "outR", x: 80, y: 50, w: 15, h: 40, label: "Out Right" },
+    { key: "outC", x: 20, y: 68, w: 60, h: 22, label: "Cntrl Dist." },
+    { key: "outL", x: 5, y: 50, w: 15, h: 40, label: "Wide L" },
+    { key: "outR", x: 80, y: 50, w: 15, h: 40, label: "Wide R" },
   ];
   return (
     <div>
@@ -555,7 +555,7 @@ function ShotCrossRef({ goals }) {
               transition: "all 0.12s",
             }}
           >
-            <div style={{ width: 110, fontSize: 11, color: activeOrigin === origin ? t.bright : t.text, fontWeight: activeOrigin === origin ? 700 : 400, flexShrink: 0 }}>{origin}</div>
+            <div style={{ width: 110, fontSize: 11, color: activeOrigin === origin ? t.bright : t.text, fontWeight: activeOrigin === origin ? 700 : 400, flexShrink: 0 }}>{ORIGIN_LABELS[origin] || origin}</div>
             <div style={{ flex: 1, height: 10, background: t.bg, borderRadius: 3, overflow: "hidden" }}>
               <div style={{ height: "100%", width: `${(total / maxTotal) * 100}%`, background: activeOrigin === origin ? t.red : t.orange, borderRadius: 3, transition: "width 0.2s" }} />
             </div>
@@ -1953,7 +1953,7 @@ export default function DashboardPage() {
                     {dGoals?.sources && Object.entries(dGoals.sources).length > 0 ? (
                       <ResponsiveContainer width="100%" height={180}>
                         <PieChart>
-                          <Pie data={Object.entries(dGoals.sources).map(([name, value]) => ({ name, value }))} cx="50%" cy="50%" outerRadius={65} dataKey="value" label={({ name, value }) => `${name}: ${value}`} labelLine={{ stroke: t.dim, strokeWidth: 0.5 }} style={{ fontSize: 9 }}>
+                          <Pie data={Object.entries(dGoals.sources).map(([name, value]) => ({ name, value }))} cx="50%" cy="50%" outerRadius={65} dataKey="value" label={({ name, value }) => `${ORIGIN_LABELS[name] || name}: ${value}`} labelLine={{ stroke: t.dim, strokeWidth: 0.5 }} style={{ fontSize: 9 }}>
                             {Object.keys(dGoals.sources).map((_, i) => <Cell key={i} fill={PAL[i % PAL.length]} />)}
                           </Pie>
                           <Tooltip {...ttS} />
