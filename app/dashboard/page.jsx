@@ -15,7 +15,7 @@ const tDark = {
   bg: "#070b0e", card: "#0f1419", cardAlt: "#151c22", border: "#1e2a32",
   accent: "#10b981", accentDim: "#065f46", accentGlow: "#10b98133",
   gold: "#d4a853", orange: "#f97316",
-  red: "#ef4444", green: "#22c55e", yellow: "#eab308",
+  red: "#ef4444", green: t.green, yellow: "#eab308",
   cyan: "#06b6d4", purple: "#a78bfa", teal: "#14b8a6", pink: "#f472b6",
   text: "#d1d9e0", dim: "#5c6b77", bright: "#f0f4f7",
 };
@@ -29,7 +29,7 @@ const tLight = {
 };
 let t = tDark;
 const font = "'DM Sans', -apple-system, sans-serif";
-const PAL = ["#10b981","#06b6d4","#eab308","#f97316","#ef4444","#a78bfa","#f472b6","#22c55e","#14b8a6","#38bdf8"];
+const PAL = ["#10b981","#059669","#047857","#0d9668","#34d399","#6ee7b7","#0f766e","#15803d","#065f46","#a7f3d0"];
 const ttS = { contentStyle: { background: t.card, border: `1px solid ${t.border}`, borderRadius: 8, fontSize: 10, color: t.text }, itemStyle: { color: t.text } };
 
 const ROLES = ["Starter", "Backup", "Development", "Trial"];
@@ -57,9 +57,9 @@ const ZONE_LABELS = {
   "Low L": "Low Left", "Low C": "Low Center", "Low R": "Low Right",
 };
 const ORIGIN_LABELS = {
-  "6yard": "6-Yard Box", "boxC": "Box (Center)", "boxL": "Box (Left)",
-  "boxR": "Box (Right)", "cornerL": "Wide Left", "cornerR": "Wide Right",
-  "outC": "Outside Box", "outL": "Outside Left", "outR": "Outside Right",
+  "6yard": "6-Yard Box", "boxC": "Central Box", "boxL": "Left Channel",
+  "boxR": "Right Channel", "cornerL": "Corner Left", "cornerR": "Corner Right",
+  "outC": "Central Distance", "outL": "Wide Left", "outR": "Wide Right",
   "penalty": "Penalty Spot",
 };
 
@@ -88,8 +88,8 @@ function aggregateMatches(matches) {
   return {
     gp, min, sot, saves: sv, ga, svPct, gaa, cs, csPct, w: wins, d: draws, l: losses,
     saveTypes: {
-      Catch: sum("saves_catch"), Parry: sum("saves_parry"), Dive: sum("saves_dive"),
-      Block: sum("saves_block"), Tip: sum("saves_tip"), Punch: sum("saves_punch"),
+      Catch: sum("saves_catch"), Parry: sum("saves_parry"), Smother: sum("saves_dive"),
+      Block: sum("saves_block"), Deflect: sum("saves_tip"), Punch: sum("saves_punch"),
     },
     crosses: {
       claimed: sum("crosses_claimed"), punched: sum("crosses_punched"),
@@ -630,9 +630,9 @@ function SingleGameView({ match, goals, logRow, keeperName, primaryColor, onBack
   const saveTypes = [
     { label: "Catch", val: match.saves_catch || 0 },
     { label: "Parry", val: match.saves_parry || 0 },
-    { label: "Dive",  val: match.saves_dive  || 0 },
+    { label: "Smother",  val: match.saves_dive  || 0 },
     { label: "Block", val: match.saves_block || 0 },
-    { label: "Tip",   val: match.saves_tip   || 0 },
+    { label: "Deflect",   val: match.saves_tip   || 0 },
     { label: "Punch", val: match.saves_punch || 0 },
   ].filter(s => s.val > 0);
   const maxSave = Math.max(...saveTypes.map(s => s.val), 1);
@@ -929,7 +929,7 @@ function ReportView({ keeper, keeperData, alerts, targetGame, primaryColor, onBa
                   <PolarAngleAxis dataKey="attr" tick={{ fontSize: 8, fill: "#555" }} />
                   <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
                   <Radar name="Season" dataKey="Season" stroke={pc} fill={pc} fillOpacity={0.15} strokeWidth={2} />
-                  <Radar name="Last 5" dataKey="Last 5" stroke="#f97316" fill="#f97316" fillOpacity={0.1} strokeWidth={2} strokeDasharray="4 2" />
+                  <Radar name="Last 5" dataKey="Last 5" stroke={t.gold} fill={t.gold} fillOpacity={0.1} strokeWidth={2} strokeDasharray="4 2" />
                   <Legend wrapperStyle={{ fontSize: 10, color: "#555" }} />
                 </RadarChart>
               </ResponsiveContainer>
@@ -959,7 +959,7 @@ function ReportView({ keeper, keeperData, alerts, targetGame, primaryColor, onBa
                     <span>{d.name}</span><span style={{ fontWeight: 700 }}>{p}%</span>
                   </div>
                   <div style={{ height: 6, background: "#eee", borderRadius: 3 }}>
-                    <div style={{ height: "100%", width: p + "%", background: p >= 80 ? "#22c55e" : p >= 60 ? pc : "#f97316", borderRadius: 3 }} />
+                    <div style={{ height: "100%", width: p + "%", background: p >= 80 ? t.green : p >= 60 ? pc : "#f97316", borderRadius: 3 }} />
                   </div>
                 </div>
               );
@@ -1017,7 +1017,7 @@ function ReportView({ keeper, keeperData, alerts, targetGame, primaryColor, onBa
           <div style={{ marginBottom: 20 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Active Coaching Alerts</div>
             {alerts.slice(0, 5).map((al, i) => (
-              <div key={i} style={{ padding: "8px 12px", borderRadius: 6, marginBottom: 6, background: al.type === "positive" ? "#f0fdf4" : al.type === "alert" ? "#fef2f2" : "#fff7ed", borderLeft: `3px solid ${al.type === "positive" ? "#22c55e" : al.type === "alert" ? "#ef4444" : "#f97316"}` }}>
+              <div key={i} style={{ padding: "8px 12px", borderRadius: 6, marginBottom: 6, background: al.type === "positive" ? "#f0fdf4" : al.type === "alert" ? "#fef2f2" : "#fff7ed", borderLeft: `3px solid ${al.type === "positive" ? t.green : al.type === "alert" ? "#ef4444" : "#f97316"}` }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: al.type === "positive" ? "#15803d" : al.type === "alert" ? "#dc2626" : "#c2410c" }}>{al.title}</div>
                 <div style={{ fontSize: 10, color: "#555", marginTop: 2 }}>{al.detail} · {al.action}</div>
               </div>
@@ -1474,10 +1474,10 @@ export default function DashboardPage() {
       <div style={{ maxWidth: 960, margin: "0 auto", padding: "20px 16px" }}>
 
         {isDelegate && delegateOf && (
-          <div style={{ padding: "10px 16px", borderRadius: 10, marginBottom: 16, background: t.cyan + "08", border: `1px solid ${t.cyan}22`, display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ padding: "10px 16px", borderRadius: 10, marginBottom: 16, background: t.accent + "08", border: `1px solid ${t.accent}22`, display: "flex", alignItems: "center", gap: 10 }}>
             <span style={{ fontSize: 16 }}>📊</span>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: t.cyan }}>Viewing as {delegateOf.role?.replace("_", " ")}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: t.accent }}>Viewing as {delegateOf.role?.replace("_", " ")}</div>
               <div style={{ fontSize: 10, color: t.dim }}>Managed by {delegateOf.coach_name} · {delegateOf.club?.name || "Club"}</div>
             </div>
           </div>
@@ -1656,7 +1656,7 @@ export default function DashboardPage() {
                           <div key={rank} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                             <div style={{ width: 90, fontSize: 12, color: t.dim }}>{rank}</div>
                             <div style={{ flex: 1, height: 16, background: t.bg, borderRadius: 4, overflow: "hidden" }}>
-                              <div style={{ height: "100%", width: (s.ga > 0 ? (count / s.ga * 100) : 0) + "%", background: rank === "Unsavable" ? t.purple : rank === "Difficult" ? t.orange : t.red, borderRadius: 4 }} />
+                              <div style={{ height: "100%", width: (s.ga > 0 ? (count / s.ga * 100) : 0) + "%", background: t.accent, borderRadius: 4 }} />
                             </div>
                             <div style={{ fontSize: 12, fontWeight: 700, color: t.text, width: 28, textAlign: "right" }}>{count}</div>
                           </div>
@@ -1673,7 +1673,7 @@ export default function DashboardPage() {
                           <div key={type} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                             <div style={{ width: 80, fontSize: 12, color: t.dim }}>{type}</div>
                             <div style={{ flex: 1, height: 14, background: t.bg, borderRadius: 4, overflow: "hidden" }}>
-                              <div style={{ height: "100%", width: (s.ga > 0 ? (count / s.ga * 100) : 0) + "%", background: t.cyan, borderRadius: 4 }} />
+                              <div style={{ height: "100%", width: (s.ga > 0 ? (count / s.ga * 100) : 0) + "%", background: t.accent, borderRadius: 4 }} />
                             </div>
                             <div style={{ fontSize: 12, fontWeight: 700, color: t.text, width: 24, textAlign: "right" }}>{count}</div>
                           </div>
@@ -1737,7 +1737,7 @@ export default function DashboardPage() {
                         <div key={type} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                           <div style={{ width: 80, fontSize: 12, color: t.dim }}>{type}</div>
                           <div style={{ flex: 1, height: 16, background: t.bg, borderRadius: 4, overflow: "hidden" }}>
-                            <div style={{ height: "100%", width: (s.distribution.total > 0 ? (count / s.distribution.total * 100) : 0) + "%", background: t.cyan, borderRadius: 4 }} />
+                            <div style={{ height: "100%", width: (s.distribution.total > 0 ? (count / s.distribution.total * 100) : 0) + "%", background: t.accent, borderRadius: 4 }} />
                           </div>
                           <div style={{ fontSize: 12, fontWeight: 700, color: t.text, width: 28, textAlign: "right" }}>{count}</div>
                         </div>
@@ -1754,7 +1754,7 @@ export default function DashboardPage() {
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, textAlign: "center" }}>
                       {[
                         { label: "Claimed", value: s.crosses.claimed || 0, color: t.green },
-                        { label: "Punched", value: s.crosses.punched || 0, color: t.cyan },
+                        { label: "Punched", value: s.crosses.punched || 0, color: t.accent },
                         { label: "Missed", value: s.crosses.missed || 0, color: t.red },
                         { label: "Away", value: s.crosses.away || 0, color: t.dim },
                       ].map(item => {
@@ -1798,7 +1798,7 @@ export default function DashboardPage() {
                                   const angle = (Math.PI * 2 * i) / n - Math.PI / 2;
                                   const lx = cx + (r + 16) * Math.cos(angle);
                                   const ly = cy + (r + 16) * Math.sin(angle);
-                                  return <text key={name} x={lx} y={ly} textAnchor="middle" dominantBaseline="middle" fill={t.dim} fontSize="6">{name}</text>;
+                                  return <text key={name} x={lx} y={ly} textAnchor="middle" dominantBaseline="middle" fill={t.dim} fontSize="6">{ATTR_LABELS[name] || name}</text>;
                                 })}
                                 <polygon points={attrs.map(([, val], i) => {
                                   const angle = (Math.PI * 2 * i) / n - Math.PI / 2;
@@ -1823,7 +1823,7 @@ export default function DashboardPage() {
                       <div>
                         {Object.entries(dAttrs).map(([name, val]) => (
                           <div key={name} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                            <div style={{ width: 90, fontSize: 12, color: t.dim }}>{name}</div>
+                            <div style={{ width: 90, fontSize: 12, color: t.dim }}>{ATTR_LABELS[name] || name}</div>
                             <div style={{ flex: 1, height: 14, background: t.bg, borderRadius: 4, overflow: "hidden" }}>
                               <div style={{ height: "100%", width: Math.min(val / 10 * 100, 100) + "%", background: val >= 7 ? t.green : val >= 4 ? t.yellow : t.red, borderRadius: 4 }} />
                             </div>
@@ -1967,19 +1967,19 @@ export default function DashboardPage() {
                     <div style={{ fontSize: 10, color: t.dim, marginBottom: 8 }}>Saveability</div>
                     {dGoals?.ranks && Object.entries(dGoals.ranks).length > 0 ? (
                       Object.entries(dGoals.ranks).map(([rank, count]) => (
-                        <PBar key={rank} label={rank} value={count} max={Math.max(...Object.values(dGoals.ranks), 1)} suf="" color={rank === "Saveable" ? t.red : rank === "Difficult" ? t.orange : t.green} />
+                        <PBar key={rank} label={rank} value={count} max={Math.max(...Object.values(dGoals.ranks), 1)} suf="" color={t.accent} />
                       ))
                     ) : <div style={{ color: t.dim, fontSize: 11, textAlign: "center", padding: 12 }}>No data</div>}
                   </Card>
                   <Card>
                     <div style={{ fontSize: 10, color: t.dim, marginBottom: 8 }}>Shot Type & Positioning</div>
                     {dGoals?.shotTypes && Object.entries(dGoals.shotTypes).length > 0 && (
-                      <div style={{ marginBottom: 10 }}>{Object.entries(dGoals.shotTypes).map(([type, count]) => <PBar key={type} label={type} value={count} max={Math.max(...Object.values(dGoals.shotTypes), 1)} suf="" color={t.cyan} />)}</div>
+                      <div style={{ marginBottom: 10 }}>{Object.entries(dGoals.shotTypes).map(([type, count]) => <PBar key={type} label={type} value={count} max={Math.max(...Object.values(dGoals.shotTypes), 1)} suf="" color={t.accent} />)}</div>
                     )}
                     {dGoals?.positioning && Object.entries(dGoals.positioning).length > 0 && (
                       <div>
                         <div style={{ fontSize: 9, color: t.dim, marginBottom: 4, marginTop: 8 }}>GK Position at Goal</div>
-                        {Object.entries(dGoals.positioning).map(([pos, count]) => <PBar key={pos} label={pos} value={count} max={Math.max(...Object.values(dGoals.positioning), 1)} suf="" color={t.purple} />)}
+                        {Object.entries(dGoals.positioning).map(([pos, count]) => <PBar key={pos} label={pos} value={count} max={Math.max(...Object.values(dGoals.positioning), 1)} suf="" color={t.accent} />)}
                       </div>
                     )}
                     {(!dGoals?.shotTypes || Object.keys(dGoals.shotTypes).length === 0) && <div style={{ color: t.dim, fontSize: 11, textAlign: "center", padding: 12 }}>No data</div>}
@@ -2015,7 +2015,7 @@ export default function DashboardPage() {
                 </Card>
                 <Card>
                   <div style={{ fontSize: 10, color: t.dim, marginBottom: 10 }}>Accuracy Breakdown</div>
-                  {distData.filter(d => d.att > 0).map(d => <PBar key={d.name} label={d.name} value={d.pct} color={d.pct >= 80 ? t.green : d.pct >= 60 ? t.accent : t.yellow} />)}
+                  {distData.filter(d => d.att > 0).map(d => <PBar key={d.name} label={d.name} value={d.pct} color={t.accent} />)}
                   {distData.every(d => d.att === 0) && <div style={{ color: t.dim, fontSize: 11, textAlign: "center", padding: 16 }}>No distribution data logged yet</div>}
                 </Card>
               </div>
@@ -2033,7 +2033,7 @@ export default function DashboardPage() {
                       <StatBox label="Punched" value={s.crosses.punched} color={t.gold} />
                       <StatBox label="Missed" value={s.crosses.missed} color={t.red} />
                     </div>
-                    {s.crosses.total > 0 && <PBar label="Claim Rate" value={(s.crosses.claimed / s.crosses.total) * 100} color={(s.crosses.claimed / s.crosses.total) >= 0.7 ? t.green : t.yellow} />}
+                    {s.crosses.total > 0 && <PBar label="Claim Rate" value={(s.crosses.claimed / s.crosses.total) * 100} color={t.accent} />}
                   </Card>
                   <Card>
                     <div style={{ fontSize: 10, color: t.dim, marginBottom: 8 }}>Breakdown</div>
@@ -2041,7 +2041,7 @@ export default function DashboardPage() {
                       <ResponsiveContainer width="100%" height={180}>
                         <PieChart>
                           <Pie data={[{ name: "Claimed", value: s.crosses.claimed }, { name: "Punched", value: s.crosses.punched }, { name: "Missed", value: s.crosses.missed }].filter(d => d.value > 0)} cx="50%" cy="50%" outerRadius={65} dataKey="value" label={({ name, value }) => `${name}: ${value}`} labelLine={{ stroke: t.dim, strokeWidth: 0.5 }} style={{ fontSize: 9 }}>
-                            <Cell fill={t.green} /><Cell fill={t.gold} /><Cell fill={t.red} />
+                            <Cell fill={t.green} /><Cell fill={t.border} /><Cell fill={t.red} />
                           </Pie>
                           <Tooltip {...ttS} />
                         </PieChart>
@@ -2060,7 +2060,7 @@ export default function DashboardPage() {
                         <Tooltip {...ttS} />
                         <Legend wrapperStyle={{ fontSize: 9 }} />
                         <Bar dataKey="Season" fill={t.accent} radius={[3, 3, 0, 0]} />
-                        <Bar dataKey="Last 5" fill={t.gold} radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="Last 5" fill={t.border} radius={[3, 3, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </Card>
@@ -2089,7 +2089,7 @@ export default function DashboardPage() {
                       <StatBox label="Controlled" value={s.rebounds.controlled} color={t.green} />
                       <StatBox label="Dangerous" value={s.rebounds.dangerous} color={t.red} />
                     </div>
-                    {(s.rebounds.controlled + s.rebounds.dangerous) > 0 && <PBar label="Control Rate" value={(s.rebounds.controlled / (s.rebounds.controlled + s.rebounds.dangerous)) * 100} color={(s.rebounds.controlled / (s.rebounds.controlled + s.rebounds.dangerous)) >= 0.75 ? t.green : t.yellow} />}
+                    {(s.rebounds.controlled + s.rebounds.dangerous) > 0 && <PBar label="Control Rate" value={(s.rebounds.controlled / (s.rebounds.controlled + s.rebounds.dangerous)) * 100} color={t.accent} />}
                   </Card>
                 </div>
                 {d.season && d.l5 && (
@@ -2103,7 +2103,7 @@ export default function DashboardPage() {
                         <Tooltip {...ttS} />
                         <Legend wrapperStyle={{ fontSize: 9 }} />
                         <Bar dataKey="Season" fill={t.accent} radius={[3, 3, 0, 0]} />
-                        <Bar dataKey="Last 5" fill={t.gold} radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="Last 5" fill={t.border} radius={[3, 3, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   </Card>
@@ -2125,7 +2125,7 @@ export default function DashboardPage() {
                           <PolarAngleAxis dataKey="attr" tick={{ fill: t.dim, fontSize: 7 }} />
                           <PolarRadiusAxis angle={90} domain={[0, 5]} tick={{ fill: t.dim, fontSize: 7 }} />
                           <Radar dataKey="Season" stroke={t.accent} fill={t.accent} fillOpacity={0.15} strokeWidth={2} />
-                          <Radar dataKey="Last 5" stroke={t.gold} fill={t.gold} fillOpacity={0.1} strokeWidth={2} strokeDasharray="4 2" />
+                          <Radar dataKey="Last 5" stroke={t.gold} fill={t.border} fillOpacity={0.1} strokeWidth={2} strokeDasharray="4 2" />
                           <Legend wrapperStyle={{ fontSize: 9 }} />
                         </RadarChart>
                       </ResponsiveContainer>
@@ -2282,7 +2282,7 @@ export default function DashboardPage() {
                             <PolarAngleAxis dataKey="attr" tick={{ fill: t.dim, fontSize: 8 }} />
                             <PolarRadiusAxis angle={90} domain={[0, 5]} tick={{ fill: t.dim, fontSize: 7 }} />
                             <Radar dataKey={selectedKeeperObj?.name?.split(" ")[0] || "A"} stroke={t.accent} fill={t.accent} fillOpacity={0.15} strokeWidth={2} />
-                            <Radar dataKey={cmpKeeperObj?.name?.split(" ")[0] || "B"} stroke={t.gold} fill={t.gold} fillOpacity={0.15} strokeWidth={2} />
+                            <Radar dataKey={cmpKeeperObj?.name?.split(" ")[0] || "B"} stroke={t.gold} fill={t.border} fillOpacity={0.15} strokeWidth={2} />
                             <Legend wrapperStyle={{ fontSize: 9 }} />
                           </RadarChart>
                         </ResponsiveContainer>
