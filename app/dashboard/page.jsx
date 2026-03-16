@@ -15,7 +15,7 @@ const tDark = {
   bg: "#070b0e", card: "#0f1419", cardAlt: "#151c22", border: "#1e2a32",
   accent: "#10b981", accentDim: "#065f46", accentGlow: "#10b98133",
   gold: "#d4a853", orange: "#f97316",
-  red: "#ef4444", green: t.green, yellow: "#eab308",
+  red: "#ef4444", green: "#22c55e", yellow: "#eab308",
   cyan: "#06b6d4", purple: "#a78bfa", teal: "#14b8a6", pink: "#f472b6",
   text: "#d1d9e0", dim: "#5c6b77", bright: "#f0f4f7",
 };
