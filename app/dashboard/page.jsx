@@ -1,4 +1,7 @@
 "use client";
+
+      {editingMatch && <EditMatchModal match={editingMatch} onSave={handleEditMatch} onClose={() => setEditingMatch(null)} />}
+      {deletingMatch && <DeleteMatchConfirm match={deletingMatch} onConfirm={handleDeleteMatch} onClose={() => setDeletingMatch(null)} />}
 import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
@@ -1005,6 +1008,143 @@ function ReportView({ keeper, keeperData, alerts, targetGame, primaryColor, onBa
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// EDIT MATCH MODAL
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function EditMatchModal({ match, onSave, onClose }) {
+  const [formData, setFormData] = useState({
+    opponent: match?.opponent || "",
+    match_date: match?.match_date || "",
+    session_type: match?.session_type || "match",
+    venue: match?.venue || "home",
+    result: match?.result || "—",
+    goals_for: match?.goals_for ?? 0,
+    goals_against: match?.goals_against ?? 0,
+    shots_on_target: match?.shots_on_target ?? 0,
+    saves: match?.saves ?? 0,
+    goals_conceded: match?.goals_conceded ?? 0,
+  });
+
+  const isMatch = formData.session_type === "match";
+  const handleChange = (field, value) => { setFormData(prev => ({ ...prev, [field]: value })); };
+  const handleSubmit = (e) => { e.preventDefault(); onSave(formData); };
+
+  const inputStyle = { width: "100%", boxSizing: "border-box", padding: "8px 12px", background: t.bg, border: `1px solid ${t.border}`, borderRadius: 6, color: t.text, fontFamily: font, fontSize: 13 };
+  const labelStyle = { display: "block", fontSize: 12, color: t.dim, marginBottom: 6, fontWeight: 600 };
+  const selectStyle = { ...inputStyle, cursor: "pointer" };
+
+  return (
+    <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, fontFamily: font }}>
+      <div style={{ background: t.card, borderRadius: 12, border: `1px solid ${t.border}`, padding: 24, maxWidth: 480, width: "90%", color: t.text }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, color: t.bright, margin: "0 0 20px" }}>Edit Match</h2>
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: 16 }}>
+            <label style={labelStyle}>Opponent</label>
+            <input type="text" value={formData.opponent} onChange={e => handleChange("opponent", e.target.value)} style={inputStyle} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+            <div>
+              <label style={labelStyle}>Match Date</label>
+              <input type="date" value={formData.match_date} onChange={e => handleChange("match_date", e.target.value)} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Type</label>
+              <select value={formData.session_type} onChange={e => handleChange("session_type", e.target.value)} style={selectStyle}>
+                <option value="match">Match</option>
+                <option value="training">Training</option>
+              </select>
+            </div>
+          </div>
+          {isMatch && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+              <div>
+                <label style={labelStyle}>Venue</label>
+                <select value={formData.venue} onChange={e => handleChange("venue", e.target.value)} style={selectStyle}>
+                  <option value="home">Home</option>
+                  <option value="away">Away</option>
+                  <option value="neutral">Neutral</option>
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>Result</label>
+                <select value={formData.result} onChange={e => handleChange("result", e.target.value)} style={selectStyle}>
+                  <option value="W">Win</option>
+                  <option value="D">Draw</option>
+                  <option value="L">Loss</option>
+                  <option value="—">—</option>
+                </select>
+              </div>
+            </div>
+          )}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+            <div>
+              <label style={labelStyle}>Goals For</label>
+              <input type="number" value={formData.goals_for} onChange={e => handleChange("goals_for", parseInt(e.target.value) || 0)} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Goals Against</label>
+              <input type="number" value={formData.goals_against} onChange={e => handleChange("goals_against", parseInt(e.target.value) || 0)} style={inputStyle} />
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+            <div>
+              <label style={labelStyle}>Shots on Target</label>
+              <input type="number" value={formData.shots_on_target} onChange={e => handleChange("shots_on_target", parseInt(e.target.value) || 0)} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Saves</label>
+              <input type="number" value={formData.saves} onChange={e => handleChange("saves", parseInt(e.target.value) || 0)} style={inputStyle} />
+            </div>
+          </div>
+          <div style={{ marginBottom: 20 }}>
+            <label style={labelStyle}>Goals Conceded</label>
+            <input type="number" value={formData.goals_conceded} onChange={e => handleChange("goals_conceded", parseInt(e.target.value) || 0)} style={inputStyle} />
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button type="submit" style={{ flex: 1, padding: "10px 14px", borderRadius: 6, background: t.accent, border: "none", color: "#000", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: font }}>Save Changes</button>
+            <button type="button" onClick={onClose} style={{ flex: 1, padding: "10px 14px", borderRadius: 6, background: t.cardAlt, border: `1px solid ${t.border}`, color: t.text, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: font }}>Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DELETE MATCH CONFIRMATION MODAL
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function DeleteMatchConfirm({ match, onConfirm, onClose }) {
+  const dateStr = new Date(match?.match_date || "").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  const opponent = match?.opponent || "Unknown";
+
+  return (
+    <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, fontFamily: font }}>
+      <div style={{ background: t.card, borderRadius: 12, border: `1px solid ${t.border}`, padding: 24, maxWidth: 420, width: "90%", color: t.text }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 16 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: t.red + "22", border: `1px solid ${t.red}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
+            🗑️
+          </div>
+          <div>
+            <h2 style={{ fontSize: 16, fontWeight: 700, color: t.bright, margin: "0 0 6px" }}>Delete Match?</h2>
+            <p style={{ fontSize: 13, color: t.dim, margin: 0, lineHeight: 1.5 }}>
+              Delete match vs <strong style={{ color: t.text }}>{opponent}</strong> on <strong style={{ color: t.text }}>{dateStr}</strong>?
+            </p>
+            <p style={{ fontSize: 12, color: t.dim, margin: "10px 0 0", lineHeight: 1.5 }}>
+              This will also remove all associated goals and attributes. This cannot be undone.
+            </p>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={onConfirm} style={{ flex: 1, padding: "10px 14px", borderRadius: 6, background: t.red, border: "none", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: font }}>Delete</button>
+          <button onClick={onClose} style={{ flex: 1, padding: "10px 14px", borderRadius: 6, background: t.cardAlt, border: `1px solid ${t.border}`, color: t.text, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: font }}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // MAIN DASHBOARD
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1026,6 +1166,9 @@ export default function DashboardPage() {
   const [allGoals, setAllGoals] = useState([]);
   const [allAttrs, setAllAttrs] = useState([]);
   const [loadingData, setLoadingData] = useState(true);
+
+  const [editingMatch, setEditingMatch] = useState(null);
+  const [deletingMatch, setDeletingMatch] = useState(null);
 
   const [selectedKeeper, setSelectedKeeper] = useState(null);
   const [tab, setTab] = useState("overview");
@@ -1075,6 +1218,28 @@ export default function DashboardPage() {
     if (goalRes.data) setAllGoals(goalRes.data);
     if (attrRes.data) setAllAttrs(attrRes.data);
     setLoadingData(false);
+  };
+
+  const handleEditMatch = async (matchData) => {
+    if (!editingMatch?.id) return;
+    const { error } = await supabase.from("matches").update(matchData).eq("id", editingMatch.id);
+    if (!error) {
+      setEditingMatch(null);
+      fetchAnalyticsData();
+    }
+  };
+
+  const handleDeleteMatch = async () => {
+    if (!deletingMatch?.id) return;
+    try {
+      await supabase.from("goals_conceded").delete().eq("match_id", deletingMatch.id);
+      await supabase.from("match_attributes").delete().eq("match_id", deletingMatch.id);
+      await supabase.from("matches").delete().eq("id", deletingMatch.id);
+      setDeletingMatch(null);
+      fetchAnalyticsData();
+    } catch (err) {
+      console.error("Error deleting match:", err);
+    }
   };
 
   useEffect(() => {
@@ -1410,29 +1575,52 @@ export default function DashboardPage() {
                   <Card>
                     <Sec icon="📋">Recent Matches</Sec>
                     <div style={{ overflowX: "auto" }}>
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 480 }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 520 }}>
                         <thead>
-                          <tr>{["Date", "Opp", "H/A", "Result", "Score", "SOT", "Sv", "GA", "Sv%"].map(h => <th key={h} style={{ textAlign: "center", padding: "7px 6px", color: t.dim, borderBottom: `1px solid ${t.border}`, fontSize: 9 }}>{h}</th>)}</tr>
+                          <tr>{["Date", "Opp", "H/A", "Result", "Score", "SOT", "Sv", "GA", "Sv%", ""].map(h => <th key={h} style={{ textAlign: "center", padding: "7px 6px", color: t.dim, borderBottom: `1px solid ${t.border}`, fontSize: 9 }}>{h}</th>)}</tr>
                         </thead>
                         <tbody>
-                          {d.matchLog.slice(0, 5).map((m, i) => (
-                            <tr key={i}
-                              onClick={() => { setTab("matches"); openGameDrillDown(m); }}
-                              style={{ cursor: "pointer" }}
-                              onMouseEnter={e => e.currentTarget.style.background = t.cardAlt}
-                              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                            >
-                              <td style={{ padding: "7px 6px", color: t.text, textAlign: "center", borderBottom: `1px solid ${t.border}22` }}>{m.date}</td>
-                              <td style={{ padding: "7px 6px", color: t.bright, fontWeight: 600, textAlign: "center", borderBottom: `1px solid ${t.border}22` }}>{m.opp}</td>
-                              <td style={{ padding: "7px 6px", color: t.dim, textAlign: "center", borderBottom: `1px solid ${t.border}22` }}>{m.type === "training" ? "T" : m.ha}</td>
-                              <td style={{ padding: "7px 6px", textAlign: "center", borderBottom: `1px solid ${t.border}22`, color: m.res === "W" ? t.green : m.res === "L" ? t.red : t.dim, fontWeight: 600 }}>{m.res}</td>
-                              <td style={{ padding: "7px 6px", color: t.text, textAlign: "center", borderBottom: `1px solid ${t.border}22` }}>{m.score}</td>
-                              <td style={{ padding: "7px 6px", color: t.text, textAlign: "center", borderBottom: `1px solid ${t.border}22` }}>{m.sot}</td>
-                              <td style={{ padding: "7px 6px", color: t.text, textAlign: "center", borderBottom: `1px solid ${t.border}22` }}>{m.sv}</td>
-                              <td style={{ padding: "7px 6px", color: m.ga > 0 ? t.red : t.green, textAlign: "center", borderBottom: `1px solid ${t.border}22`, fontWeight: 600 }}>{m.ga}</td>
-                              <td style={{ padding: "7px 6px", textAlign: "center", borderBottom: `1px solid ${t.border}22`, color: m.svP != null ? svC(m.svP) : t.dim, fontWeight: 600 }}>{m.svP != null ? pct(m.svP) : "—"}</td>
-                            </tr>
-                          ))}
+                          {d.matchLog.slice(0, 5).map((m, i) => {
+                            const matchRecord = d.matches.find(x => x.id === m.id);
+                            return (
+                              <tr key={i}
+                                onClick={() => { setTab("matches"); openGameDrillDown(m); }}
+                                style={{ cursor: "pointer" }}
+                                onMouseEnter={e => e.currentTarget.style.background = t.cardAlt}
+                                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                              >
+                                <td style={{ padding: "7px 6px", color: t.text, textAlign: "center", borderBottom: `1px solid ${t.border}22` }}>{m.date}</td>
+                                <td style={{ padding: "7px 6px", color: t.bright, fontWeight: 600, textAlign: "center", borderBottom: `1px solid ${t.border}22` }}>{m.opp}</td>
+                                <td style={{ padding: "7px 6px", color: t.dim, textAlign: "center", borderBottom: `1px solid ${t.border}22` }}>{m.type === "training" ? "T" : m.ha}</td>
+                                <td style={{ padding: "7px 6px", textAlign: "center", borderBottom: `1px solid ${t.border}22`, color: m.res === "W" ? t.green : m.res === "L" ? t.red : t.dim, fontWeight: 600 }}>{m.res}</td>
+                                <td style={{ padding: "7px 6px", color: t.text, textAlign: "center", borderBottom: `1px solid ${t.border}22` }}>{m.score}</td>
+                                <td style={{ padding: "7px 6px", color: t.text, textAlign: "center", borderBottom: `1px solid ${t.border}22` }}>{m.sot}</td>
+                                <td style={{ padding: "7px 6px", color: t.text, textAlign: "center", borderBottom: `1px solid ${t.border}22` }}>{m.sv}</td>
+                                <td style={{ padding: "7px 6px", color: m.ga > 0 ? t.red : t.green, textAlign: "center", borderBottom: `1px solid ${t.border}22`, fontWeight: 600 }}>{m.ga}</td>
+                                <td style={{ padding: "7px 6px", textAlign: "center", borderBottom: `1px solid ${t.border}22`, color: m.svP != null ? svC(m.svP) : t.dim, fontWeight: 600 }}>{m.svP != null ? pct(m.svP) : "\u2014"}</td>
+                                <td style={{ padding: "7px 6px", textAlign: "center", borderBottom: `1px solid ${t.border}22` }}>
+                                  {!isDelegate && (
+                                    <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); setEditingMatch(matchRecord); }}
+                                        style={{ background: "none", border: "none", color: t.accent, cursor: "pointer", padding: "2px 4px", fontSize: 12 }}
+                                        title="Edit"
+                                      >
+                                        \u270f\ufe0f
+                                      </button>
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); setDeletingMatch(m); }}
+                                        style={{ background: "none", border: "none", color: t.red, cursor: "pointer", padding: "2px 4px", fontSize: 12 }}
+                                        title="Delete"
+                                      >
+                                        \ud83d\uddd1\ufe0f
+                                      </button>
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -1462,31 +1650,54 @@ export default function DashboardPage() {
                   <>
                     <Sec icon="📋">Match Log — {selectedKeeperObj?.name} · click any row to drill in</Sec>
                     <Card s={{ overflowX: "auto" }}>
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 520 }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 580 }}>
                         <thead>
-                          <tr>{["Date", "Type", "Opp", "H/A", "Res", "Score", "SOT", "Sv", "GA", "Sv%", "CS"].map(h => <th key={h} style={{ textAlign: "center", padding: "7px 5px", color: t.dim, borderBottom: `1px solid ${t.border}`, fontSize: 9 }}>{h}</th>)}</tr>
+                          <tr>{["Date", "Type", "Opp", "H/A", "Res", "Score", "SOT", "Sv", "GA", "Sv%", "CS", ""].map(h => <th key={h} style={{ textAlign: "center", padding: "7px 5px", color: t.dim, borderBottom: `1px solid ${t.border}`, fontSize: 9 }}>{h}</th>)}</tr>
                         </thead>
                         <tbody>
-                          {d.matchLog.map((m, i) => (
-                            <tr key={i}
-                              onClick={() => openGameDrillDown(m)}
-                              style={{ background: i % 2 === 0 ? "transparent" : t.cardAlt + "44", cursor: "pointer" }}
-                              onMouseEnter={e => e.currentTarget.style.background = t.cardAlt}
-                              onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? "transparent" : t.cardAlt + "44"}
-                            >
-                              <td style={{ padding: "7px 5px", color: t.text, textAlign: "center" }}>{m.date}</td>
-                              <td style={{ padding: "7px 5px", textAlign: "center" }}><span style={{ fontSize: 8, padding: "2px 6px", borderRadius: 4, background: m.type === "match" ? t.accent + "22" : t.gold + "22", color: m.type === "match" ? t.accent : t.gold }}>{m.type === "match" ? "M" : "T"}</span></td>
-                              <td style={{ padding: "7px 5px", color: t.bright, fontWeight: 600, textAlign: "center" }}>{m.opp}</td>
-                              <td style={{ padding: "7px 5px", color: t.dim, textAlign: "center" }}>{m.type === "training" ? "—" : m.ha}</td>
-                              <td style={{ padding: "7px 5px", textAlign: "center", color: m.res === "W" ? t.green : m.res === "L" ? t.red : t.dim, fontWeight: 600 }}>{m.res}</td>
-                              <td style={{ padding: "7px 5px", color: t.text, textAlign: "center" }}>{m.score}</td>
-                              <td style={{ padding: "7px 5px", color: t.text, textAlign: "center" }}>{m.sot}</td>
-                              <td style={{ padding: "7px 5px", color: t.text, textAlign: "center" }}>{m.sv}</td>
-                              <td style={{ padding: "7px 5px", color: m.ga > 0 ? t.red : t.green, textAlign: "center", fontWeight: 600 }}>{m.ga}</td>
-                              <td style={{ padding: "7px 5px", textAlign: "center", color: m.svP != null ? svC(m.svP) : t.dim, fontWeight: 600 }}>{m.svP != null ? pct(m.svP) : "—"}</td>
-                              <td style={{ padding: "7px 5px", textAlign: "center" }}>{m.cs ? <span style={{ color: t.green }}>✓</span> : ""}</td>
-                            </tr>
-                          ))}
+                          {d.matchLog.map((m, i) => {
+                            const matchRecord = d.matches.find(x => x.id === m.id);
+                            return (
+                              <tr key={i}
+                                onClick={() => openGameDrillDown(m)}
+                                style={{ background: i % 2 === 0 ? "transparent" : t.cardAlt + "44", cursor: "pointer" }}
+                                onMouseEnter={e => e.currentTarget.style.background = t.cardAlt}
+                                onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? "transparent" : t.cardAlt + "44"}
+                              >
+                                <td style={{ padding: "7px 5px", color: t.text, textAlign: "center" }}>{m.date}</td>
+                                <td style={{ padding: "7px 5px", textAlign: "center" }}><span style={{ fontSize: 8, padding: "2px 6px", borderRadius: 4, background: m.type === "match" ? t.accent + "22" : t.gold + "22", color: m.type === "match" ? t.accent : t.gold }}>{m.type === "match" ? "M" : "T"}</span></td>
+                                <td style={{ padding: "7px 5px", color: t.bright, fontWeight: 600, textAlign: "center" }}>{m.opp}</td>
+                                <td style={{ padding: "7px 5px", color: t.dim, textAlign: "center" }}>{m.type === "training" ? "\u2014" : m.ha}</td>
+                                <td style={{ padding: "7px 5px", textAlign: "center", color: m.res === "W" ? t.green : m.res === "L" ? t.red : t.dim, fontWeight: 600 }}>{m.res}</td>
+                                <td style={{ padding: "7px 5px", color: t.text, textAlign: "center" }}>{m.score}</td>
+                                <td style={{ padding: "7px 5px", color: t.text, textAlign: "center" }}>{m.sot}</td>
+                                <td style={{ padding: "7px 5px", color: t.text, textAlign: "center" }}>{m.sv}</td>
+                                <td style={{ padding: "7px 5px", color: m.ga > 0 ? t.red : t.green, textAlign: "center", fontWeight: 600 }}>{m.ga}</td>
+                                <td style={{ padding: "7px 5px", textAlign: "center", color: m.svP != null ? svC(m.svP) : t.dim, fontWeight: 600 }}>{m.svP != null ? pct(m.svP) : "\u2014"}</td>
+                                <td style={{ padding: "7px 5px", textAlign: "center" }}>{m.cs ? <span style={{ color: t.green }}>\u2713</span> : ""}</td>
+                                <td style={{ padding: "7px 5px", textAlign: "center" }}>
+                                  {!isDelegate && (
+                                    <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); setEditingMatch(matchRecord); }}
+                                        style={{ background: "none", border: "none", color: t.accent, cursor: "pointer", padding: "2px 4px", fontSize: 12 }}
+                                        title="Edit"
+                                      >
+                                        \u270f\ufe0f
+                                      </button>
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); setDeletingMatch(m); }}
+                                        style={{ background: "none", border: "none", color: t.red, cursor: "pointer", padding: "2px 4px", fontSize: 12 }}
+                                        title="Delete"
+                                      >
+                                        \ud83d\uddd1\ufe0f
+                                      </button>
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </Card>
