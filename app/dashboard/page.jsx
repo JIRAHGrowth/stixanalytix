@@ -1,7 +1,5 @@
 "use client";
 
-      {editingMatch && <EditMatchModal match={editingMatch} onSave={handleEditMatch} onClose={() => setEditingMatch(null)} />}
-      {deletingMatch && <DeleteMatchConfirm match={deletingMatch} onConfirm={handleDeleteMatch} onClose={() => setDeletingMatch(null)} />}
 import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
@@ -2099,6 +2097,8 @@ export default function DashboardPage() {
 
       {showKeeperModal && <KeeperModal keeper={null} primaryColor={primaryColor} onClose={() => setShowKeeperModal(false)} onSave={handleAddKeeper} />}
       {editingKeeper && <KeeperModal keeper={editingKeeper} primaryColor={primaryColor} onClose={() => setEditingKeeper(null)} onSave={handleEditKeeper} onDeactivate={handleDeactivateKeeper} />}
+      {editingMatch && <EditMatchModal match={editingMatch} onSave={handleEditMatch} onClose={() => setEditingMatch(null)} />}
+      {deletingMatch && <DeleteMatchConfirm match={deletingMatch} onConfirm={handleDeleteMatch} onClose={() => setDeletingMatch(null)} />}
     </div>
   );
 }
