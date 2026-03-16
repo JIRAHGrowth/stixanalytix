@@ -1882,7 +1882,7 @@ export default function DashboardPage() {
                                 <td style={{ padding: "7px 5px", color: t.text, textAlign: "center" }}>{m.sv}</td>
                                 <td style={{ padding: "7px 5px", color: m.ga > 0 ? t.red : t.green, textAlign: "center", fontWeight: 600 }}>{m.ga}</td>
                                 <td style={{ padding: "7px 5px", textAlign: "center", color: m.svP != null ? svC(m.svP) : t.dim, fontWeight: 600 }}>{m.svP != null ? pct(m.svP) : "\u2014"}</td>
-                                <td style={{ padding: "7px 5px", textAlign: "center" }}>{m.cs ? <span style={{ color: t.green }}>\u2713</span> : ""}</td>
+                                <td style={{ padding: "7px 5px", textAlign: "center" }}>{m.cs ? <span style={{ color: t.green }}>✓</span> : ""}</td>
                                 <td style={{ padding: "7px 5px", textAlign: "center" }}>
                                   {!isDelegate && (
                                     <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
