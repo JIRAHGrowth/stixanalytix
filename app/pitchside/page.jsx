@@ -29,6 +29,7 @@ const HALVES = ["H1", "H2", "ET"];
 const EVENT_TYPES = ["Corner", "Cross", "Shot", "1v1", "Penalty"];
 const GK_ACTIONS_CROSS = ["Claim", "Punched", "Missed/Misjudged"];
 const GK_ACTIONS_SHOT = ["Claim", "Parry", "Dive", "Block", "Tip", "Punched", "Goal", "Missed/Misjudged"];
+const GK_ACTION_LABELS = {"Claim":"Catch","Dive":"Smother","Tip":"Deflect","Punched":"Punch"};
 const GK_ACTIONS_PENALTY = ["Save – Dive", "Save – Catch", "Save – Parry", "Goal", "Missed/Misjudged"];
 const SHOT_METHODS = ["Foot", "Header", "Deflection", "Own Goal"];
 const GOAL_ZONES = ["High L","High C","High R","Mid L","Mid C","Mid R","Low L","Low C","Low R"];
@@ -44,12 +45,12 @@ const ATTRS = [
 ];
 const SHOT_ORIGINS = [
   { id: "6yard", label: "6-Yard Box" },
-  { id: "boxL", label: "Box Left" },
-  { id: "boxC", label: "Box Center" },
-  { id: "boxR", label: "Box Right" },
-  { id: "outL", label: "Outside Left" },
-  { id: "outC", label: "Outside Center" },
-  { id: "outR", label: "Outside Right" },
+  { id: "boxL", label: "Left Channel" },
+  { id: "boxC", label: "Central Box" },
+  { id: "boxR", label: "Right Channel" },
+  { id: "outL", label: "Wide Left" },
+  { id: "outC", label: "Central Distance" },
+  { id: "outR", label: "Wide Right" },
   { id: "cornerL", label: "Corner Left" },
   { id: "cornerR", label: "Corner Right" },
 ];
@@ -155,14 +156,14 @@ function PitchOriginMap({ selected, onSelect }) {
 
   const labels = {
     "6yard": { x: cx, y: goalY - sixH / 2 - 2, t: "6-Yard" },
-    "boxL": { x: (boxL + sixL) / 2, y: (boxTop + goalY) / 2, t: "Box L" },
-    "boxC": { x: cx, y: (boxTop + sixTop) / 2, t: "Box C" },
-    "boxR": { x: (sixR + boxR) / 2, y: (boxTop + goalY) / 2, t: "Box R" },
-    "outL": { x: boxL / 2, y: (10 + goalY) / 2, t: "Outside L" },
-    "outC": { x: cx, y: (10 + boxTop) / 2, t: "Outside C" },
-    "outR": { x: (boxR + w) / 2, y: (10 + goalY) / 2, t: "Outside R" },
-    "cornerL": { x: 16, y: goalY - 14, t: "CK" },
-    "cornerR": { x: w - 16, y: goalY - 14, t: "CK" },
+    "boxL": { x: (boxL + sixL) / 2, y: (boxTop + goalY) / 2, t: "Left Ch." },
+    "boxC": { x: cx, y: (boxTop + sixTop) / 2, t: "Central" },
+    "boxR": { x: (sixR + boxR) / 2, y: (boxTop + goalY) / 2, t: "Right Ch." },
+    "outL": { x: boxL / 2, y: (10 + goalY) / 2, t: "Wide L" },
+    "outC": { x: cx, y: (10 + boxTop) / 2, t: "Cntrl Dist." },
+    "outR": { x: (boxR + w) / 2, y: (10 + goalY) / 2, t: "Wide R" },
+    "cornerL": { x: 16, y: goalY - 14, t: "Corner" },
+    "cornerR": { x: w - 16, y: goalY - 14, t: "Corner" },
   };
 
   const zc = (id) => selected === id
@@ -316,7 +317,7 @@ function EventLog({ events, half, onUndo }) {
   const describeEvent = (e) => {
     let desc = e.type;
     if (e.offTarget) return `${desc} → Off Target`;
-    if (e.gkAction) desc += ` → ${e.gkAction}`;
+    if (e.gkAction) desc += ` → ${GK_ACTION_LABELS[e.gkAction] || e.gkAction}`;
     if (e.isGoal) desc += " → GOAL";
     return desc;
   };
@@ -1215,7 +1216,7 @@ export default function PitchsidePage() {
                   <div style={{ fontSize: 10, color: t.dim, fontWeight: 600, textTransform: "uppercase", marginBottom: 6 }}>GK Action</div>
                   <div style={{ display: "grid", gridTemplateColumns: evtType === "Penalty" ? "repeat(3, 1fr)" : "repeat(4, 1fr)", gap: 4 }}>
                     {getAvailableActions().map(a => (
-                      <Chip key={a} label={a} selected={evtAction === a} small
+                      <Chip key={a} label={GK_ACTION_LABELS[a] || a} selected={evtAction === a} small
                         color={a === "Missed/Misjudged" ? t.red : a === "Goal" ? t.red : (club?.primary_color || t.accent)}
                         onClick={() => {
                           setEvtAction(a);
