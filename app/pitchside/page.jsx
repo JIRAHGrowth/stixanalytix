@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 // ═══ THEME ═══════════════════════════════════════════════════════════════════
-const t = {
+const tDark = {
   bg: "#070b0e", card: "#0f1419", cardAlt: "#151c22", border: "#1e2a32",
   accent: "#10b981", accentDim: "#065f46", accentGlow: "#10b98133",
   gold: "#d4a853", goldDim: "#d4a85322",
@@ -13,6 +13,15 @@ const t = {
   teal: "#14b8a6", cyan: "#06b6d4", purple: "#a78bfa",
   text: "#d1d9e0", dim: "#5c6b77", bright: "#f0f4f7",
 };
+const tLight = {
+  bg: "#f5f7fa", card: "#ffffff", cardAlt: "#f0f2f5", border: "#e2e8f0",
+  accent: "#10b981", accentDim: "#d1fae5", accentGlow: "#10b98122",
+  gold: "#b8860b", orange: "#ea580c",
+  red: "#dc2626", green: "#16a34a", yellow: "#ca8a04",
+  cyan: "#0891b2", purple: "#7c3aed", teal: "#0d9488", pink: "#db2777",
+  text: "#1e293b", dim: "#64748b", bright: "#0f172a",
+};
+let t = tDark;
 const font = "'DM Sans', -apple-system, sans-serif";
 
 // ═══ CONSTANTS ══════════════════════════════════════════════════════════════
@@ -354,6 +363,8 @@ export default function PitchsidePage() {
   const router = useRouter();
 
   // ─── Phase routing
+  const [darkMode, setDarkMode] = useState(true);
+  t = darkMode ? tDark : tLight;
   const [phase, setPhase] = useState("setup"); // setup | match | attributes | saving | saved
 
   // ─── Setup state
@@ -739,6 +750,15 @@ export default function PitchsidePage() {
   if (authLoading) {
     return (
       <div style={{ minHeight: "100vh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: font }}>
+            <button onClick={() => setDarkMode(!darkMode)} style={{
+              position: "fixed", top: 16, right: 16, zIndex: 9999,
+              background: t.card, border: "1px solid " + t.border, borderRadius: 8,
+              padding: "6px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+              color: t.text, fontSize: 12, fontWeight: 600, fontFamily: font,
+              boxShadow: "0 2px 8px rgba(0,0,0,0.15)"
+            }}>
+              {darkMode ? "☀️" : "🌙"} {darkMode ? "Light" : "Dark"}
+            </button>
         <div style={{ color: t.dim }}>Loading...</div>
       </div>
     );
