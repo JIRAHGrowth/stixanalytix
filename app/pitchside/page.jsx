@@ -1423,8 +1423,6 @@ export default function PitchsidePage() {
                 <label style={{ fontSize: 11, color: t.dim, fontWeight: 600, display: "block", marginBottom: 3 }}>Date</label>
                 <input type="date" value={matchDate} onChange={e => setMatchDate(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: `1px solid ${t.border}`, background: t.cardAlt, color: t.text, fontSize: 14, fontFamily: font, outline: "none", boxSizing: "border-box" }} />
               </div>
-              <div>
-            
             </div>
             <button onClick={() => setShowSetup(false)} style={{ width: "100%", marginTop: 16, padding: 14, borderRadius: 10, background: club?.primary_color || t.accent, color: "#fff", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: font, minHeight: 48 }}>Done</button>
           </div>
