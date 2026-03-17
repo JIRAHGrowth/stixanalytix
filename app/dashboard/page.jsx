@@ -362,8 +362,7 @@ function PitchOriginMap({ origins, title }) {
 
     return (
       <div>
-        <div style={{fontSize:11,color:t.dim,marginBottom:8,textTransform:"uppercase",letterSpacing:0.5}}>Where Goals Came From</div>
-        <svg viewBox="0 0 100 85" style={{width:"100%",maxWidth:360,display:"block",margin:"0 auto"}}>
+        <svg viewBox="0 0 100 85" style={{width:"100%",maxWidth:300,display:"block",margin:"0 auto"}}>
           <rect x="0" y="0" width="100" height="85" rx="3" fill={t.bg} stroke={t.border} strokeWidth="0.5"/>
           <rect x="30" y="0" width="40" height="3" rx="1" fill={t.dim} opacity="0.3"/>
           <text x="50" y="2" textAnchor="middle" fill={t.bright} fontSize="2.8" fontWeight="700" letterSpacing="1">GOAL</text>
