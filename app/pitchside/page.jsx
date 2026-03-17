@@ -27,10 +27,10 @@ const font = "'DM Sans', -apple-system, sans-serif";
 // ═══ CONSTANTS ══════════════════════════════════════════════════════════════
 const HALVES = ["H1", "H2", "ET"];
 const EVENT_TYPES = ["Shot", "1v1", "Corner", "Cross", "Penalty"];
-const GK_ACTIONS_CROSS = ["Claim", "Punched", "Away", "Missed/Misjudged"];
-const GK_ACTIONS_SHOT = ["Claim", "Dive", "Block", "Tip", "Punched", "Goal", "Missed/Misjudged"];
-const GK_ACTION_LABELS = {"Claim":"Catch","Dive":"Dive","Tip":"Deflect","Punched":"Punch","Away":"Away"};
-const GK_ACTIONS_PENALTY = ["Save – Dive", "Save – Catch", "Save – Parry", "Goal", "Missed/Misjudged"];
+const GK_ACTIONS_CROSS = ["Catch", "Punch", "Away", "Missed/Misjudged"];
+const GK_ACTIONS_SHOT = ["Catch", "Block", "Smother", "Parry", "Deflect", "Punch", "Goal", "Missed/Misjudged"];
+const GK_ACTION_LABELS = {"Away":"Away"};
+const GK_ACTIONS_PENALTY = ["Save – Catch", "Save – Smother", "Save – Parry", "Goal", "Missed/Misjudged"];
 const SHOT_METHODS = ["Foot", "Header", "Deflection", "Own Goal"];
 const GOAL_ZONES = ["High L","High C","High R","Mid L","Mid C","Mid R","Low L","Low C","Low R"];
 const OFF_TARGET_ZONES = ["Wide Left", "Wide Right", "Over Bar"];
@@ -205,51 +205,46 @@ function PitchOriginMap({ selected, onSelect }) {
 
 // ═══ GOAL ZONE MAP (with off-target zones) ═════════════════════════════════
 function GoalZoneMap({ selected, onSelect, showOffTarget }) {
-  const w = 300, h = 180;
-  const cols = 3, rows = 3;
-  const cellW = w / cols, cellH = h / rows;
   const zoneLabels = GOAL_ZONES;
-
+  const bw = 3;
+  const selOff = (z) => selected === z ? t.orange + "33" : "transparent";
+  const selOffBorder = (z) => selected === z ? t.orange : t.border;
+  const selOffColor = (z) => selected === z ? t.orange : t.dim;
+  const selOffWeight = (z) => selected === z ? 700 : 500;
   return (
-    <div>
-      <div style={{ position: "relative", background: t.bg, borderRadius: 10, border: `1px solid ${t.border}`, padding: 8 }}>
-        <div style={{ position: "absolute", top: 2, left: "50%", transform: "translateX(-50%)", fontSize: 9, color: t.dim + "88", letterSpacing: 2, textTransform: "uppercase" }}>← goal face →</div>
-        <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", maxWidth: 340, display: "block", margin: "8px auto 0" }}>
-          <rect x={0} y={0} width={w} height={h} rx={4} fill="none" stroke="#4a9a5a" strokeWidth={3} />
-          {[1, 2].map(i => (
-            <line key={`v${i}`} x1={cellW * i} y1={0} x2={cellW * i} y2={h} stroke={t.border} strokeWidth={1} />
-          ))}
-          {[1, 2].map(i => (
-            <line key={`h${i}`} x1={0} y1={cellH * i} x2={w} y2={cellH * i} stroke={t.border} strokeWidth={1} />
-          ))}
+    <div style={{ position: "relative", background: t.bg, borderRadius: 10, border: `1px solid ${t.border}`, padding: 8 }}>
+      <div style={{ position: "absolute", top: 2, left: "50%", transform: "translateX(-50%)", fontSize: 9, color: t.dim + "88", letterSpacing: 2, textTransform: "uppercase" }}>← goal face →</div>
+      {showOffTarget !== false && (
+        <div onClick={() => onSelect("Over Bar")} style={{ cursor: "pointer", width: "100%", maxWidth: 340, margin: "8px auto 0", height: 22, display: "flex", alignItems: "center", justifyContent: "center", border: `${bw}px solid ${selOffBorder("Over Bar")}`, borderBottom: "none", borderRadius: "6px 6px 0 0", background: selOff("Over Bar"), transition: "all 0.15s" }}>
+          <span style={{ fontSize: 9, fontWeight: selOffWeight("Over Bar"), color: selOffColor("Over Bar"), textTransform: "uppercase", letterSpacing: 1, fontFamily: font }}>Over Bar</span>
+        </div>
+      )}
+      <div style={{ display: "flex", width: "100%", maxWidth: 340, margin: showOffTarget === false ? "8px auto 0" : "0 auto" }}>
+        {showOffTarget !== false && (
+          <div onClick={() => onSelect("Wide Left")} style={{ cursor: "pointer", width: 28, display: "flex", alignItems: "center", justifyContent: "center", border: `${bw}px solid ${selOffBorder("Wide Left")}`, borderRight: "none", borderRadius: "6px 0 0 6px", background: selOff("Wide Left"), transition: "all 0.15s" }}>
+            <span style={{ writingMode: "vertical-rl", textOrientation: "mixed", fontSize: 9, fontWeight: selOffWeight("Wide Left"), color: selOffColor("Wide Left"), textTransform: "uppercase", letterSpacing: 1, fontFamily: font }}>Wide L</span>
+          </div>
+        )}
+        <svg viewBox="0 0 300 180" style={{ flex: 1, display: "block" }}>
+          <rect x={0} y={0} width={300} height={180} rx={0} fill="none" stroke="#4a9a5a" strokeWidth={bw} />
+          {[1, 2].map(i => (<line key={`v${i}`} x1={100 * i} y1={0} x2={100 * i} y2={180} stroke={t.border} strokeWidth={1} />))}
+          {[1, 2].map(i => (<line key={`h${i}`} x1={0} y1={60 * i} x2={300} y2={60 * i} stroke={t.border} strokeWidth={1} />))}
           {zoneLabels.map((z, i) => {
             const col = i % 3, row = Math.floor(i / 3);
             const isSelected = selected === z;
-            return (
-              <g key={z} onClick={() => onSelect(z)} style={{ cursor: "pointer" }}>
-                <rect x={col * cellW + 1} y={row * cellH + 1} width={cellW - 2} height={cellH - 2}
-                  fill={isSelected ? t.red + "44" : "transparent"} rx={3}
-                  stroke={isSelected ? t.red : "transparent"} strokeWidth={isSelected ? 2 : 0}
-                  style={{ transition: "all 0.15s" }} />
-                <text x={col * cellW + cellW / 2} y={row * cellH + cellH / 2}
-                  textAnchor="middle" dominantBaseline="middle"
-                  fontSize={11} fontWeight={isSelected ? 700 : 500}
-                  fill={isSelected ? t.red : t.dim} fontFamily={font}
-                  style={{ pointerEvents: "none" }}>{z}</text>
-              </g>
-            );
+            return (<g key={z} onClick={() => onSelect(z)} style={{ cursor: "pointer" }}>
+              <rect x={col * 100 + 1} y={row * 60 + 1} width={98} height={58} fill={isSelected ? t.red + "44" : "transparent"} rx={3} stroke={isSelected ? t.red : "transparent"} strokeWidth={isSelected ? 2 : 0} style={{ transition: "all 0.15s" }} />
+              <text x={col * 100 + 50} y={row * 60 + 30} textAnchor="middle" dominantBaseline="middle" fontSize={11} fontWeight={isSelected ? 700 : 500} fill={isSelected ? t.red : t.dim} fontFamily={font} style={{ pointerEvents: "none" }}>{z}</text>
+            </g>);
           })}
         </svg>
+        {showOffTarget !== false && (
+          <div onClick={() => onSelect("Wide Right")} style={{ cursor: "pointer", width: 28, display: "flex", alignItems: "center", justifyContent: "center", border: `${bw}px solid ${selOffBorder("Wide Right")}`, borderLeft: "none", borderRadius: "0 6px 6px 0", background: selOff("Wide Right"), transition: "all 0.15s" }}>
+            <span style={{ writingMode: "vertical-rl", textOrientation: "mixed", fontSize: 9, fontWeight: selOffWeight("Wide Right"), color: selOffColor("Wide Right"), textTransform: "uppercase", letterSpacing: 1, fontFamily: font }}>Wide R</span>
+          </div>
+        )}
       </div>
-      {/* Off-target zones - spatial layout */}
-          {showOffTarget !== false && (
-            <div style={{ display: "grid", gridTemplateColumns: "40px 1fr 40px", gap: 0, marginTop: -8, alignItems: "stretch" }}>
-              <button onClick={() => onSelect("Wide Left")} style={{ padding: "8px 2px", borderRadius: "8px 0 0 8px", border: "1px dashed " + (selected === "Wide Left" ? t.orange : t.border), borderRight: "none", background: selected === "Wide Left" ? t.orange + "25" : "transparent", color: selected === "Wide Left" ? t.orange : t.dim, fontSize: 9, fontWeight: selected === "Wide Left" ? 700 : 500, cursor: "pointer", textAlign: "center", fontFamily: font, writingMode: "vertical-rl", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 60 }}>Wide L</button>
-              <button onClick={() => onSelect("Over Bar")} style={{ padding: "8px 4px", borderRadius: 0, border: "1px dashed " + (selected === "Over Bar" ? t.orange : t.border), borderBottom: "none", background: selected === "Over Bar" ? t.orange + "25" : "transparent", color: selected === "Over Bar" ? t.orange : t.dim, fontSize: 10, fontWeight: selected === "Over Bar" ? 700 : 500, cursor: "pointer", textAlign: "center", fontFamily: font }}>Over Bar</button>
-              <button onClick={() => onSelect("Wide Right")} style={{ padding: "8px 2px", borderRadius: "0 8px 8px 0", border: "1px dashed " + (selected === "Wide Right" ? t.orange : t.border), borderLeft: "none", background: selected === "Wide Right" ? t.orange + "25" : "transparent", color: selected === "Wide Right" ? t.orange : t.dim, fontSize: 9, fontWeight: selected === "Wide Right" ? 700 : 500, cursor: "pointer", textAlign: "center", fontFamily: font, writingMode: "vertical-rl", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 60 }}>Wide R</button>
-            </div>
-          )}
-      </div>
+    </div>
   );
 }
 // ═══ HALF SUMMARY MODAL ════════════════════════════════════════════════════
@@ -259,7 +254,7 @@ function HalfSummary({ half, events, halves, goalsFor, onClose, clubName, oppone
   const saves = hEvents.filter(e => !e.isGoal && !e.offTarget && (e.type === "Shot" || e.type === "1v1" || e.type === "Penalty") && e.gkAction && e.gkAction !== "Missed/Misjudged" && !e.gkAction.startsWith("Goal"));
   const goals = hEvents.filter(e => e.isGoal);
   const crosses = hEvents.filter(e => e.type === "Cross" || e.type === "Corner");
-  const claims = crosses.filter(e => e.gkAction === "Claim");
+  const claims = crosses.filter(e => e.gkAction === "Catch");
   const sot = shots.filter(e => !e.offTarget).length;
   const svPct = sot > 0 ? (((sot - goals.length) / sot) * 100).toFixed(1) + "%" : "—";
 
@@ -640,8 +635,8 @@ export default function PitchsidePage() {
       const countAction = (a) => saveEvents.filter(e => e.gkAction === a || e.gkAction?.startsWith(a)).length;
 
       const crossEvents = events.filter(e => e.type === "Cross" || e.type === "Corner");
-      const crossClaimed = crossEvents.filter(e => e.gkAction === "Claim").length;
-      const crossPunched = crossEvents.filter(e => e.gkAction === "Punched").length;
+      const crossClaimed = crossEvents.filter(e => e.gkAction === "Catch").length;
+      const crossPunched = crossEvents.filter(e => e.gkAction === "Punch").length;
       const crossMissed = crossEvents.filter(e => e.gkAction === "Missed/Misjudged" || e.gkAction === "Away").length;
 
       const oneV1 = events.filter(e => e.type === "1v1");
@@ -671,12 +666,12 @@ export default function PitchsidePage() {
         minutes_played: minutesPlayed ? parseInt(minutesPlayed) : null,
           shots_on_target: totalSOT, saves: totalSaves,
           goals_conceded: totalGA, save_percentage: savePct,
-          saves_catch: countAction("Claim") + countAction("Save – Catch"),
-          saves_parry: 0,  // Merged into Dive
-          saves_dive: countAction("Dive") + countAction("Save – Smother"),
+          saves_catch: countAction("Catch") + countAction("Save – Catch"),
+          saves_parry: countAction("Parry") + countAction("Save – Parry"),
+      saves_dive: countAction("Smother") + countAction("Save – Smother"),
           saves_block: countAction("Block"),
-          saves_tip: countAction("Tip"),
-          saves_punch: countAction("Punched"),
+          saves_tip: countAction("Deflect"),
+          saves_punch: countAction("Punch"),
           crosses_claimed: crossClaimed, crosses_punched: crossPunched,
           crosses_missed: crossMissed, crosses_total: crossEvents.length,
           dist_gk_short_att: sumHE("dGkShort"), dist_gk_short_suc: sumHE("dGkShort") - sumHE("dGkShortFail"),
@@ -892,11 +887,7 @@ export default function PitchsidePage() {
                 </div>
               </div>
             )}
-            <div style={{ background: t.card, borderRadius: 14, padding: 14, border: `1px solid ${t.border}` }}>
-              <div style={{ fontSize: 11, color: t.dim, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Minutes Played</div>
-              <input type="number" value={minutesPlayed} onChange={e => setMinutesPlayed(e.target.value)}
-                placeholder="90" style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${t.border}`, background: t.bg, color: t.bright, fontSize: 14, fontFamily: font, outline: "none", boxSizing: "border-box" }} />
-            </div>
+            
           </div>
 
           <div style={{ background: t.card, borderRadius: 14, padding: 14, border: `1px solid ${t.border}`, marginBottom: 24 }}>
@@ -982,7 +973,7 @@ export default function PitchsidePage() {
     const totalDistOk = ["H1","H2","ET"].reduce((s, hf) => s + (halfExtras[hf]?.dGkShortFail || 0) + (halfExtras[hf]?.dGkLongFail || 0) + (halfExtras[hf]?.dThrowFail || 0) + (halfExtras[hf]?.dPassFail || 0), 0);
     const distPct = totalDist > 0 ? ((totalDistOk / totalDist) * 100).toFixed(0) + "%" : "—";
     const crossEvts = events.filter(e => e.type === "Cross" || e.type === "Corner");
-    const claims = crossEvts.filter(e => e.gkAction === "Claim").length;
+    const claims = crossEvts.filter(e => e.gkAction === "Catch").length;
 
     return (
       <div style={{ minHeight: "100vh", background: t.bg, fontFamily: font, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}>
@@ -1376,7 +1367,7 @@ export default function PitchsidePage() {
             <div style={{ background: t.card, borderRadius: 12, padding: 16, border: `1px solid ${t.border}`, marginTop: 8 }}>
               <div style={{ fontSize: 11, color: t.dim, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>
                 End {sessionType === "training" ? "Session" : "Match"}
-              </div>
+              </div> <div style={{ marginBottom: 10 }}> <label style={{ fontSize: 11, color: t.dim, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 6 }}>Minutes Played</label> <input type="number" inputMode="numeric" value={minutesPlayed} onChange={e => setMinutesPlayed(e.target.value)} placeholder="e.g. 90" style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${t.border}`, background: t.bg, color: t.bright, fontSize: 14, fontFamily: font, outline: "none", boxSizing: "border-box" }} /> </div>
               {sessionType === "match" && (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 5, marginBottom: 12 }}>
                   {["W", "D", "L"].map(r => (
@@ -1433,9 +1424,7 @@ export default function PitchsidePage() {
                 <input type="date" value={matchDate} onChange={e => setMatchDate(e.target.value)} style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: `1px solid ${t.border}`, background: t.cardAlt, color: t.text, fontSize: 14, fontFamily: font, outline: "none", boxSizing: "border-box" }} />
               </div>
               <div>
-                <label style={{ fontSize: 11, color: t.dim, fontWeight: 600, display: "block", marginBottom: 3 }}>Minutes Played</label>
-                <input type="number" inputMode="numeric" value={minutesPlayed || ""} onChange={e => setMinutesPlayed(e.target.value)} placeholder="e.g. 90" style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: `1px solid ${t.border}`, background: t.cardAlt, color: t.text, fontSize: 14, fontFamily: font, outline: "none", boxSizing: "border-box" }} />
-              </div>
+            
             </div>
             <button onClick={() => setShowSetup(false)} style={{ width: "100%", marginTop: 16, padding: 14, borderRadius: 10, background: club?.primary_color || t.accent, color: "#fff", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: font, minHeight: 48 }}>Done</button>
           </div>
