@@ -682,7 +682,7 @@ export default function PitchsidePage() {
           goals_conceded: totalGA, save_percentage: savePct,
           saves_catch: countAction("Claim") + countAction("Save – Catch"),
           saves_parry: countAction("Parry") + countAction("Save – Parry"),
-          saves_dive: countAction("Dive") + countAction("Save – Dive"),
+          saves_dive: countAction("Dive") + countAction("Save – Smother"),
           saves_block: countAction("Block"),
           saves_tip: countAction("Tip"),
           saves_punch: countAction("Punched"),
