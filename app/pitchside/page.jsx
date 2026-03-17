@@ -1148,8 +1148,7 @@ export default function PitchsidePage() {
                 {psoAttempts > 0 ? ((psoSaves / psoAttempts) * 100).toFixed(1) + "%" : "—"}
               </span>
             </div>
-          </div>
-        
+          
             {/* End Game from PK */}
             <div style={{ marginTop: 16, padding: 12, background: t.cardAlt, borderRadius: 10, border: `1px solid ${t.border}` }}>
               <div style={{ fontSize: 11, color: t.dim, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>End Game</div>
@@ -1161,7 +1160,7 @@ export default function PitchsidePage() {
               <button onClick={() => { if (confirm("Save and end match?")) document.querySelector("[data-save-btn]")?.click(); }} style={{ width: "100%", padding: "12px 0", borderRadius: 10, border: "none", background: t.accent, color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: font }}>Save Match</button>
             </div>
           </div>
-) : (
+        ) : (
           <>
             {/* ═══ EVENT LOG ═══ */}
             <EventLog events={events} half={half} onUndo={undoLastEvent} />
