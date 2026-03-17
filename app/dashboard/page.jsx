@@ -984,20 +984,8 @@ function ReportView({ keeper, keeperData, alerts, targetGame, primaryColor, onBa
           </div>
         </div>
 
-        <div style={{ position: "absolute", bottom: 24, left: 36, right: 36, borderTop: "1px solid #ddd", paddingTop: 10, display: "flex", justifyContent: "space-between", fontSize: 9, color: "#aaa" }}>
-          <span>StixAnalytix · Goalkeeper Coaching Intelligence</span>
-          <span>Page 1 of 2</span>
-        </div>
-      </div>
-
-      {/* PAGE 2 */}
-      <div style={pageStyle} className="print-page">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `3px solid ${pc}`, paddingBottom: 12, marginBottom: 20 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "#111" }}>{keeper.name} — {isSingleGame ? "Match" : "Season"} Report (cont.)</div>
-          <div style={{ fontSize: 11, color: "#888" }}>StixAnalytix</div>
-        </div>
-
-        {/* Season vs Last 5 */}
+        
+{/* Season vs Last 5 */}
         {!isSingleGame && s && l && (
           <div style={{ marginBottom: 20 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Season vs Last 5 Comparison</div>
@@ -1029,7 +1017,8 @@ function ReportView({ keeper, keeperData, alerts, targetGame, primaryColor, onBa
           </div>
         )}
 
-        {/* Alerts */}
+        
+{/* Alerts */}
         {alerts?.length > 0 && (
           <div style={{ marginBottom: 20 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Active Coaching Alerts</div>
@@ -1042,9 +1031,23 @@ function ReportView({ keeper, keeperData, alerts, targetGame, primaryColor, onBa
           </div>
         )}
 
+        
+        <div style={{ position: "absolute", bottom: 24, left: 36, right: 36, borderTop: "1px solid #ddd", paddingTop: 10, display: "flex", justifyContent: "space-between", fontSize: 9, color: "#aaa" }}>
+          <span>StixAnalytix · Goalkeeper Coaching Intelligence</span>
+          <span>Page 1 of 2</span>
+        </div>
+      </div>
+
+      {/* PAGE 2 */}
+      <div style={pageStyle} className="print-page">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `3px solid ${pc}`, paddingBottom: 12, marginBottom: 20 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#111" }}>{keeper.name} — {isSingleGame ? "Match" : "Season"} Report (cont.)</div>
+          <div style={{ fontSize: 11, color: "#888" }}>StixAnalytix</div>
+        </div>
+
         {/* Match log */}
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Recent Match Log</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Recent Matches</div>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
             <thead>
               <tr style={{ background: "#f5f5f7" }}>
@@ -1054,7 +1057,7 @@ function ReportView({ keeper, keeperData, alerts, targetGame, primaryColor, onBa
               </tr>
             </thead>
             <tbody>
-              {log.slice(0, 10).map((m, i) => (
+              {log.filter(m => m.type !== "training").slice(0, 25).map((m, i) => (
                 <tr key={i} style={{ borderBottom: "1px solid #f0f0f0" }}>
                   <td style={{ padding: "5px 8px", color: "#555", textAlign: "center" }}>{m.date}</td>
                   <td style={{ padding: "5px 8px", fontWeight: 600, color: "#222" }}>{m.opp}</td>
@@ -1071,6 +1074,34 @@ function ReportView({ keeper, keeperData, alerts, targetGame, primaryColor, onBa
           </table>
         </div>
 
+        {/* Training Sessions */}
+        {log.filter(m => m.type === "training").length > 0 && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Recent Training Sessions</div>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
+              <thead>
+                <tr style={{ background: "#f5f5f7" }}>
+                  {["Date", "Focus / Notes", "SOT", "Sv", "GA", "Sv%"].map(h => (
+                    <th key={h} style={{ padding: "6px 8px", textAlign: h === "Focus / Notes" ? "left" : "center", color: "#666", fontWeight: 700, borderBottom: "1px solid #ddd" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {log.filter(m => m.type === "training").slice(0, 25).map((m, i) => (
+                  <tr key={i} style={{ borderBottom: "1px solid #f0f0f0" }}>
+                    <td style={{ padding: "5px 8px", color: "#555", textAlign: "center" }}>{m.date}</td>
+                    <td style={{ padding: "5px 8px", fontWeight: 600, color: "#222" }}>{m.opp}</td>
+                    <td style={{ padding: "5px 8px", textAlign: "center", color: "#555" }}>{m.sot}</td>
+                    <td style={{ padding: "5px 8px", textAlign: "center", color: "#555" }}>{m.sv}</td>
+                    <td style={{ padding: "5px 8px", textAlign: "center", color: m.ga > 0 ? "#dc2626" : "#16a34a", fontWeight: 600 }}>{m.ga}</td>
+                    <td style={{ padding: "5px 8px", textAlign: "center", fontWeight: 600, color: "#333" }}>{m.svP != null ? pct(m.svP) : "\u2013"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
         <div style={{ position: "absolute", bottom: 24, left: 36, right: 36, borderTop: "1px solid #ddd", paddingTop: 10, display: "flex", justifyContent: "space-between", fontSize: 9, color: "#aaa" }}>
           <span>StixAnalytix · Goalkeeper Coaching Intelligence</span>
           <span>Page 2 of 2</span>
@@ -1080,9 +1111,19 @@ function ReportView({ keeper, keeperData, alerts, targetGame, primaryColor, onBa
       <style>{`
         @media print {
           .no-print { display: none !important; }
-          body { background: white !important; margin: 0 !important; }
-          .print-page { page-break-after: always; box-shadow: none !important; margin: 0 !important; }
+          body, html { background: white !important; margin: 0 !important; padding: 0 !important; }
+          .report-outer { background: white !important; padding: 0 !important; }
+          .print-page {
+            box-shadow: none !important;
+            margin: 0 !important;
+            padding: 24px 28px !important;
+            width: 100% !important;
+            min-height: auto !important;
+            break-after: page;
+          }
+          .print-page:last-of-type { break-after: auto; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          @page { size: A4; margin: 10mm; }
         }
       `}</style>
     </div>
