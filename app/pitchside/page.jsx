@@ -875,8 +875,8 @@ export default function PitchsidePage() {
             </div>
           )}
 
-          {/* Home/Away + Date + Minutes */}
-          <div style={{ display: "grid", gridTemplateColumns: sessionType === "match" ? "1fr 1fr" : "1fr 1fr", gap: 10, marginBottom: 12 }}>
+          {/* Venue + Date */}
+          <div style={{ display: "grid", gridTemplateColumns: sessionType === "match" ? "1fr 1fr" : "1fr", gap: 10, marginBottom: 24 }}>
             {sessionType === "match" && (
               <div style={{ background: t.card, borderRadius: 14, padding: 14, border: `1px solid ${t.border}` }}>
                 <div style={{ fontSize: 11, color: t.dim, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Venue</div>
@@ -1128,7 +1128,7 @@ export default function PitchsidePage() {
         {showPSO ? (
           <div style={{ background: t.card, border: `1px solid ${t.gold}44`, borderRadius: 12, padding: 16, marginBottom: 10 }}>
             <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
-              <button onClick={() => { setPsoAttempts(0); setPsoSaves(0); }} style={{ background: "none", border: "none", color: t.dim, fontSize: 18, cursor: "pointer", padding: "4px 8px", marginRight: 8 }}>← Back</button>
+              <button onClick={() => { setShowPSO(false); setPsoAttempts(0); setPsoSaves(0); }} style={{ background: "none", border: "none", color: t.dim, fontSize: 18, cursor: "pointer", padding: "4px 8px", marginRight: 8 }}>← Back</button>
               <div style={{ flex: 1 }}><SectionHeader title="Penalty Shootout" icon="🎯" accentColor={t.gold} /></div>
             </div>
             <Counter label="Penalties Faced" value={psoAttempts} onChange={v => { setPsoAttempts(v); setLastSave(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })); }} />
