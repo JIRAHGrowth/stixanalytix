@@ -361,7 +361,7 @@ function PitchOriginMap({ origins, title }) {
     const vizMax = Math.max(...vizZones.map(z=>z.val), 1);
 
     return (
-      <div>
+      <div style={{textTransform:"none"}}>
         <svg viewBox="0 0 100 85" style={{width:"100%",maxWidth:300,display:"block",margin:"0 auto"}}>
           <rect x="0" y="0" width="100" height="85" rx="3" fill={t.bg} stroke={t.border} strokeWidth="0.5"/>
           <rect x="30" y="0" width="40" height="3" rx="1" fill={t.dim} opacity="0.3"/>
