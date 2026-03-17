@@ -348,16 +348,16 @@ function PitchOriginMap({ origins, title }) {
   }
   const maxVal = Math.max(...Object.values(origins), 1);
   const zones = [
-    { key: "cornerL", x: 5, y: 5, w: 15, h: 20, label: "Corner L" },
-    { key: "boxL", x: 20, y: 15, w: 18, h: 35, label: "Left Ch." },
-    { key: "6yard", x: 38, y: 25, w: 24, h: 22, label: "6-Yard" },
-    { key: "boxR", x: 62, y: 15, w: 18, h: 35, label: "Right Ch." },
-    { key: "cornerR", x: 80, y: 5, w: 15, h: 20, label: "Corner R" },
-    { key: "boxC", x: 28, y: 48, w: 44, h: 20, label: "Central" },
-    { key: "penalty", x: 42, y: 55, w: 16, h: 8, label: "Pen Spot" },
-    { key: "outC", x: 20, y: 68, w: 60, h: 22, label: "Cntrl Dist." },
-    { key: "outL", x: 5, y: 50, w: 15, h: 40, label: "Wide L" },
-    { key: "outR", x: 80, y: 50, w: 15, h: 40, label: "Wide R" },
+    { key: "cornerL", x: 2, y: 4, w: 18, h: 18, label: "Corner L" },
+    { key: "boxL", x: 20, y: 4, w: 16, h: 44, label: "Left Ch." },
+    { key: "6yard", x: 36, y: 4, w: 28, h: 20, label: "6-Yard" },
+    { key: "boxR", x: 64, y: 4, w: 16, h: 44, label: "Right Ch." },
+    { key: "cornerR", x: 80, y: 4, w: 18, h: 18, label: "Corner R" },
+    { key: "boxC", x: 36, y: 24, w: 28, h: 24, label: "Central" },
+    { key: "penalty", x: 42, y: 34, w: 16, h: 10, label: "Pen Spot" },
+    { key: "outC", x: 20, y: 50, w: 60, h: 22, label: "Cntrl Dist." },
+    { key: "outL", x: 2, y: 24, w: 18, h: 48, label: "Wide L" },
+    { key: "outR", x: 80, y: 24, w: 18, h: 48, label: "Wide R" },
   ];
   return (
     <div>
@@ -374,8 +374,8 @@ function PitchOriginMap({ origins, title }) {
           return (
             <g key={z.key}>
               {v > 0 && <rect x={z.x} y={z.y} width={z.w} height={z.h} rx="1" fill={"rgba(239,68,68," + intensity + ")"} />}
-              {v > 0 && <text x={z.x + z.w/2} y={z.y + z.h/2 - 2} textAnchor="middle" dominantBaseline="middle" fill={t.bright} fontSize="7" fontWeight="800">{v}</text>}
-              {v > 0 && <text x={z.x + z.w/2} y={z.y + z.h/2 + 6} textAnchor="middle" dominantBaseline="middle" fill={t.dim} fontSize="4">{z.label}</text>}
+              {v > 0 && <text x={z.x + z.w/2} y={z.y + z.h * 0.38} textAnchor="middle" dominantBaseline="middle" fill={t.bright} fontSize={z.h < 15 ? 5 : 7} fontWeight="800">{v}</text>}
+              {v > 0 && <text x={z.x + z.w/2} y={z.y + z.h * 0.78} textAnchor="middle" dominantBaseline="middle" fill={t.dim} fontSize={z.h < 15 ? 2.5 : 3.5}>{z.label}</text>}
             </g>
           );
         })}
@@ -801,8 +801,8 @@ function SingleGameView({ match, goals, logRow, keeperName, primaryColor, onBack
           <div>
             <div style={{ fontSize: 10, color: t.dim, marginBottom: 8, textTransform: "uppercase" }}>Crosses</div>
             {[
-              { label: "Claimed", val: match.crosses_claimed },
-              { label: "Punched", val: match.crosses_punched },
+              { label: "Caught", val: match.crosses_claimed },
+              { label: "Punch", val: match.crosses_punched },
               { label: "Missed",  val: match.crosses_missed },
             ].map(x => (
               <div key={x.label} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 5 }}>
@@ -1753,8 +1753,8 @@ export default function DashboardPage() {
                   {s.crosses ? (
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, textAlign: "center" }}>
                       {[
-                        { label: "Claimed", value: s.crosses.claimed || 0, color: t.green },
-                        { label: "Punched", value: s.crosses.punched || 0, color: t.accent },
+                        { label: "Caught", value: s.crosses.claimed || 0, color: t.green },
+                        { label: "Punch", value: s.crosses.punched || 0, color: t.accent },
                         { label: "Missed", value: s.crosses.missed || 0, color: t.red },
                         { label: "Away", value: s.crosses.away || 0, color: t.dim },
                       ].map(item => {
@@ -2029,18 +2029,18 @@ export default function DashboardPage() {
                   <Card>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 12 }}>
                       <StatBox label="Total" value={s.crosses.total} />
-                      <StatBox label="Claimed" value={s.crosses.claimed} color={t.green} />
-                      <StatBox label="Punched" value={s.crosses.punched} color={t.gold} />
+                      <StatBox label="Caught" value={s.crosses.claimed} color={t.green} />
+                      <StatBox label="Punch" value={s.crosses.punched} color={t.gold} />
                       <StatBox label="Missed" value={s.crosses.missed} color={t.red} />
                     </div>
-                    {s.crosses.total > 0 && <PBar label="Claim Rate" value={(s.crosses.claimed / s.crosses.total) * 100} color={t.accent} />}
+                    {s.crosses.total > 0 && <PBar label="Catch Rate" value={(s.crosses.claimed / s.crosses.total) * 100} color={t.accent} />}
                   </Card>
                   <Card>
                     <div style={{ fontSize: 10, color: t.dim, marginBottom: 8 }}>Breakdown</div>
                     {s.crosses.total > 0 ? (
                       <ResponsiveContainer width="100%" height={180}>
                         <PieChart>
-                          <Pie data={[{ name: "Claimed", value: s.crosses.claimed }, { name: "Punched", value: s.crosses.punched }, { name: "Missed", value: s.crosses.missed }].filter(d => d.value > 0)} cx="50%" cy="50%" outerRadius={65} dataKey="value" label={({ name, value }) => `${name}: ${value}`} labelLine={{ stroke: t.dim, strokeWidth: 0.5 }} style={{ fontSize: 9 }}>
+                          <Pie data={[{ name: "Caught", value: s.crosses.claimed }, { name: "Punch", value: s.crosses.punched }, { name: "Missed", value: s.crosses.missed }].filter(d => d.value > 0)} cx="50%" cy="50%" outerRadius={65} dataKey="value" label={({ name, value }) => `${name}: ${value}`} labelLine={{ stroke: t.dim, strokeWidth: 0.5 }} style={{ fontSize: 9 }}>
                             <Cell fill={t.green} /><Cell fill={t.border} /><Cell fill={t.red} />
                           </Pie>
                           <Tooltip {...ttS} />
@@ -2053,7 +2053,7 @@ export default function DashboardPage() {
                   <Card>
                     <Sec icon="📈">Season vs Last 5</Sec>
                     <ResponsiveContainer width="100%" height={180}>
-                      <BarChart data={[{ name: "Claimed", Season: d.season.crosses.claimed, "Last 5": d.l5.crosses.claimed }, { name: "Punched", Season: d.season.crosses.punched, "Last 5": d.l5.crosses.punched }, { name: "Missed", Season: d.season.crosses.missed, "Last 5": d.l5.crosses.missed }]}>
+                      <BarChart data={[{ name: "Caught", Season: d.season.crosses.claimed, "Last 5": d.l5.crosses.claimed }, { name: "Punch", Season: d.season.crosses.punched, "Last 5": d.l5.crosses.punched }, { name: "Missed", Season: d.season.crosses.missed, "Last 5": d.l5.crosses.missed }]}>
                         <CartesianGrid strokeDasharray="3 3" stroke={t.border} />
                         <XAxis dataKey="name" tick={{ fill: t.dim, fontSize: 9 }} />
                         <YAxis tick={{ fill: t.dim, fontSize: 9 }} />
