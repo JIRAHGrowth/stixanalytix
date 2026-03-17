@@ -362,20 +362,21 @@ function PitchOriginMap({ origins, title }) {
   return (
     <div>
       {title && <div style={{ fontSize: 11, color: t.dim, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>{title}</div>}
-      <svg viewBox="0 0 100 74" style={{ width: "100%", maxWidth: 280, display: "block", margin: "0 auto" }}>
+      <svg viewBox="0 0 100 74" style={{ width: "100%", maxWidth: 360, display: "block", margin: "0 auto" }}>
         <rect x="0" y="0" width="100" height="74" rx="2" fill={t.bg} stroke={t.border} strokeWidth="0.5" />
         <line x1="0" y1="2" x2="100" y2="2" stroke={t.border} strokeWidth="1" />
-        <rect x="20" y="2" width="60" height="44" fill="none" stroke={t.dim} strokeWidth="0.4" strokeDasharray="2" />
-        <rect x="30" y="2" width="40" height="16" fill="none" stroke={t.dim} strokeWidth="0.4" strokeDasharray="2" />
-        <circle cx="50" cy="40" r="1" fill={t.dim} />
+        
+        
+        
         {zones.map(z => {
           const v = origins[z.key] || 0;
           const intensity = v > 0 ? 0.2 + (v / maxVal) * 0.7 : 0;
           return (
             <g key={z.key}>
+              <rect x={z.x} y={z.y} width={z.w} height={z.h} rx={1} fill={t.cardBg || t.bg} stroke={t.border} strokeWidth="0.3" />
               {v > 0 && <rect x={z.x} y={z.y} width={z.w} height={z.h} rx="1" fill={"rgba(239,68,68," + intensity + ")"} />}
-              {v > 0 && <text x={z.x + z.w/2} y={z.y + z.h * 0.38} textAnchor="middle" dominantBaseline="middle" fill={t.bright} fontSize={z.h < 15 ? 5 : 7} fontWeight="800">{v}</text>}
-              {v > 0 && <text x={z.x + z.w/2} y={z.y + z.h * 0.78} textAnchor="middle" dominantBaseline="middle" fill={t.dim} fontSize={z.h < 15 ? 2.5 : 3.5}>{z.label}</text>}
+              {v > 0 && <text x={z.x + z.w/2} y={z.y + z.h * 0.38} textAnchor="middle" dominantBaseline="middle" fill={t.bright} fontSize={z.h < 12 ? 4.5 : z.w < 20 ? 5.5 : 7} fontWeight="800">{v}</text>}
+              {<text x={z.x + z.w/2} y={z.y + z.h * 0.78} textAnchor="middle" dominantBaseline="middle" fill={t.dim} fontSize={z.h < 12 ? 2.2 : z.w < 20 ? 2.8 : 3.5}>{z.label}</text>}
             </g>
           );
         })}
