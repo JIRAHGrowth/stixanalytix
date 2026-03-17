@@ -876,7 +876,7 @@ export default function PitchsidePage() {
           )}
 
           {/* Venue + Date */}
-          <div style={{ display: "grid", gridTemplateColumns: sessionType === "match" ? "1fr 1fr" : "1fr", gap: 10, marginBottom: 24 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 24 }}>
             {sessionType === "match" && (
               <div style={{ background: t.card, borderRadius: 14, padding: 14, border: `1px solid ${t.border}` }}>
                 <div style={{ fontSize: 11, color: t.dim, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Venue</div>
@@ -888,13 +888,13 @@ export default function PitchsidePage() {
               </div>
             )}
             
-          </div>
-
-          <div style={{ background: t.card, borderRadius: 14, padding: 14, border: `1px solid ${t.border}`, marginBottom: 24 }}>
+          
+<div style={{ background: t.card, borderRadius: 14, padding: 14, border: `1px solid ${t.border}`, }}>
             <div style={{ fontSize: 11, color: t.dim, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Date</div>
             <input type="date" value={matchDate} onChange={e => setMatchDate(e.target.value)}
               style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${t.border}`, background: t.bg, color: t.bright, fontSize: 14, fontFamily: font, outline: "none", boxSizing: "border-box" }} />
           </div>
+</div>
 
           <button onClick={() => { if (ready) setPhase("match"); }} disabled={!ready} style={{
             width: "100%", padding: 18, borderRadius: 12, border: "none",
