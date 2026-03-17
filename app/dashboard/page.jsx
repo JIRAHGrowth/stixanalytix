@@ -1,4 +1,4 @@
-"use client";
+h"use client";
 
 import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
@@ -336,7 +336,7 @@ function GoalHeatmap({ zones, title }) {
               borderBottom: z.includes("Low") ? "none" : "1px solid " + t.border,
             }}>
               <div style={{ fontSize: 18, fontWeight: 800, color: v > 0 ? t.bright : t.dim }}>{v}</div>
-              <div style={{ fontSize: 8, color: t.dim, marginTop: 2 }}>{label}</div>
+              <div style={{ fontSize: 8, color: v > 0 ? "rgba(255,255,255,0.65)" : t.dim, marginTop: 2 }}>{label}</div>
             </div>
           );
         })}
