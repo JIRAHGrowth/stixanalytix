@@ -884,7 +884,7 @@ function ReportView({ keeper, keeperData, alerts, targetGame, primaryColor, onBa
   };
 
   return (
-    <div style={{ background: "#0a0a0f", minHeight: "100vh", padding: "20px", fontFamily: font }}>
+    <div className="report-outer" style={{ background: "#0a0a0f", minHeight: "100vh", padding: "20px", fontFamily: font }}>
       {/* Controls */}
       <div className="no-print" style={{ display: "flex", gap: 12, marginBottom: 20, justifyContent: "center" }}>
         <button onClick={onBack} style={{ padding: "10px 20px", background: t.card, border: `1px solid ${t.border}`, color: t.text, borderRadius: 8, cursor: "pointer", fontFamily: font, fontSize: 13 }}>
@@ -1112,7 +1112,8 @@ function ReportView({ keeper, keeperData, alerts, targetGame, primaryColor, onBa
         @media print {
           .no-print { display: none !important; }
           body, html { background: white !important; margin: 0 !important; padding: 0 !important; }
-          .report-outer { background: white !important; padding: 0 !important; }
+          .report-outer, .report-outer * { background: white !important; }
+          .report-outer { padding: 0 !important; min-height: 0 !important; }
           .print-page {
             box-shadow: none !important;
             margin: 0 !important;
@@ -1120,6 +1121,7 @@ function ReportView({ keeper, keeperData, alerts, targetGame, primaryColor, onBa
             width: 100% !important;
             min-height: auto !important;
             break-after: page;
+            background: white !important;
           }
           .print-page:last-of-type { break-after: auto; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
