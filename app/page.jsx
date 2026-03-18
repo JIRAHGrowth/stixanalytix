@@ -2,8 +2,12 @@
 // Paste this file into app/page.jsx on GitHub
 // Vercel will auto-deploy within ~60 seconds of committing to main
 
+import { Outfit, DM_Sans } from 'next/font/google';
+
+const outfit = Outfit({ subsets: ['latin'], weight: ['400', '700', '800'], variable: '--font-outfit' });
+const dmSans = DM_Sans({ subsets: ['latin'], weight: ['300', '400', '500'], variable: '--font-dm' });
+
 const css = `
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -23,7 +27,7 @@ html { scroll-behavior: smooth; }
 body {
   background: var(--pitch-black);
   color: var(--chalk);
-  font-family: 'DM Sans', sans-serif;
+  font-family: var(--font-dm), 'DM Sans', sans-serif;
   font-size: 16px;
   line-height: 1.7;
   -webkit-font-smoothing: antialiased;
@@ -110,7 +114,7 @@ nav {
 
 .hero h1 {
   position: relative;
-  font-family: 'Outfit', sans-serif;
+  font-family: var(--font-outfit), 'Outfit', sans-serif;
   font-weight: 800;
   font-size: clamp(3rem, 7.5vw, 5.8rem);
   line-height: 1.04;
@@ -178,7 +182,7 @@ nav {
 
 .stat-num {
   display: block;
-  font-family: 'Outfit', sans-serif;
+  font-family: var(--font-outfit), 'Outfit', sans-serif;
   font-weight: 700;
   font-size: 1.9rem;
   color: var(--green);
@@ -209,7 +213,7 @@ nav {
 }
 
 .section-title {
-  font-family: 'Outfit', sans-serif;
+  font-family: var(--font-outfit), 'Outfit', sans-serif;
   font-weight: 800;
   font-size: clamp(2rem, 4vw, 2.9rem);
   letter-spacing: -0.025em;
@@ -259,7 +263,7 @@ nav {
 .pillar-card:hover .pillar-accent { opacity: 1; }
 
 .pillar-num {
-  font-family: 'Outfit', sans-serif;
+  font-family: var(--font-outfit), 'Outfit', sans-serif;
   font-size: 4rem;
   font-weight: 800;
   color: rgba(16,185,129,0.1);
@@ -268,7 +272,7 @@ nav {
 }
 
 .pillar-title {
-  font-family: 'Outfit', sans-serif;
+  font-family: var(--font-outfit), 'Outfit', sans-serif;
   font-size: 1.25rem;
   font-weight: 700;
   margin-bottom: 0.6rem;
@@ -303,7 +307,7 @@ nav {
 }
 
 .audience-title {
-  font-family: 'Outfit', sans-serif;
+  font-family: var(--font-outfit), 'Outfit', sans-serif;
   font-weight: 700;
   font-size: 1.05rem;
   margin-bottom: 0.5rem;
@@ -356,7 +360,7 @@ nav {
 }
 
 .tier-name {
-  font-family: 'Outfit', sans-serif;
+  font-family: var(--font-outfit), 'Outfit', sans-serif;
   font-weight: 800;
   font-size: 1.6rem;
   margin-bottom: 0.15rem;
@@ -374,7 +378,7 @@ nav {
 }
 
 .tier-price {
-  font-family: 'Outfit', sans-serif;
+  font-family: var(--font-outfit), 'Outfit', sans-serif;
   font-weight: 800;
   font-size: 3.2rem;
   line-height: 1;
@@ -442,7 +446,7 @@ nav {
 }
 .cta-block h2 {
   position: relative;
-  font-family: 'Outfit', sans-serif;
+  font-family: var(--font-outfit), 'Outfit', sans-serif;
   font-weight: 800;
   font-size: clamp(2rem, 4.5vw, 3.2rem);
   letter-spacing: -0.025em;
@@ -476,7 +480,7 @@ footer {
   align-items: center;
 }
 .problem-lede {
-  font-family: 'Outfit', sans-serif;
+  font-family: var(--font-outfit), 'Outfit', sans-serif;
   font-weight: 800;
   font-size: clamp(2rem, 3.8vw, 2.75rem);
   letter-spacing: -0.025em;
@@ -509,7 +513,7 @@ footer {
   transition: background 0.2s;
 }
 .metric-cell:hover { background: rgba(16,185,129,0.04); }
-.metric-cell-title { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 0.95rem; color: var(--chalk); margin-bottom: 0.35rem; }
+.metric-cell-title { font-family: var(--font-outfit), 'Outfit', sans-serif; font-weight: 700; font-size: 0.95rem; color: var(--chalk); margin-bottom: 0.35rem; }
 .metric-cell-body { font-size: 13px; color: var(--dim); line-height: 1.55; }
 .pitchside-callout {
   border-left: 2px solid var(--green);
@@ -532,9 +536,9 @@ footer {
 }
 .origin-aside { position: sticky; top: 6rem; }
 .origin-eyebrow { font-size: 11px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--green); margin-bottom: 0.75rem; }
-.origin-headline { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 2rem; letter-spacing: -0.025em; line-height: 1.1; color: var(--chalk); margin-bottom: 1.25rem; }
+.origin-headline { font-family: var(--font-outfit), 'Outfit', sans-serif; font-weight: 800; font-size: 2rem; letter-spacing: -0.025em; line-height: 1.1; color: var(--chalk); margin-bottom: 1.25rem; }
 .origin-sig { margin-top: 2rem; padding-top: 1.25rem; border-top: 1px solid var(--border); }
-.origin-sig-name { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 0.95rem; color: var(--chalk); }
+.origin-sig-name { font-family: var(--font-outfit), 'Outfit', sans-serif; font-weight: 700; font-size: 0.95rem; color: var(--chalk); }
 .origin-sig-role { font-size: 12px; color: var(--dim); }
 .origin-body p { color: var(--dim); font-size: 1.05rem; line-height: 1.8; margin-bottom: 1.5rem; }
 .origin-body p:last-child { margin-bottom: 0; }
@@ -586,7 +590,7 @@ function LogoSVG({ height = 38 }) {
 
 export default function Page() {
   return (
-    <>
+    <div className={`${outfit.variable} ${dmSans.variable}`}>
       <style dangerouslySetInnerHTML={{ __html: css }} />
 
       {/* ── NAV ── */}
@@ -847,7 +851,7 @@ export default function Page() {
         <LogoSVG height={30} />
         <p className="footer-copy">© 2026 StixAnalytix by JIRAH Growth Partners</p>
       </footer>
-    </>
+    </div>
   );
 }
 
