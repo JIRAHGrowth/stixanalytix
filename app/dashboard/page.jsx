@@ -359,7 +359,7 @@ function GoalHeatmap({ zones, title }) {
               borderRight: z.includes("R") ? "none" : "1px solid " + t.border,
               borderBottom: z.includes("Low") ? "none" : "1px solid " + t.border,
             }}>
-              <div style={{ fontSize: 18, fontWeight: 800, color: v > 0 ? t.bright : t.dim }}>{v}</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: v > 0 ? t.bright : t.dim }}>{v}{v > 0 && <div style={{ fontSize: 7, color: t.dim, marginTop: -1 }}>{(v / Math.max(1, Object.values(zones).reduce(function(a,b){return a+b},0)) * 100).toFixed(0)}%</div>}</div>
               <div style={{ fontSize: 8, color: v > 0 ? "rgba(255,255,255,0.65)" : t.dim, marginTop: 2 }}>{label}</div>
             </div>
           );
@@ -1742,7 +1742,7 @@ export default function DashboardPage() {
                         <div style={{ flex: 1, height: 16, background: t.bg, borderRadius: 4, overflow: "hidden" }}>
                           <div style={{ height: "100%", width: (s.saves > 0 ? (count / s.saves * 100) : 0) + "%", background: t.accent, borderRadius: 4 }} />
                         </div>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: t.text, width: 28, textAlign: "right" }}>{count}</div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: t.text, width: 28, textAlign: "right" }}>{count}<span style={{ fontSize: 9, color: t.dim, marginLeft: 4 }}>({(s.saves > 0 ? (count / s.saves * 100).toFixed(0) : 0)}%)</span></div>
                       </div>
                     ))}
                   </Card>
@@ -1762,7 +1762,7 @@ export default function DashboardPage() {
                             <div style={{ flex: 1, height: 16, background: t.bg, borderRadius: 4, overflow: "hidden" }}>
                               <div style={{ height: "100%", width: (s.ga > 0 ? (count / s.ga * 100) : 0) + "%", background: t.accent, borderRadius: 4 }} />
                             </div>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: t.text, width: 28, textAlign: "right" }}>{count}</div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: t.text, width: 28, textAlign: "right" }}>{count}<span style={{ fontSize: 9, color: t.dim, marginLeft: 4 }}>({(s.ga > 0 ? (count / s.ga * 100).toFixed(0) : 0)}%)</span></div>
                           </div>
                         ))}
                       </div>
