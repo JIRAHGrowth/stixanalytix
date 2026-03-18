@@ -638,7 +638,7 @@ export default function PitchsidePage() {
       const savePct = totalSOT > 0 ? totalSaves / totalSOT : 0;
 
       const allNotes = ["H1", "H2", "ET"]
-        .map(hf => halves[hf]?.note ? `${hf}: ${halves[hf].note}` : null)
+        .map(hf => halves[hf]?.note ? halves[hf].note : null)
         .filter(Boolean).join("\n");
 
       const { data: matchData, error: matchError } = await supabase
