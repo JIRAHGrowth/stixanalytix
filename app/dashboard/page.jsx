@@ -1803,6 +1803,42 @@ export default function DashboardPage() {
                 </div>
               </Sec>
 
+
+            {/* Zone Threat Analysis */}
+            <Sec title="Zone Threat Analysis">
+              {(() => {
+                const shotEvts = d ? (isL5 ? d.l5ShotEvents : d.seasonShotEvents) : [];
+                const zones = computeZoneConversion(shotEvts || []);
+                if (!shotEvts || shotEvts.length === 0) return (
+                  <Card><div style={{ textAlign: "center", padding: 24, color: t.dim, fontSize: 12 }}>Available for matches logged after March 2026. Log a match in Pitchside to see zone conversion data.</div></Card>
+                );
+                if (zones.length === 0) return (
+                  <Card><div style={{ textAlign: "center", padding: 24, color: t.dim, fontSize: 12 }}>No shot origin data recorded yet.</div></Card>
+                );
+                const maxShots = Math.max(...zones.map(function(z) { return z.shots; }));
+                return (
+                  <Card>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: t.text, marginBottom: 12 }}>Of all shots faced from each zone, what percentage resulted in goals?</div>
+                    {zones.map(function(z) {
+                      var pctVal = (z.rate * 100);
+                      var barColor = pctVal < 15 ? t.green : pctVal < 25 ? t.gold : t.red;
+                      return (
+                        <div key={z.zone} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                          <div style={{ width: 110, fontSize: 11, color: t.dim, flexShrink: 0 }}>{z.name}</div>
+                          <div style={{ flex: 1, height: 18, background: t.bg, borderRadius: 4, overflow: "hidden", position: "relative" }}>
+                            <div style={{ height: "100%", width: (z.shots / maxShots * 100) + "%", background: barColor, borderRadius: 4, opacity: 0.7 }} />
+                          </div>
+                          <div style={{ width: 40, fontSize: 11, color: t.dim, textAlign: "right" }}>{z.shots} shot{z.shots !== 1 ? "s" : ""}</div>
+                          <div style={{ width: 35, fontSize: 11, color: t.text, textAlign: "right" }}>{z.goals} GA</div>
+                          <div style={{ width: 40, fontSize: 12, fontWeight: 700, color: barColor, textAlign: "right" }}>{pctVal.toFixed(1)}%</div>
+                        </div>
+                      );
+                    })}
+                    <div style={{ marginTop: 8, fontSize: 10, color: t.dim }}>Sorted by conversion rate (highest vulnerability first). Green &lt;15% | Gold 15–25% | Red &gt;25%</div>
+                  </Card>
+                );
+              })()}
+            </Sec>
               {/* Row 4: Distribution */}
               <Sec title="Distribution">
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
