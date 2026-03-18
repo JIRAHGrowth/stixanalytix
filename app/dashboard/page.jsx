@@ -1297,6 +1297,18 @@ export default function DashboardPage() {
   const [editingMatch, setEditingMatch] = useState(null);
   const [deletingMatch, setDeletingMatch] = useState(null);
 
+  const [notesStatus, setNotesStatus] = useState({});
+  const [rankingsStatus, setRankingsStatus] = useState({});
+  const [expandedNotes, setExpandedNotes] = useState(null);
+  const [expandedRankings, setExpandedRankings] = useState(null);
+  const [noteText, setNoteText] = useState("");
+  const [rankingValues, setRankingValues] = useState({});
+  const [submittingNote, setSubmittingNote] = useState(false);
+  const [submittingRanking, setSubmittingRanking] = useState(false);
+  const [notesData, setNotesData] = useState({});
+  const [rankingsData, setRankingsData] = useState({});
+  const rankingsEnabled = true;
+
   const [selectedKeeper, setSelectedKeeper] = useState(null);
   const [tab, setTab] = useState("overview");
   const [scope, setScope] = useState("season");
@@ -1344,6 +1356,25 @@ export default function DashboardPage() {
     if (matchRes.data) setAllMatches(matchRes.data);
     if (goalRes.data) setAllGoals(goalRes.data);
     if (attrRes.data) setAllAttrs(attrRes.data);
+
+    // Fetch notes and rankings status (existence only, not content)
+    const [notesRes, rankingsRes] = await Promise.all([
+      supabase.from("match_notes").select("match_id, author_role, submitted_at").eq("coach_id", coachId),
+      supabase.from("match_rankings").select("match_id, author_role, submitted_at").eq("coach_id", coachId),
+    ]);
+    const nSt = {};
+    if (notesRes.data) notesRes.data.forEach(n => {
+      if (!nSt[n.match_id]) nSt[n.match_id] = {};
+      nSt[n.match_id][n.author_role] = n.submitted_at;
+    });
+    setNotesStatus(nSt);
+    const rSt = {};
+    if (rankingsRes.data) rankingsRes.data.forEach(r => {
+      if (!rSt[r.match_id]) rSt[r.match_id] = {};
+      rSt[r.match_id][r.author_role] = r.submitted_at;
+    });
+    setRankingsStatus(rSt);
+
     setLoadingData(false);
   };
 
@@ -1485,6 +1516,294 @@ export default function DashboardPage() {
   const showScope = scopeTabs.includes(tab);
 
   if (loading || !user) {
+
+  // --- NOTES & RANKINGS HELPERS ---
+  const ATTR_LABELS = {
+    game_rating: "Game Rating", shot_stopping: "Shot Stopping", handling: "Handling",
+    positioning: "Positioning", aerial_dominance: "Aerial Dominance", distribution: "Distribution",
+    decision_making: "Decision Making", sweeper_play: "Sweeper Play", set_piece_org: "Set Piece Org.",
+    footwork_agility: "Footwork & Agility", reaction_speed: "Reaction Speed", communication: "Communication",
+    command_of_box: "Command of Box", composure: "Composure", compete_level: "Compete Level"
+  };
+
+  const fetchNoteContent = async (matchId) => {
+    const { data } = await supabase.from("match_notes").select("*").eq("match_id", matchId).eq("keeper_id", selectedKeeper);
+    const result = {};
+    if (data) data.forEach(n => { result[n.author_role] = n; });
+    setNotesData(prev => ({...prev, [matchId]: result}));
+    return result;
+  };
+
+  const fetchRankingContent = async (matchId) => {
+    const { data } = await supabase.from("match_rankings").select("*").eq("match_id", matchId).eq("keeper_id", selectedKeeper);
+    const result = {};
+    if (data) data.forEach(r => { result[r.author_role] = r; });
+    setRankingsData(prev => ({...prev, [matchId]: result}));
+    return result;
+  };
+
+  const submitNote = async (matchId) => {
+    if (!noteText.trim() || submittingNote) return;
+    setSubmittingNote(true);
+    const coachId = isDelegate ? delegateOf.coach_id : user.id;
+    const authorRole = isDelegate && delegateOf.role === "goalkeeper" ? "keeper" : "coach";
+    const { error } = await supabase.from("match_notes").upsert({
+      match_id: matchId, coach_id: coachId, keeper_id: selectedKeeper,
+      author_id: user.id, author_role: authorRole, note_text: noteText.trim(),
+      submitted_at: new Date().toISOString(), updated_at: new Date().toISOString()
+    }, { onConflict: "match_id,keeper_id,author_role" });
+    if (!error) {
+      setNotesStatus(prev => ({...prev, [matchId]: {...(prev[matchId]||{}), [authorRole]: new Date().toISOString()}}));
+      await fetchNoteContent(matchId);
+      setNoteText("");
+    }
+    setSubmittingNote(false);
+  };
+
+  const submitRanking = async (matchId) => {
+    if (submittingRanking) return;
+    setSubmittingRanking(true);
+    const coachId = isDelegate ? delegateOf.coach_id : user.id;
+    const authorRole = isDelegate && delegateOf.role === "goalkeeper" ? "keeper" : "coach";
+    const payload = {
+      match_id: matchId, coach_id: coachId, keeper_id: selectedKeeper,
+      author_id: user.id, author_role: authorRole,
+      submitted_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      ...rankingValues
+    };
+    const { error } = await supabase.from("match_rankings").upsert(payload, { onConflict: "match_id,keeper_id,author_role" });
+    if (!error) {
+      setRankingsStatus(prev => ({...prev, [matchId]: {...(prev[matchId]||{}), [authorRole]: new Date().toISOString()}}));
+      await fetchRankingContent(matchId);
+      setRankingValues({});
+    }
+    setSubmittingRanking(false);
+  };
+
+  const getIconState = (statusObj, matchId) => {
+    if (!statusObj[matchId]) return "pending";
+    const hasCoach = !!statusObj[matchId].coach;
+    const hasKeeper = !!statusObj[matchId].keeper;
+    if (hasCoach && hasKeeper) return "both-done";
+    if (hasCoach) return "coach-done";
+    if (hasKeeper) return "keeper-done";
+    return "pending";
+  };
+
+  const canEdit = (submittedAt) => {
+    if (!submittedAt) return false;
+    return (Date.now() - new Date(submittedAt).getTime()) < 24 * 60 * 60 * 1000;
+  };
+
+  const isAutoReleased = (submittedAt, otherSubmitted) => {
+    if (otherSubmitted) return false;
+    if (!submittedAt) return false;
+    return (Date.now() - new Date(submittedAt).getTime()) > 3 * 24 * 60 * 60 * 1000;
+  };
+
+  const toggleNotes = async (matchId) => {
+    if (expandedNotes === matchId) { setExpandedNotes(null); return; }
+    setExpandedNotes(matchId);
+    setExpandedRankings(null);
+    await fetchNoteContent(matchId);
+  };
+
+  const toggleRankings = async (matchId) => {
+    if (!rankingsEnabled) return;
+    if (expandedRankings === matchId) { setExpandedRankings(null); return; }
+    setExpandedRankings(matchId);
+    setExpandedNotes(null);
+    await fetchRankingContent(matchId);
+  };
+
+
+
+  const StatusIcon = ({ state, onClick }) => {
+    const styles = {
+      "pending": { bg: "transparent", border: t.border, color: t.dim, icon: String.fromCharCode(9675) },
+      "coach-done": { bg: t.accent + "18", border: t.accent, color: t.accent, icon: String.fromCharCode(10003) },
+      "keeper-done": { bg: t.dim + "18", border: t.dim, color: t.dim, icon: String.fromCharCode(10003) },
+      "both-done": { bg: t.green + "18", border: t.green, color: t.green, icon: String.fromCharCode(10003) },
+      "rankings-off": { bg: t.bg, border: t.border, color: t.dim, icon: String.fromCharCode(8212) },
+    };
+    const st = styles[state] || styles["pending"];
+    return (
+      <button onClick={onClick} style={{
+        width: 26, height: 26, borderRadius: 6, border: "1.5px solid " + st.border,
+        background: st.bg, color: st.color, fontSize: 12, fontWeight: 700,
+        cursor: state === "rankings-off" ? "default" : "pointer",
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 0
+      }}>{st.icon}</button>
+    );
+  };
+
+
+  const NotesPanel = ({ matchId, matchLabel }) => {
+    const myRole = (isDelegate && delegateOf.role === "goalkeeper") ? "keeper" : "coach";
+    const otherRole = myRole === "coach" ? "keeper" : "coach";
+    const nd = notesData[matchId] || {};
+    const myNote = nd[myRole];
+    const otherNote = nd[otherRole];
+    const ns = notesStatus[matchId] || {};
+    const bothDone = !!ns.coach && !!ns.keeper;
+    const myDone = !!ns[myRole];
+    const released = myNote && isAutoReleased(myNote.submitted_at, ns[otherRole]);
+    const unlocked = bothDone || released;
+
+    return (
+      <tr><td colSpan={13} style={{ padding: 0 }}>
+        <div style={{ background: t.card, border: "1px solid " + t.border, borderRadius: 12, padding: 20, margin: "4px 0 8px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: t.bright }}>{matchLabel} - Notes</div>
+            <button onClick={() => setExpandedNotes(null)} style={{ background: "none", border: "none", color: t.dim, cursor: "pointer", fontSize: 18 }}>{String.fromCharCode(10005)}</button>
+          </div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            <span style={{ padding: "2px 10px", borderRadius: 12, fontSize: 11, fontWeight: 600, background: ns.coach ? t.accent + "22" : t.border, color: ns.coach ? t.accent : t.dim }}>Coach {ns.coach ? String.fromCharCode(10003) : String.fromCharCode(9675)}</span>
+            <span style={{ padding: "2px 10px", borderRadius: 12, fontSize: 11, fontWeight: 600, background: ns.keeper ? t.accent + "22" : t.border, color: ns.keeper ? t.accent : t.dim }}>Keeper {ns.keeper ? String.fromCharCode(10003) : String.fromCharCode(9675)}</span>
+          </div>
+          {unlocked ? (
+            <div>
+              <div style={{ padding: "8px 12px", borderRadius: 8, background: t.green + "12", border: "1px solid " + t.green + "33", color: t.green, fontSize: 12, marginBottom: 16 }}>
+                {released ? "Auto-released (other party did not respond within 3 days)" : "Both parties have submitted " + String.fromCharCode(8212) + " notes unlocked"}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                {[myRole, otherRole].map(role => {
+                  const note = nd[role];
+                  return note ? (
+                    <div key={role} style={{ background: t.bg, borderRadius: 8, padding: 12 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                        <span style={{ width: 24, height: 24, borderRadius: 12, background: t.accent, color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700 }}>{role === "coach" ? "C" : "K"}</span>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: t.text }}>{role === "coach" ? "Coach" : "Keeper"}</span>
+                        <span style={{ fontSize: 10, color: t.dim, marginLeft: "auto" }}>{new Date(note.submitted_at).toLocaleDateString()}</span>
+                      </div>
+                      <div style={{ fontSize: 13, color: t.text, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{note.note_text}</div>
+                      {role === myRole && canEdit(note.submitted_at) && (
+                        <button onClick={() => { setNoteText(note.note_text); setExpandedNotes(matchId); }}
+                          style={{ marginTop: 8, background: "none", border: "1px solid " + t.border, color: t.dim, borderRadius: 6, padding: "4px 12px", fontSize: 11, cursor: "pointer" }}>Edit</button>
+                      )}
+                    </div>
+                  ) : <div key={role} style={{ background: t.bg, borderRadius: 8, padding: 12, color: t.dim, fontSize: 12 }}>Awaiting {role} notes...</div>;
+                })}
+              </div>
+            </div>
+          ) : myDone ? (
+            <div style={{ padding: "12px 16px", borderRadius: 8, background: t.accent + "12", border: "1px solid " + t.accent + "33", color: t.accent, fontSize: 13, textAlign: "center" }}>
+              Your notes are submitted. Waiting for {otherRole} to submit. Auto-releases after 3 days.
+            </div>
+          ) : (
+            <div>
+              <textarea value={noteText} onChange={e => setNoteText(e.target.value)}
+                placeholder="Write your notes for this match..."
+                style={{ width: "100%", minHeight: 120, background: t.bg, border: "1px solid " + t.border, borderRadius: 8, color: t.text, padding: 12, fontSize: 13, fontFamily: "inherit", resize: "vertical", boxSizing: "border-box" }}
+              />
+              <button onClick={() => submitNote(matchId)} disabled={submittingNote || !noteText.trim()}
+                style={{ width: "100%", marginTop: 8, padding: "10px 0", background: t.accent, color: "white", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: "pointer", opacity: submittingNote || !noteText.trim() ? 0.5 : 1 }}>
+                {submittingNote ? "Submitting..." : "Submit Notes"}
+              </button>
+              <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 8, background: "#d4a85312", border: "1px solid #d4a85333", color: "#d4a853", fontSize: 11 }}>
+                Notes are hidden until both parties submit. Auto-releases after 3 days if one party does not respond.
+              </div>
+            </div>
+          )}
+        </div>
+      </td></tr>
+    );
+  };
+
+
+  const RankingsPanel = ({ matchId, matchLabel }) => {
+    const myRole = (isDelegate && delegateOf.role === "goalkeeper") ? "keeper" : "coach";
+    const otherRole = myRole === "coach" ? "keeper" : "coach";
+    const rd = rankingsData[matchId] || {};
+    const myRanking = rd[myRole];
+    const otherRanking = rd[otherRole];
+    const rs = rankingsStatus[matchId] || {};
+    const bothDone = !!rs.coach && !!rs.keeper;
+    const myDone = !!rs[myRole];
+    const released = myRanking && isAutoReleased(myRanking.submitted_at, rs[otherRole]);
+    const unlocked = bothDone || released;
+    const attrKeys = Object.keys(ATTR_LABELS);
+
+    return (
+      <tr><td colSpan={13} style={{ padding: 0 }}>
+        <div style={{ background: t.card, border: "1px solid " + t.border, borderRadius: 12, padding: 20, margin: "4px 0 8px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: t.bright }}>{matchLabel} - Rankings</div>
+            <button onClick={() => setExpandedRankings(null)} style={{ background: "none", border: "none", color: t.dim, cursor: "pointer", fontSize: 18 }}>{String.fromCharCode(10005)}</button>
+          </div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            <span style={{ padding: "2px 10px", borderRadius: 12, fontSize: 11, fontWeight: 600, background: rs.coach ? t.accent + "22" : t.border, color: rs.coach ? t.accent : t.dim }}>Coach {rs.coach ? String.fromCharCode(10003) : String.fromCharCode(9675)}</span>
+            <span style={{ padding: "2px 10px", borderRadius: 12, fontSize: 11, fontWeight: 600, background: rs.keeper ? t.accent + "22" : t.border, color: rs.keeper ? t.accent : t.dim }}>Keeper {rs.keeper ? String.fromCharCode(10003) : String.fromCharCode(9675)}</span>
+          </div>
+          {unlocked ? (() => {
+            const coachR = rd.coach || {};
+            const keeperR = rd.keeper || {};
+            const diffs = attrKeys.map(k => ({ key: k, label: ATTR_LABELS[k], coach: Number(coachR[k]||0), keeper: Number(keeperR[k]||0), diff: Math.abs(Number(coachR[k]||0) - Number(keeperR[k]||0)) }));
+            const sorted = [...diffs].sort((a,b) => b.diff - a.diff);
+            const top3 = sorted.slice(0,3).map(d => d.key);
+            const largestGaps = sorted.filter(d => d.diff > 0).slice(0,3);
+            return (
+              <div>
+                <div style={{ padding: "8px 12px", borderRadius: 8, background: t.green + "12", border: "1px solid " + t.green + "33", color: t.green, fontSize: 12, marginBottom: 16 }}>
+                  {released ? "Auto-released (other party did not respond within 3 days)" : "Both parties have submitted " + String.fromCharCode(8212) + " rankings unlocked"}
+                </div>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                  <thead><tr>
+                    {["Attribute", "Coach", "Keeper", "Gap"].map(h => <th key={h} style={{ textAlign: h === "Attribute" ? "left" : "center", padding: "6px 8px", color: t.dim, borderBottom: "1px solid " + t.border, fontWeight: 600 }}>{h}</th>)}
+                  </tr></thead>
+                  <tbody>{diffs.map(d => (
+                    <tr key={d.key} style={{ borderLeft: top3.includes(d.key) ? "3px solid #d4a853" : "3px solid transparent" }}>
+                      <td style={{ padding: "6px 8px", color: t.text }}>{d.label}</td>
+                      <td style={{ padding: "6px 8px", textAlign: "center", color: t.text, fontWeight: 600 }}>{d.coach.toFixed(1)}</td>
+                      <td style={{ padding: "6px 8px", textAlign: "center", color: t.text, fontWeight: 600 }}>{d.keeper.toFixed(1)}</td>
+                      <td style={{ padding: "6px 8px", textAlign: "center", fontWeight: 700, color: d.diff <= 0.5 ? t.green : d.diff <= 1.0 ? "#eab308" : t.red }}>{d.diff.toFixed(1)}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+                {largestGaps.length > 0 && (
+                  <div style={{ marginTop: 12, padding: "8px 12px", borderRadius: 8, background: "#d4a85312", border: "1px solid #d4a85333", color: "#d4a853", fontSize: 11 }}>
+                    Largest gaps: {largestGaps.map(g => g.label + " (coach " + g.coach.toFixed(1) + " vs keeper " + g.keeper.toFixed(1) + ")").join(", ")}. These are the most productive areas for a coaching conversation.
+                  </div>
+                )}
+              </div>
+            );
+          })() : myDone ? (
+            <div style={{ padding: "12px 16px", borderRadius: 8, background: t.accent + "12", border: "1px solid " + t.accent + "33", color: t.accent, fontSize: 13, textAlign: "center" }}>
+              Your rankings are submitted. Waiting for {otherRole} to submit. Auto-releases after 3 days.
+            </div>
+          ) : (
+            <div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {attrKeys.map(k => (
+                  <div key={k} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px", background: t.bg, borderRadius: 6 }}>
+                    <span style={{ fontSize: 12, color: t.text }}>{ATTR_LABELS[k]}</span>
+                    <div style={{ display: "flex", gap: 2 }}>
+                      {[1,1.5,2,2.5,3,3.5,4,4.5,5].map(v => (
+                        <button key={v} onClick={() => setRankingValues(prev => ({...prev, [k]: v}))}
+                          style={{
+                            width: 22, height: 22, borderRadius: 4, fontSize: 9, fontWeight: 700, border: "none", cursor: "pointer",
+                            background: rankingValues[k] === v ? (v >= 4 ? t.green : v >= 3 ? t.accent : v >= 2 ? "#eab308" : t.red) : t.cardAlt,
+                            color: rankingValues[k] === v ? "white" : t.dim
+                          }}>{v}</button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button onClick={() => submitRanking(matchId)} disabled={submittingRanking || Object.keys(rankingValues).length < 15}
+                style={{ width: "100%", marginTop: 12, padding: "10px 0", background: t.accent, color: "white", border: "none", borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: "pointer", opacity: submittingRanking || Object.keys(rankingValues).length < 15 ? 0.5 : 1 }}>
+                {submittingRanking ? "Submitting..." : "Submit Rankings (" + Object.keys(rankingValues).length + "/15)"}
+              </button>
+              <div style={{ marginTop: 10, padding: "8px 12px", borderRadius: 8, background: "#d4a85312", border: "1px solid #d4a85333", color: "#d4a853", fontSize: 11 }}>
+                Rankings are hidden until both parties submit. Auto-releases after 3 days if one party does not respond.
+              </div>
+            </div>
+          )}
+        </div>
+      </td></tr>
+    );
+  };
+
     return (
       <div style={{ minHeight: "100vh", background: t.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: font }}>
         <div style={{ color: t.dim, fontSize: 16 }}>Loading...</div>
@@ -1920,12 +2239,12 @@ export default function DashboardPage() {
                     <Card s={{ overflowX: "auto" }}>
                       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, minWidth: 580 }}>
                         <thead>
-                          <tr>{["Date", "Type", "Opp", "H/A", "Res", "Score", "SOT", "Sv", "GA", "Sv%", "CS", ""].map(h => <th key={h} style={{ textAlign: "center", padding: "7px 5px", color: t.dim, borderBottom: `1px solid ${t.border}`, fontSize: 9 }}>{h}</th>)}</tr>
+                          <tr>{["Date", "Type", "Opp", "H/A", "Res", "Score", "SOT", "Sv", "GA", "Sv%", "Notes", "Rankings", ""].map(h => <th key={h} style={{ textAlign: "center", padding: "7px 5px", color: (h === "Notes" || h === "Rankings") ? t.accent : t.dim, borderBottom: `1px solid ${t.border}`, fontSize: 9 }}>{h}</th>)}</tr>
                         </thead>
                         <tbody>
                           {d.matchLog.map((m, i) => {
                             const matchRecord = d.matches.find(x => x.id === m.id);
-                            return (
+                            return (<>
                               <tr key={i}
                                 onClick={() => openGameDrillDown(m)}
                                 style={{ background: i % 2 === 0 ? "transparent" : t.cardAlt + "44", cursor: "pointer" }}
@@ -1942,7 +2261,12 @@ export default function DashboardPage() {
                                 <td style={{ padding: "7px 5px", color: t.text, textAlign: "center" }}>{m.sv}</td>
                                 <td style={{ padding: "7px 5px", color: m.ga > 0 ? t.red : t.green, textAlign: "center", fontWeight: 600 }}>{m.ga}</td>
                                 <td style={{ padding: "7px 5px", textAlign: "center", color: m.svP != null ? svC(m.svP) : t.dim, fontWeight: 600 }}>{m.svP != null ? pct(m.svP) : "\u2014"}</td>
-                                <td style={{ padding: "7px 5px", textAlign: "center" }}>{m.cs ? <span style={{ color: t.green }}>✓</span> : ""}</td>
+                                <td style={{ padding: "4px 6px", textAlign: "center" }} onClick={e => e.stopPropagation()}>
+                  <StatusIcon state={getIconState(notesStatus, m.id)} onClick={() => toggleNotes(m.id)} />
+                </td>
+                <td style={{ padding: "4px 6px", textAlign: "center" }} onClick={e => e.stopPropagation()}>
+                  <StatusIcon state={rankingsEnabled ? getIconState(rankingsStatus, m.id) : "rankings-off"} onClick={() => toggleRankings(m.id)} />
+                </td>
                                 <td style={{ padding: "7px 5px", textAlign: "center" }}>
                                   {!isDelegate && (
                                     <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
@@ -1964,7 +2288,9 @@ export default function DashboardPage() {
                                   )}
                                 </td>
                               </tr>
-                            );
+                {expandedNotes === m.id && <NotesPanel matchId={m.id} matchLabel={(m.opponent || m.session_type) + " " + new Date(m.match_date).toLocaleDateString()} />}
+                {expandedRankings === m.id && <RankingsPanel matchId={m.id} matchLabel={(m.opponent || m.session_type) + " " + new Date(m.match_date).toLocaleDateString()} />}
+                </>);
                           })}
                         </tbody>
                       </table>
@@ -2332,6 +2658,20 @@ export default function DashboardPage() {
                           </tbody>
                         </table>
                       </Card>
+
+              <div style={{ display: "flex", gap: 16, padding: "8px 0", flexWrap: "wrap" }}>
+                {[
+                  { icon: String.fromCharCode(9675), border: t.border, bg: "transparent", color: t.dim, label: "Not yet submitted" },
+                  { icon: String.fromCharCode(10003), border: t.accent, bg: t.accent + "18", color: t.accent, label: "Coach submitted" },
+                  { icon: String.fromCharCode(10003), border: t.dim, bg: t.dim + "18", color: t.dim, label: "Keeper submitted" },
+                  { icon: String.fromCharCode(10003), border: t.green, bg: t.green + "18", color: t.green, label: "Both submitted" },
+                ].map((s, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ width: 18, height: 18, borderRadius: 4, border: "1.5px solid " + s.border, background: s.bg, color: s.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700 }}>{s.icon}</span>
+                    <span style={{ fontSize: 10, color: t.dim }}>{s.label}</span>
+                  </div>
+                ))}
+              </div>
                     </div>
                     {d.sznAttrs && cmpData.sznAttrs && (
                       <Card s={{ marginBottom: 16 }}>
