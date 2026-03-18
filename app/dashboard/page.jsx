@@ -202,7 +202,7 @@ function buildMatchLog(matches) {
 }
 
 // ═══ ALERT GENERATOR ════════════════════════════════════════════════════════
-function genAlerts(keeperName, seasonAgg, l5Agg, seasonGoals, l5Goals, sznAttrs, l5Attrs) {
+function genAlerts(keeperName, seasonAgg, l5Agg, seasonGoals, l5Goals, sznAttrs, l5Attrs, seasonShotEvents, l5ShotEvents) {
   const a = [];
   if (!seasonAgg || !l5Agg) return a;
   if (l5Agg.svPct < seasonAgg.svPct - 0.03)
@@ -241,6 +241,49 @@ function genAlerts(keeperName, seasonAgg, l5Agg, seasonGoals, l5Goals, sznAttrs,
     a.push({ type: "positive", cat: "Mental", title: "Compete Level Rising",
       detail: `Season ${sznAttrs.compete_level.toFixed(1)} → Last 5 ${l5Attrs.compete_level.toFixed(1)}`,
       action: "Reinforce with positive feedback" });
+  // --- Zone vulnerability alerts (requires shot_events data) ---
+  if (seasonShotEvents && seasonShotEvents.length && l5ShotEvents && l5ShotEvents.length) {
+    var sznZones = computeZoneConversion(seasonShotEvents);
+    var l5Zones = computeZoneConversion(l5ShotEvents);
+    // Zone vulnerability spike: L5 conversion > season + 15pp
+    l5Zones.forEach(function(lz) {
+      var sz = sznZones.find(function(z) { return z.zone === lz.zone; });
+      if (sz && lz.shots >= 3 && (lz.rate - sz.rate) > 0.15) {
+        a.push({ type: "warning", cat: "Performance", title: "Vulnerability Rising: " + lz.name,
+          detail: (lz.rate * 100).toFixed(1) + "% of shots resulting in goals in last 5 vs " + (sz.rate * 100).toFixed(1) + "% season average.",
+          action: "Review positioning and angle coverage from this channel." });
+      }
+    });
+    // High-volume zone with rising conversion
+    var totalL5Shots = l5ShotEvents.length;
+    l5Zones.forEach(function(lz) {
+      var sz = sznZones.find(function(z) { return z.zone === lz.zone; });
+      if (sz && lz.shots / totalL5Shots > 0.25 && lz.rate > sz.rate) {
+        a.push({ type: "alert", cat: "Performance", title: "High Traffic Zone Leaking: " + lz.name,
+          detail: lz.shots + " shots (" + (lz.shots / totalL5Shots * 100).toFixed(0) + "% of all) with " + (lz.rate * 100).toFixed(1) + "% conversion vs " + (sz.rate * 100).toFixed(1) + "% season.",
+          action: "Zone accounts for heavy traffic and conversion is rising." });
+      }
+    });
+    // Positive: zone improvement
+    l5Zones.forEach(function(lz) {
+      var sz = sznZones.find(function(z) { return z.zone === lz.zone; });
+      if (sz && sz.rate > 0.20 && lz.rate < 0.12 && lz.shots >= 3) {
+        a.push({ type: "positive", cat: "Performance", title: "Improved: " + lz.name,
+          detail: "Conversion rate down to " + (lz.rate * 100).toFixed(1) + "% in last 5 from " + (sz.rate * 100).toFixed(1) + "% season.",
+          action: "Reinforce what is working." });
+      }
+    });
+  }
+  // 1v1 win rate declining
+  if (seasonAgg && l5Agg && seasonAgg.oneV1 && l5Agg.oneV1) {
+    var sznV1Rate = seasonAgg.oneV1.faced > 0 ? (seasonAgg.oneV1.won / seasonAgg.oneV1.faced) : null;
+    var l5V1Rate = l5Agg.oneV1.faced > 0 ? (l5Agg.oneV1.won / l5Agg.oneV1.faced) : null;
+    if (sznV1Rate !== null && l5V1Rate !== null && (sznV1Rate - l5V1Rate) > 0.20) {
+      a.push({ type: "warning", cat: "Performance", title: "1v1 Win Rate Declining",
+        detail: (l5V1Rate * 100).toFixed(0) + "% last 5 vs " + (sznV1Rate * 100).toFixed(0) + "% season.",
+        action: "Review angle play and decision-making in breakaway situations." });
+    }
+  }
   return a;
 }
 
@@ -1042,6 +1085,12 @@ function ReportView({ keeper, keeperData, alerts, targetGame, primaryColor, onBa
         {alerts?.length > 0 && (
           <div style={{ marginBottom: 20 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Active Coaching Alerts</div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+              {["All", "Performance", "Technical", "Mental"].map(function(cat) {
+                var count = cat === "All" ? alerts.length : alerts.filter(function(al) { return al.cat === cat; }).length;
+                return <Chip key={cat} label={cat + " (" + count + ")"} selected={alertFilter === cat} onClick={function() { setAlertFilter(cat); }} />;
+              })}
+            </div>
             {alerts.slice(0, 5).map((al, i) => (
               <div key={i} style={{ padding: "8px 12px", borderRadius: 6, marginBottom: 6, background: al.type === "positive" ? "#f0fdf4" : al.type === "alert" ? "#fef2f2" : "#fff7ed", borderLeft: `3px solid ${al.type === "positive" ? t.green : al.type === "alert" ? "#ef4444" : "#f97316"}` }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: al.type === "positive" ? "#15803d" : al.type === "alert" ? "#dc2626" : "#c2410c" }}>{al.title}</div>
@@ -1318,6 +1367,7 @@ export default function DashboardPage() {
   const [editingMatch, setEditingMatch] = useState(null);
   const [deletingMatch, setDeletingMatch] = useState(null);
   const [notesStatus, setNotesStatus] = useState({}); const [rankingsStatus, setRankingsStatus] = useState({}); const [expandedNotes, setExpandedNotes] = useState(null); const [expandedRankings, setExpandedRankings] = useState(null); const [noteText, setNoteText] = useState(""); const [editingNoteId, setEditingNoteId] = useState(null); const [rankingValues, setRankingValues] = useState({}); const [submittingNote, setSubmittingNote] = useState(false); const [submittingRanking, setSubmittingRanking] = useState(false); const [notesData, setNotesData] = useState({}); const [rankingsData, setRankingsData] = useState({}); const rankingsEnabled = true;
+  const [alertFilter, setAlertFilter] = useState("All");
 
   const [selectedKeeper, setSelectedKeeper] = useState(null);
   const [tab, setTab] = useState("overview");
@@ -1474,7 +1524,7 @@ export default function DashboardPage() {
     const kp = keepers.find(k => k.id === selectedKeeper);
     return genAlerts(kp?.name, keeperData.season, keeperData.l5,
       keeperData.seasonGoals, keeperData.l5Goals,
-      keeperData.sznAttrs, keeperData.l5Attrs);
+      keeperData.sznAttrs, keeperData.l5Attrs, keeperData.seasonShotEvents, keeperData.l5ShotEvents);
   }, [keeperData, selectedKeeper, keepers]);
 
   // ── NEW: drill-down & report helpers ──
@@ -2069,7 +2119,7 @@ export default function DashboardPage() {
                 {alerts.length === 0 ? (
                   <EmptyState icon="✅" title="All Clear" subtitle="No coaching alerts based on current performance trends." />
                 ) : (
-                  alerts.map((al, i) => (
+                  alerts.filter(function(al) { return alertFilter === "All" || al.cat === alertFilter; }).map((al, i) => (
                     <Card key={i} s={{ marginBottom: 12 }}>
                       <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
                         <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: al.type === "positive" ? t.green + "22" : al.type === "alert" ? t.red + "22" : t.orange + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, border: `1px solid ${al.type === "positive" ? t.green + "44" : al.type === "alert" ? t.red + "44" : t.orange + "44"}` }}>
