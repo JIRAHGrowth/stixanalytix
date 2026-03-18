@@ -21,6 +21,7 @@ const ROLES = [
   { id: "scout", label: "Scout", icon: "🔍", desc: "Views analytics only — no match logging" },
   { id: "team_manager", label: "Team Manager", icon: "📋", desc: "Logs matches for any assigned keepers" },
   { id: "academy_coach", label: "Academy GK Coach", icon: "🎓", desc: "Full logging and analytics for their age group" },
+  { id: "goalkeeper", label: "Goalkeeper", icon: "🧤", desc: "Submits their own notes and rankings for matches they played in" },
 ];
 
 const roleMeta = (roleId) => ROLES.find(r => r.id === roleId) || { label: roleId, icon: "👤" };
