@@ -695,6 +695,26 @@ export default function PitchsidePage() {
         }));
         const { error: goalsError } = await supabase.from("goals_conceded").insert(goalRows);
         if (goalsError) throw goalsError;
+
+      // --- Write all shot events to shot_events (fail silently) ---
+      try {
+        const shotRows = events.map(e => ({
+          match_id: matchData.id,
+          keeper_id: selectedKeeperId,
+          coach_id: isDelegate && delegateOf ? delegateOf.coach_id : user.id,
+          shot_origin: e.origin || null,
+          gk_action: e.gkAction || null,
+          goal_zone: e.isGoal ? (e.goalZone || null) : null,
+          is_goal: !!e.isGoal,
+          is_off_target: !!e.offTarget,
+          shot_type: e.isGoal ? (e.method || null) : null,
+          event_type: e.type || null,
+          half: e.half || null,
+        }));
+        if (shotRows.length) {
+          await supabase.from("shot_events").insert(shotRows);
+        }
+      } catch (e) { console.error("shot_events insert error:", e); }
       }
 
       const attrKeys = {
