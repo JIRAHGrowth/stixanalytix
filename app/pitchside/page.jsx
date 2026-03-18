@@ -112,25 +112,17 @@ function SectionHeader({ title, icon, accentColor }) {
 }
 
 function RatingRow({ label, value, onChange }) {
-  return (
-    <div style={{ padding: "5px 0" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-        <span style={{ fontSize: 12, color: t.text, fontWeight: 500 }}>{label}</span>
-        <span style={{ fontSize: 11, fontWeight: 700, color: value ? (value >= 4 ? t.green : value >= 3 ? t.gold : t.red) : t.dim }}>{value || "—"}</span>
+    return (
+      <div style={{ padding: "6px 0" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+          <span style={{ fontSize: 13, color: t.text, fontWeight: 500 }}>{label}</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: value ? (value >= 4 ? t.green : value >= 3 ? t.gold : t.red) : t.dim }}>{value || "\u2014"}</span>
+        </div>
+        <input type="range" min={1} max={5} step={0.5} value={value || 0} onChange={e => onChange(parseFloat(e.target.value))}
+          style={{ width: "100%", accentColor: t.accent, height: 6, cursor: "pointer" }} />
       </div>
-      <div style={{ display: "flex", gap: 3 }}>
-        {[1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5].map(v => (
-          <button key={v} onClick={() => onChange(v)} style={{
-            flex: 1, height: 34, borderRadius: 6, border: "none", cursor: "pointer",
-            fontSize: 10, fontWeight: 700, fontFamily: font,
-            background: value === v ? (v >= 4 ? t.green : v >= 3 ? t.gold : t.red) : t.bg,
-            color: value === v ? "#fff" : t.dim, transition: "all 0.12s",
-          }}>{v % 1 === 0 ? v : ""}</button>
-        ))}
-      </div>
-    </div>
-  );
-}
+    );
+  }
 
 // ═══ PITCH ORIGIN MAP ═══════════════════════════════════════════════════════
 function PitchOriginMap({ selected, onSelect }) {
@@ -719,6 +711,16 @@ export default function PitchsidePage() {
       Object.entries(attrKeys).forEach(([label, col]) => { attrRow[col] = attrs[label] || null; });
       const { error: attrError } = await supabase.from("match_attributes").insert(attrRow);
       if (attrError) throw attrError;
+
+      // Blind-submit: write coach rankings
+      const rkRow = { match_id: matchData.id, coach_id: isDelegate ? delegateOf.coach_id : user.id, keeper_id: selectedKeeperId, author_id: user.id, author_role: "coach", submitted_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      Object.entries(attrKeys).forEach(([label, col]) => { rkRow[col] = attrs[label] || null; });
+      try { await supabase.from("match_rankings").upsert(rkRow, { onConflict: "match_id,keeper_id,author_role" }); } catch (e) { console.error("Rankings sync error:", e); }
+
+      // Blind-submit: write coach notes
+      if (allNotes && allNotes.trim()) {
+        try { await supabase.from("match_notes").upsert({ match_id: matchData.id, coach_id: isDelegate ? delegateOf.coach_id : user.id, keeper_id: selectedKeeperId, author_id: user.id, author_role: "coach", note_text: allNotes.trim(), submitted_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { onConflict: "match_id,keeper_id,author_role" }); } catch (e) { console.error("Notes sync error:", e); }
+      }
 
       // Clear auto-save — data is safely in Supabase now
       try { localStorage.removeItem(AUTOSAVE_KEY); } catch (e) {}
