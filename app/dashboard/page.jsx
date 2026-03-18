@@ -62,6 +62,26 @@ const ORIGIN_LABELS = {
   "outC": "Central Distance", "outL": "Wide Left", "outR": "Wide Right",
   "penalty": "Penalty Spot",
 };
+// Zone conversion rate computation
+function computeZoneConversion(shotEvents) {
+  if (!shotEvents || !shotEvents.length) return [];
+  const zones = {};
+  shotEvents.forEach(function(se) {
+    var zone = se.shot_origin;
+    if (!zone) return;
+    if (!zones[zone]) zones[zone] = { shots: 0, goals: 0 };
+    zones[zone].shots++;
+    if (se.is_goal) zones[zone].goals++;
+  });
+  return Object.entries(zones)
+    .filter(function(e) { return e[1].shots > 0; })
+    .map(function(e) {
+      var name = ORIGIN_LABELS[e[0]] || e[0];
+      return { zone: e[0], name: name, shots: e[1].shots, goals: e[1].goals, rate: e[1].goals / e[1].shots };
+    })
+    .sort(function(a, b) { return b.rate - a.rate; });
+}
+
 
 // ═══ FORMATTING HELPERS ══════════════════════════════════════════════════════
 const pct = v => v != null && !isNaN(v) ? (v * 100).toFixed(1) + "%" : "—";
@@ -1292,6 +1312,7 @@ export default function DashboardPage() {
   const [allMatches, setAllMatches] = useState([]);
   const [allGoals, setAllGoals] = useState([]);
   const [allAttrs, setAllAttrs] = useState([]);
+  const [allShotEvents, setAllShotEvents] = useState([]);
   const [loadingData, setLoadingData] = useState(true);
 
   const [editingMatch, setEditingMatch] = useState(null);
@@ -1337,14 +1358,16 @@ export default function DashboardPage() {
     if (!user) return;
     setLoadingData(true);
     const coachId = isDelegate && delegateOf ? delegateOf.coach_id : user.id;
-    const [matchRes, goalRes, attrRes] = await Promise.all([
+    const [matchRes, goalRes, attrRes, shotRes] = await Promise.all([
       supabase.from("matches").select("*").eq("coach_id", coachId).order("match_date", { ascending: true }),
       supabase.from("goals_conceded").select("*").eq("coach_id", coachId),
       supabase.from("match_attributes").select("*").eq("coach_id", coachId),
+      supabase.from("shot_events").select("*").eq("coach_id", coachId),
     ]);
     if (matchRes.data) setAllMatches(matchRes.data);
     if (goalRes.data) setAllGoals(goalRes.data);
     if (attrRes.data) setAllAttrs(attrRes.data);
+    if (shotRes.data) setAllShotEvents(shotRes.data);
     const [nR2, rR2] = await Promise.all([supabase.from("match_notes").select("match_id, author_role, submitted_at").eq("coach_id", coachId), supabase.from("match_rankings").select("match_id, author_role, submitted_at").eq("coach_id", coachId)]); const nS2 = {}; if (nR2.data) nR2.data.forEach(n => { if (!nS2[n.match_id]) nS2[n.match_id] = {}; nS2[n.match_id][n.author_role] = n.submitted_at; }); setNotesStatus(nS2); const rS2 = {}; if (rR2.data) rR2.data.forEach(r => { if (!rS2[r.match_id]) rS2[r.match_id] = {}; rS2[r.match_id][r.author_role] = r.submitted_at; }); setRankingsStatus(rS2);
     setLoadingData(false);
   };
@@ -1403,11 +1426,13 @@ export default function DashboardPage() {
     const matchIds = new Set(kMatches.map(m => m.id));
     const kGoals = allGoals.filter(g => matchIds.has(g.match_id));
     const kAttrs = allAttrs.filter(a => a.keeper_id === selectedKeeper);
+    const kShotEvents = allShotEvents.filter(se => se.keeper_id === selectedKeeper);
     const sorted = [...kMatches].sort((a, b) => new Date(b.match_date) - new Date(a.match_date));
     const last5 = sorted.slice(0, 5);
     const l5Ids = new Set(last5.map(m => m.id));
     const l5Goals = kGoals.filter(g => l5Ids.has(g.match_id));
     const l5Attrs = kAttrs.filter(a => l5Ids.has(a.match_id));
+    const l5ShotEvents = kShotEvents.filter(se => l5Ids.has(se.match_id));
     return {
       matches: kMatches,
       sorted,
@@ -1422,8 +1447,10 @@ export default function DashboardPage() {
       last5Matches: last5,
       rawGoals: kGoals,
       rawL5Goals: l5Goals,
+      seasonShotEvents: kShotEvents,
+      l5ShotEvents: l5ShotEvents,
     };
-  }, [selectedKeeper, allMatches, allGoals, allAttrs]);
+  }, [selectedKeeper, allMatches, allGoals, allAttrs, allShotEvents]);
 
   const cmpData = useMemo(() => {
     if (!cmpKeeper) return null;
