@@ -1525,7 +1525,7 @@ export default function DashboardPage() {
     { id: "quarterly", label: "Quarterly", icon: "📅" },
     { id: "compare", label: "Compare", icon: "⚖️" },
   ];
-  const scopeTabs = ["goals", "distribution", "crosses", "sweeper", "attributes"];
+  const scopeTabs = ["overview", "goals", "distribution", "crosses", "sweeper", "attributes"];
   const showScope = scopeTabs.includes(tab);
 
   if (loading || !user) {
@@ -1704,8 +1704,11 @@ export default function DashboardPage() {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: 8 }}>
                 <StatBox label="GP" value={s.gp} />
                 <StatBox label="Save %" value={(s.svPct * 100).toFixed(1) + "%"} color={s.svPct >= 0.7 ? t.green : s.svPct >= 0.5 ? t.yellow : t.red} />
+              <TrendBadge cur={d.l5 ? d.l5.svPct : null} prev={d.season ? d.season.svPct : null} suf="%" />
                 <StatBox label="GAA" value={s.gaa.toFixed(2)} color={s.gaa <= 1 ? t.green : s.gaa <= 2 ? t.yellow : t.red} />
+              <TrendBadge cur={d.l5 ? d.l5.gaa : null} prev={d.season ? d.season.gaa : null} inv suf="" />
                 <StatBox label="CS" value={s.cs} />
+              <TrendBadge cur={d.l5 && d.l5.gp ? (d.l5.cs / d.l5.gp * 100) : null} prev={d.season && d.season.gp ? (d.season.cs / d.season.gp * 100) : null} suf="%" />
                 <StatBox label="W-D-L" value={s.w + "-" + s.d + "-" + s.l} />
               </div>
 
