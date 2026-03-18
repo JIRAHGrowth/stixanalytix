@@ -220,7 +220,7 @@ function InviteModal({ mode, keepers, onClose, onSave }) {
               <div>
                 <label style={{ fontSize: 11, fontWeight: 600, color: t.dim, display: "block", marginBottom: 8 }}>Role *</label>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {ROLES.map(r => (
+                  {ROLES.filter(r => { if (r.id === "goalkeeper") { const hasAdult = keepers.some(k => { if (!k.date_of_birth) return false; const age = (Date.now() - new Date(k.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000); return age >= 18; }); return hasAdult; } return true; }).map(r => (
                     <div key={r.id} onClick={() => setRole(r.id)} style={{
                       display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 8, cursor: "pointer",
                       background: role === r.id ? t.accent + "12" : t.bg,
