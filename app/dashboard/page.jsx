@@ -10,6 +10,14 @@ import {
   LineChart, Line, CartesianGrid, Legend, PieChart, Pie,
 } from "recharts";
 
+
+// Responsive breakpoints
+function useBreakpoint() {
+  const [w, setW] = useState(typeof window !== "undefined" ? window.innerWidth : 1200);
+  useEffect(() => { const h = () => setW(window.innerWidth); window.addEventListener("resize", h); return () => window.removeEventListener("resize", h); }, []);
+  return { isMobile: w < 768, isTablet: w >= 768 && w < 1024, isDesktop: w >= 1024, width: w };
+}
+
 // ═══ THEME ═══════════════════════════════════════════════════════════════════
 const tDark = {
   bg: "#070b0e", card: "#0f1419", cardAlt: "#151c22", border: "#1e2a32",
@@ -500,7 +508,7 @@ function KeeperModal({ keeper, onSave, onClose, onDeactivate, primaryColor }) {
           <input value={name} onChange={e => setName(e.target.value)} placeholder="Full name"
             style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: `1px solid ${t.border}`, background: t.bg, color: t.bright, fontSize: 15, fontFamily: font, outline: "none", boxSizing: "border-box" }} />
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 16 }}>
           <div>
             <label style={{ fontSize: 11, color: t.dim, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 6 }}>Number</label>
             <input type="number" value={number} onChange={e => setNumber(e.target.value)} placeholder="#"
@@ -778,7 +786,7 @@ function SingleGameView({ match, goals, logRow, keeperName, primaryColor, onBack
         ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 12 }}>
         {saveTypes.length > 0 && (
           <Card>
             <Sec icon="🧤">Save Types</Sec>
@@ -864,7 +872,7 @@ function SingleGameView({ match, goals, logRow, keeperName, primaryColor, onBack
 
       <Card s={{ marginBottom: 12 }}>
         <Sec icon="🏃">Physical & Crosses</Sec>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
           <div>
             <div style={{ fontSize: 10, color: t.dim, marginBottom: 8, textTransform: "uppercase" }}>Sweeper</div>
             {[
@@ -999,7 +1007,7 @@ function ReportView({ keeper, keeperData, alerts, targetGame, primaryColor, onBa
         </div>
 
         {/* Radar + Heatmap */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
+        <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 20, marginBottom: 20 }}>
           {radarData.length > 0 && (
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Attribute Profile</div>
@@ -1024,7 +1032,7 @@ function ReportView({ keeper, keeperData, alerts, targetGame, primaryColor, onBa
         {/* Distribution */}
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Distribution Accuracy</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
             {[
               { name: "GK Short",      att: s?.distribution?.gkShort?.att,      suc: s?.distribution?.gkShort?.suc },
               { name: "GK Long",       att: s?.distribution?.gkLong?.att,       suc: s?.distribution?.gkLong?.suc },
@@ -1236,7 +1244,7 @@ function EditMatchModal({ match, onSave, onClose }) {
             <label style={labelStyle}>Opponent</label>
             <input type="text" value={formData.opponent} onChange={e => handleChange("opponent", e.target.value)} style={inputStyle} />
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 16 }}>
             <div>
               <label style={labelStyle}>Match Date</label>
               <input type="date" value={formData.match_date} onChange={e => handleChange("match_date", e.target.value)} style={inputStyle} />
@@ -1250,7 +1258,7 @@ function EditMatchModal({ match, onSave, onClose }) {
             </div>
           </div>
           {isMatch && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 16 }}>
               <div>
                 <label style={labelStyle}>Venue</label>
                 <select value={formData.venue} onChange={e => handleChange("venue", e.target.value)} style={selectStyle}>
@@ -1270,7 +1278,7 @@ function EditMatchModal({ match, onSave, onClose }) {
               </div>
             </div>
           )}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 16 }}>
             <div>
               <label style={labelStyle}>Goals For</label>
               <input type="number" value={formData.goals_for} onChange={e => handleChange("goals_for", parseInt(e.target.value) || 0)} style={inputStyle} />
@@ -1280,7 +1288,7 @@ function EditMatchModal({ match, onSave, onClose }) {
               <input type="number" value={formData.goals_against} onChange={e => handleChange("goals_against", parseInt(e.target.value) || 0)} style={inputStyle} />
             </div>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 16 }}>
             <div>
               <label style={labelStyle}>Shots on Target</label>
               <input type="number" value={formData.shots_on_target} onChange={e => handleChange("shots_on_target", parseInt(e.target.value) || 0)} style={inputStyle} />
@@ -1348,6 +1356,7 @@ export default function DashboardPage() {
 
   const [darkMode, setDarkMode] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
+  const bp = useBreakpoint();
   t = darkMode ? tDark : tLight;
   const [keepers, setKeepers] = useState([]);
   const [loadingKeepers, setLoadingKeepers] = useState(true);
@@ -1757,7 +1766,7 @@ export default function DashboardPage() {
 
               {/* Row 1: Goals In + Goals From */}
               <Sec title="Goals Conceded">
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
                   <Card>
                     <div style={{ fontSize: 13, fontWeight: 700, color: t.text, marginBottom: 12 }}>Where Goals Went In</div>
                     <GoalHeatmap zones={dGoals ? dGoals.zones : {}} />
@@ -1771,7 +1780,7 @@ export default function DashboardPage() {
 
               {/* Row 2: Shot Stopping */}
               <Sec title="Shot Stopping">
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
                   <Card>
                     <div style={{ textAlign: "center", padding: 16, color: t.dim, fontSize: 12 }}>
                       <div style={{ fontSize: 24, fontWeight: 800, color: t.accent }}>{s.saves}</div>
@@ -1797,7 +1806,7 @@ export default function DashboardPage() {
 
               {/* Row 3: Savability + Shot Type & Positioning */}
               <Sec title="Savability & Shot Analysis">
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
                   <Card>
                     <div style={{ fontSize: 13, fontWeight: 700, color: t.text, marginBottom: 12 }}>Savability</div>
                     {dGoals && dGoals.ranks && Object.keys(dGoals.ranks).length > 0 ? (
@@ -1887,7 +1896,7 @@ export default function DashboardPage() {
             </Sec>
               {/* Row 4: Distribution */}
               <Sec title="Distribution">
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
                   <Card>
                     <div style={{ fontSize: 13, fontWeight: 700, color: t.text, marginBottom: 12 }}>Distribution Summary</div>
                     {s.distribution ? (
@@ -1960,7 +1969,7 @@ export default function DashboardPage() {
 
               {/* Row 6: Attributes */}
               <Sec title="Attributes">
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
                   <Card>
                     <div style={{ fontSize: 13, fontWeight: 700, color: t.text, marginBottom: 12 }}>Attribute Web</div>
                     {dAttrs && Object.keys(dAttrs).length > 0 ? (
@@ -2276,7 +2285,7 @@ export default function DashboardPage() {
                   </Card>
                   <Card>
                     <div style={{ fontSize: 10, color: t.dim, marginBottom: 10 }}>Rebound Control</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 8, marginBottom: 12 }}>
                       <StatBox label="Controlled" value={s.rebounds.controlled} color={t.green} />
                       <StatBox label="Dangerous" value={s.rebounds.dangerous} color={t.red} />
                     </div>
@@ -2426,7 +2435,7 @@ export default function DashboardPage() {
                 </Card>
                 {cmpData?.season && d?.season ? (
                   <div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 14, marginBottom: 16 }}>
                       <Card>
                         <Sec icon="📊">Season Stats</Sec>
                         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
@@ -2479,7 +2488,7 @@ export default function DashboardPage() {
                         </ResponsiveContainer>
                       </Card>
                     )}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 14 }}>
                       <Card><GoalHeatmap zones={d.seasonGoals?.zones} title={`${selectedKeeperObj?.name?.split(" ")[0]} Goals`} /></Card>
                       <Card><GoalHeatmap zones={cmpData.seasonGoals?.zones} title={`${cmpKeeperObj?.name?.split(" ")[0]} Goals`} /></Card>
                     </div>
