@@ -277,9 +277,7 @@ export default function OnboardingPage() {
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 16, boxShadow: `0 2px 12px ${t.accentGlow}`,
             }}>⚽</div>
-            <span style={{ fontSize: 18, fontWeight: 800, color: t.bright }}>
-              Stix<span style={{ color: t.accent }}>Analytix</span>
-            </span>
+            <img src="/logo.svg" alt="StixAnalytix" style={{ height: 48, marginBottom: 8 }} />
           </div>
         </div>
 
