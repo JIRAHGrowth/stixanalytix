@@ -402,7 +402,7 @@ nav {
   border-bottom: 1px solid rgba(237,234,225,0.05);
 }
 .feature-list li:last-child { border-bottom: none; }
-.feature-list li::before { content: '\2014'; color: var(--green); font-weight: 700; flex-shrink: 0; font-size: 12px; }
+.feature-list li::before { content: '—'; color: var(--green); font-weight: 700; flex-shrink: 0; font-size: 12px; }
 
 .tier-cta {
   width: 100%;
