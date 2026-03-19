@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 168" width="500" height="168">
+  <title>stixanalytix — White frame · Green text</title>
+  
+  <!-- Net grid -->
+  <line x1="10.00" y1="14.00" x2="10.00" y2="154.00" stroke="#EDEAE1" stroke-width="1.1" opacity="0.17"/>
+  <line x1="70.00" y1="14.00" x2="70.00" y2="154.00" stroke="#EDEAE1" stroke-width="1.1" opacity="0.17"/>
+  <line x1="130.00" y1="14.00" x2="130.00" y2="154.00" stroke="#EDEAE1" stroke-width="1.1" opacity="0.17"/>
+  <line x1="190.00" y1="14.00" x2="190.00" y2="154.00" stroke="#EDEAE1" stroke-width="1.1" opacity="0.17"/>
+  <line x1="250.00" y1="14.00" x2="250.00" y2="154.00" stroke="#EDEAE1" stroke-width="1.1" opacity="0.17"/>
+  <line x1="310.00" y1="14.00" x2="310.00" y2="154.00" stroke="#EDEAE1" stroke-width="1.1" opacity="0.17"/>
+  <line x1="370.00" y1="14.00" x2="370.00" y2="154.00" stroke="#EDEAE1" stroke-width="1.1" opacity="0.17"/>
+  <line x1="430.00" y1="14.00" x2="430.00" y2="154.00" stroke="#EDEAE1" stroke-width="1.1" opacity="0.17"/>
+  <line x1="490.00" y1="14.00" x2="490.00" y2="154.00" stroke="#EDEAE1" stroke-width="1.1" opacity="0.17"/>
+  <line x1="10.00" y1="14.00" x2="490.00" y2="14.00" stroke="#EDEAE1" stroke-width="1.1" opacity="0.17"/>
+  <line x1="10.00" y1="49.00" x2="490.00" y2="49.00" stroke="#EDEAE1" stroke-width="1.1" opacity="0.17"/>
+  <line x1="10.00" y1="84.00" x2="490.00" y2="84.00" stroke="#EDEAE1" stroke-width="1.1" opacity="0.17"/>
+  <line x1="10.00" y1="119.00" x2="490.00" y2="119.00" stroke="#EDEAE1" stroke-width="1.1" opacity="0.17"/>
+  <line x1="10.00" y1="154.00" x2="490.00" y2="154.00" stroke="#EDEAE1" stroke-width="1.1" opacity="0.17"/>
+  <!-- Goal frame -->
+  <polyline points="10.0,154.0 10.0,14.0 490.0,14.0 490.0,154.0" fill="none" stroke="#EDEAE1" stroke-width="6" stroke-linecap="square" stroke-linejoin="miter"/>
+  <!-- Wordmark -->
+  <text
+    x="250.0" y="110.0"
+    font-family="Arial, Liberation Sans, Helvetica, sans-serif"
+    font-weight="700"
+    font-size="72"
+    fill="#10B981"
+    text-anchor="middle"
+    letter-spacing="-2">stixanalytix</text>
+</svg>
