@@ -770,7 +770,7 @@ function SingleGameView({ match, goals, logRow, keeperName, primaryColor, onBack
       </Card>
 
       {/* Key stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))", gap: 8, marginBottom: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(80px, 1fr))", gap: 8, marginBottom: 12 }}>
         {[
           { label: "SOT",     val: match.shots_on_target ?? "–" },
           { label: "Saves",   val: match.saves ?? "–" },
@@ -1623,7 +1623,7 @@ export default function DashboardPage() {
   return (
     <div style={{ minHeight: "100vh", background: t.bg, fontFamily: font }}>
       {/* HEADER */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px", borderBottom: `1px solid ${t.border}`, maxWidth: 960, margin: "0 auto" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: bp.isMobile ? "8px 12px" : "12px 20px", borderBottom: `1px solid ${t.border}`, maxWidth: bp.isMobile ? "100%" : 960, margin: "0 auto" }}>
         <Link href="/" style={{ textDecoration: "none" }}>
           <img src="/logo.svg" alt="StixAnalytix" style={{ height: 36 }} />
         </Link>
@@ -1635,7 +1635,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 960, margin: "0 auto", padding: "20px 16px" }}>
+      <div style={{ maxWidth: bp.isMobile ? "100%" : 960, margin: "0 auto", padding: "20px 16px" }}>
 
         {isDelegate && delegateOf && (
           <div style={{ padding: "10px 16px", borderRadius: 10, marginBottom: 16, background: t.accent + "08", border: `1px solid ${t.accent}22`, display: "flex", alignItems: "center", gap: 10 }}>
