@@ -565,26 +565,7 @@ footer {
 
 function LogoSVG({ height = 38 }) {
   return (
-    <svg viewBox="0 0 210 58" height={height} xmlns="http://www.w3.org/2000/svg" aria-label="stixanalytix" role="img">
-      <line x1="5" y1="5" x2="205" y2="5" stroke="#EDEAE1" strokeWidth="6" strokeLinecap="square" />
-      <line x1="5" y1="5" x2="5" y2="56" stroke="#EDEAE1" strokeWidth="6" strokeLinecap="square" />
-      <line x1="205" y1="5" x2="205" y2="56" stroke="#EDEAE1" strokeWidth="6" strokeLinecap="square" />
-      <line x1="25" y1="5" x2="25" y2="56" stroke="#EDEAE1" strokeWidth="0.9" opacity="0.17" />
-      <line x1="45" y1="5" x2="45" y2="56" stroke="#EDEAE1" strokeWidth="0.9" opacity="0.17" />
-      <line x1="65" y1="5" x2="65" y2="56" stroke="#EDEAE1" strokeWidth="0.9" opacity="0.17" />
-      <line x1="85" y1="5" x2="85" y2="56" stroke="#EDEAE1" strokeWidth="0.9" opacity="0.17" />
-      <line x1="105" y1="5" x2="105" y2="56" stroke="#EDEAE1" strokeWidth="0.9" opacity="0.17" />
-      <line x1="125" y1="5" x2="125" y2="56" stroke="#EDEAE1" strokeWidth="0.9" opacity="0.17" />
-      <line x1="145" y1="5" x2="145" y2="56" stroke="#EDEAE1" strokeWidth="0.9" opacity="0.17" />
-      <line x1="165" y1="5" x2="165" y2="56" stroke="#EDEAE1" strokeWidth="0.9" opacity="0.17" />
-      <line x1="185" y1="5" x2="185" y2="56" stroke="#EDEAE1" strokeWidth="0.9" opacity="0.17" />
-      <line x1="5" y1="19" x2="205" y2="19" stroke="#EDEAE1" strokeWidth="0.9" opacity="0.17" />
-      <line x1="5" y1="33" x2="205" y2="33" stroke="#EDEAE1" strokeWidth="0.9" opacity="0.17" />
-      <line x1="5" y1="47" x2="205" y2="47" stroke="#EDEAE1" strokeWidth="0.9" opacity="0.17" />
-      <text x="105" y="32" textAnchor="middle" dominantBaseline="middle"
-        fontFamily="Outfit, sans-serif" fontWeight="700" fontSize="21"
-        letterSpacing="-1" fill="#10B981">stixanalytix</text>
-    </svg>
+    <img src="/logo.svg" alt="StixAnalytix" style={{ height: height }} />
   );
 }
 
