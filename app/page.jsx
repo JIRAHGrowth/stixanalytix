@@ -101,7 +101,7 @@ nav {
 .hero-badge {
   position: relative;
   display: inline-block;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -128,7 +128,7 @@ nav {
 
 .hero-sub {
   position: relative;
-  font-size: clamp(1rem, 2vw, 1.15rem);
+  font-size: clamp(1.1rem, 2.2vw, 1.3rem);
   color: var(--dim);
   max-width: 520px;
   margin-bottom: 2.5rem;
@@ -144,14 +144,14 @@ nav {
   margin-bottom: 4.5rem;
 }
 
-.btn-large { padding: 0.9rem 2rem; font-size: 15px; border-radius: 8px; }
+.btn-large { padding: 0.9rem 2rem; font-size: 16px; border-radius: 8px; }
 
 .btn-outline {
   background: none;
   border: 1px solid var(--border);
   color: var(--chalk);
   padding: 0.9rem 2rem;
-  font-size: 15px;
+  font-size: 16px;
   border-radius: 8px;
   font-family: 'DM Sans', sans-serif;
   cursor: pointer;
@@ -191,7 +191,7 @@ nav {
 }
 
 .stat-label {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--dim);
   text-transform: uppercase;
   letter-spacing: 0.07em;
@@ -204,7 +204,7 @@ nav {
 }
 
 .section-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -225,7 +225,7 @@ nav {
 .section-sub {
   color: var(--dim);
   max-width: 520px;
-  font-size: 1.05rem;
+  font-size: 1.15rem;
   line-height: 1.65;
 }
 
@@ -279,7 +279,7 @@ nav {
   color: var(--chalk);
 }
 
-.pillar-body { font-size: 14px; color: var(--dim); line-height: 1.65; }
+.pillar-body { font-size: 15px; color: var(--dim); line-height: 1.65; }
 
 .audience-grid {
   display: grid;
@@ -309,12 +309,12 @@ nav {
 .audience-title {
   font-family: var(--font-outfit), 'Outfit', sans-serif;
   font-weight: 700;
-  font-size: 1.05rem;
+  font-size: 1.15rem;
   margin-bottom: 0.5rem;
   color: var(--chalk);
 }
 
-.audience-body { font-size: 13.5px; color: var(--dim); line-height: 1.6; }
+.audience-body { font-size: 15px; color: var(--dim); line-height: 1.6; }
 
 .pricing-grid {
   display: grid;
@@ -388,12 +388,12 @@ nav {
 .tier-price sup { font-size: 1.4rem; font-weight: 700; vertical-align: super; color: var(--dim); }
 .tier-price sub { font-size: 1rem; font-weight: 400; color: var(--dim); vertical-align: baseline; }
 
-.tier-desc { font-size: 13.5px; color: var(--dim); margin: 1rem 0 2rem; line-height: 1.55; }
+.tier-desc { font-size: 15px; color: var(--dim); margin: 1rem 0 2rem; line-height: 1.55; }
 
 .feature-list { list-style: none; margin-bottom: 2.5rem; flex: 1; }
 
 .feature-list li {
-  font-size: 13.5px;
+  font-size: 15px;
   padding: 0.4rem 0;
   color: rgba(237,234,225,0.8);
   display: flex;
@@ -423,7 +423,7 @@ nav {
 .tier-cta-ghost { background: none; border: 1px solid var(--border); color: var(--chalk); }
 .tier-cta-ghost:hover { border-color: rgba(237,234,225,0.4); }
 
-.pricing-note { text-align: center; margin-top: 1.75rem; font-size: 13px; color: var(--dim); }
+.pricing-note { text-align: center; margin-top: 1.75rem; font-size: 15px; color: var(--dim); }
 
 .cta-block {
   border: 1px solid var(--border);
@@ -454,7 +454,7 @@ nav {
   color: var(--chalk);
   line-height: 1.1;
 }
-.cta-block p { position: relative; color: var(--dim); margin-bottom: 2.5rem; font-size: 1.05rem; }
+.cta-block p { position: relative; color: var(--dim); margin-bottom: 2.5rem; font-size: 1.15rem; }
 
 footer {
   max-width: 1100px;
@@ -467,7 +467,7 @@ footer {
   flex-wrap: wrap;
   gap: 1rem;
 }
-.footer-copy { font-size: 13px; color: var(--dim); }
+.footer-copy { font-size: 14px; color: var(--dim); }
 
 /* ── PROBLEM ── */
 .problem-wrap {
@@ -489,7 +489,7 @@ footer {
   margin-bottom: 2rem;
 }
 .problem-lede em { font-style: normal; color: var(--green); }
-.problem-body p { color: var(--dim); font-size: 1.02rem; line-height: 1.75; margin-bottom: 1.25rem; }
+.problem-body p { color: var(--dim); font-size: 1.1rem; line-height: 1.75; margin-bottom: 1.25rem; }
 .problem-body p:last-child { margin-bottom: 0; }
 .problem-body strong { color: var(--chalk); font-weight: 500; }
 
@@ -513,8 +513,8 @@ footer {
   transition: background 0.2s;
 }
 .metric-cell:hover { background: rgba(16,185,129,0.04); }
-.metric-cell-title { font-family: var(--font-outfit), 'Outfit', sans-serif; font-weight: 700; font-size: 0.95rem; color: var(--chalk); margin-bottom: 0.35rem; }
-.metric-cell-body { font-size: 13px; color: var(--dim); line-height: 1.55; }
+.metric-cell-title { font-family: var(--font-outfit), 'Outfit', sans-serif; font-weight: 700; font-size: 1.05rem; color: var(--chalk); margin-bottom: 0.35rem; }
+.metric-cell-body { font-size: 15px; color: var(--dim); line-height: 1.55; }
 .pitchside-callout {
   border-left: 2px solid var(--green);
   padding: 1.25rem 1.75rem;
@@ -522,7 +522,7 @@ footer {
   border-radius: 0 8px 8px 0;
   max-width: 680px;
 }
-.pitchside-callout p { font-size: 1.05rem; color: var(--chalk); line-height: 1.65; font-style: italic; }
+.pitchside-callout p { font-size: 1.15rem; color: var(--chalk); line-height: 1.65; font-style: italic; }
 
 /* ── ORIGIN ── */
 .origin-wrap {
