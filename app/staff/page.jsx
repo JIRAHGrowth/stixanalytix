@@ -624,9 +624,7 @@ export default function StaffPage() {
         padding: "12px 20px", borderBottom: `1px solid ${t.border}`, maxWidth: 800, margin: "0 auto",
       }}>
         <Link href="/" style={{ textDecoration: "none" }}>
-          <span style={{ fontSize: 20, fontWeight: 700, color: t.bright }}>
-            Stix<span style={{ color: t.accent }}>Analytix</span>
-          </span>
+          <img src="/logo.svg" alt="StixAnalytix" style={{ height: 32 }} />
         </Link>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Link href="/dashboard" style={{
