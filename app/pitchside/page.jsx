@@ -812,9 +812,7 @@ export default function PitchsidePage() {
         <div style={{ maxWidth: 520, margin: "0 auto", padding: "32px 16px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
             <Link href="/dashboard" style={{ color: t.dim, textDecoration: "none", fontSize: 13, padding: "8px 0" }}>← Dashboard</Link>
-            <span style={{ fontSize: 18, fontWeight: 700, color: t.bright }}>
-              Stix<span style={{ color: t.accent }}>Analytix</span>
-            </span>
+            <img src="/logo.svg" alt="StixAnalytix" style={{ height: 32 }} />
           </div>
 
           <div style={{ textAlign: "center", marginBottom: 28 }}>
