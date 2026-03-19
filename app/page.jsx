@@ -279,7 +279,7 @@ nav {
   color: var(--chalk);
 }
 
-.pillar-body { font-size: 17px; color: var(--dim); line-height: 1.65; }
+.pillar-body { font-size: 18px; color: var(--dim); line-height: 1.65; }
 
 .audience-grid {
   display: grid;
@@ -314,7 +314,7 @@ nav {
   color: var(--chalk);
 }
 
-.audience-body { font-size: 17px; color: var(--dim); line-height: 1.6; }
+.audience-body { font-size: 18px; color: var(--dim); line-height: 1.6; }
 
 .pricing-grid {
   display: grid;
@@ -388,12 +388,12 @@ nav {
 .tier-price sup { font-size: 1.4rem; font-weight: 700; vertical-align: super; color: var(--dim); }
 .tier-price sub { font-size: 1rem; font-weight: 400; color: var(--dim); vertical-align: baseline; }
 
-.tier-desc { font-size: 16px; color: var(--dim); margin: 1rem 0 2rem; line-height: 1.55; }
+.tier-desc { font-size: 17px; color: var(--dim); margin: 1rem 0 2rem; line-height: 1.55; }
 
 .feature-list { list-style: none; margin-bottom: 2.5rem; flex: 1; }
 
 .feature-list li {
-  font-size: 16px;
+  font-size: 17px;
   padding: 0.4rem 0;
   color: rgba(237,234,225,0.8);
   display: flex;
@@ -423,7 +423,7 @@ nav {
 .tier-cta-ghost { background: none; border: 1px solid var(--border); color: var(--chalk); }
 .tier-cta-ghost:hover { border-color: rgba(237,234,225,0.4); }
 
-.pricing-note { text-align: center; margin-top: 1.75rem; font-size: 16px; color: var(--dim); }
+.pricing-note { text-align: center; margin-top: 1.75rem; font-size: 17px; color: var(--dim); }
 
 .cta-block {
   border: 1px solid var(--border);
@@ -514,7 +514,7 @@ footer {
 }
 .metric-cell:hover { background: rgba(16,185,129,0.04); }
 .metric-cell-title { font-family: var(--font-outfit), 'Outfit', sans-serif; font-weight: 700; font-size: 1.05rem; color: var(--chalk); margin-bottom: 0.35rem; }
-.metric-cell-body { font-size: 16px; color: var(--dim); line-height: 1.55; }
+.metric-cell-body { font-size: 17px; color: var(--dim); line-height: 1.55; }
 .pitchside-callout {
   border-left: 2px solid var(--green);
   padding: 1.25rem 1.75rem;
@@ -534,13 +534,13 @@ footer {
   gap: 5rem;
   align-items: start;
 }
-.origin-aside { position: sticky; top: 6rem; }
+.origin-aside { position: sticky; top: 6rem;  font-size: 15px;}
 .origin-eyebrow { font-size: 11px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--green); margin-bottom: 0.75rem; }
 .origin-headline { font-family: var(--font-outfit), 'Outfit', sans-serif; font-weight: 800; font-size: 2rem; letter-spacing: -0.025em; line-height: 1.1; color: var(--chalk); margin-bottom: 1.25rem; }
 .origin-sig { margin-top: 2rem; padding-top: 1.25rem; border-top: 1px solid var(--border); }
 .origin-sig-name { font-family: var(--font-outfit), 'Outfit', sans-serif; font-weight: 700; font-size: 0.95rem; color: var(--chalk); }
 .origin-sig-role { font-size: 12px; color: var(--dim); }
-.origin-body p { color: var(--dim); font-size: 1.05rem; line-height: 1.8; margin-bottom: 1.5rem; }
+.origin-body p { color: var(--dim); font-size: 1.2rem; line-height: 1.8; margin-bottom: 1.5rem; }
 .origin-body p:last-child { margin-bottom: 0; }
 .origin-body strong { color: var(--chalk); font-weight: 500; }
 
