@@ -358,7 +358,7 @@ function TrendBadge({ cur, prev, inv, suf = "" }) {
   const up = inv ? d < 0 : d > 0;
   return (
     <span style={{
-      display: "inline-flex", alignItems: "center", gap: 2, padding: "2px 5px",
+      display: "flex", alignItems: "center", justifyContent: "center", margin: "4px auto 0", gap: 2, padding: "2px 5px",
       borderRadius: 4, fontSize: 8, fontWeight: 700,
       background: up ? t.green + "22" : t.red + "22",
       color: up ? t.green : t.red,
