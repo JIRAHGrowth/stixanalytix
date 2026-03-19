@@ -1729,7 +1729,7 @@ export default function DashboardPage() {
 
             {/* Tabs */}
             <div style={{ display: "flex", gap: 4, overflowX: "auto", paddingBottom: 8, marginBottom: 12 }}>
-              {TABS.map(tb => (
+              (bp.isMobile ? TABS.slice(0, 5) : TABS).map((tb)=> (
                 <button key={tb.id} onClick={() => { setTab(tb.id); setSelectedGame(null); if (!scopeTabs.includes(tb.id)) setScope("season"); }}
                   style={{ background: tab === tb.id ? t.accent + "18" : "transparent", border: `1px solid ${tab === tb.id ? t.accent + "44" : "transparent"}`, borderRadius: 7, padding: "6px 10px", color: tab === tb.id ? t.accent : t.dim, fontSize: 10, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap", fontFamily: font, position: "relative" }}>
                   <span style={{ fontSize: 12 }}>{tb.icon}</span>{tb.label}
@@ -1738,6 +1738,7 @@ export default function DashboardPage() {
                   )}
                 </button>
               ))}
+              {bp.isMobile && TABS.length > 5 && <select onChange={function(e) { if (e.target.value) { setTab(e.target.value); setSelectedGame(null); e.target.value = ""; } }} style={{ padding: "6px 10px", borderRadius: 20, border: "1px solid " + t.border, background: t.bg, color: t.dim, fontSize: 12, fontFamily: font, cursor: "pointer" }}><option value="">More...</option>{TABS.slice(5).map(function(tb) { return <option key={tb.id} value={tb.id}>{tb.label}</option>; })}</select>}
             </div>
 
             {showScope && <ScopeToggle scope={scope} setScope={setScope} />}
