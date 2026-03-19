@@ -46,12 +46,7 @@ export default function ForgotPasswordPage() {
       <div style={{ width: "100%", maxWidth: 420 }}>
         <div style={{ textAlign: "center", marginBottom: 40 }}>
           <Link href="/" style={{ textDecoration: "none" }}>
-            <span style={{
-              fontSize: 28, fontWeight: 700, color: t.bright,
-              letterSpacing: "-0.02em",
-            }}>
-              Stix<span style={{ color: t.accent }}>Analytix</span>
-            </span>
+            <img src="/logo.svg" alt="StixAnalytix" style={{ height: 48, marginBottom: 8 }} />
           </Link>
         </div>
 
