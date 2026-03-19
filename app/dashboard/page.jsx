@@ -10,6 +10,18 @@ import {
   LineChart, Line, CartesianGrid, Legend, PieChart, Pie,
 } from "recharts";
 
+
+// ═══ RESPONSIVE BREAKPOINTS ═══════════════════════════════════════════════════
+function useBreakpoint() {
+  const [w, setW] = useState(typeof window !== "undefined" ? window.innerWidth : 1200);
+  useEffect(() => {
+    const h = () => setW(window.innerWidth);
+    window.addEventListener("resize", h);
+    return () => window.removeEventListener("resize", h);
+  }, []);
+  return { isMobile: w < 768, isTablet: w >= 768 && w < 1024, isDesktop: w >= 1024, width: w };
+}
+
 // ═══ THEME ═══════════════════════════════════════════════════════════════════
 const tDark = {
   bg: "#070b0e", card: "#0f1419", cardAlt: "#151c22", border: "#1e2a32",
@@ -309,7 +321,7 @@ function Card({ children, s }) {
 function Sec({ children, title, icon }) {
   return (
     <div style={{ marginBottom: 20 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: bp.isMobile ? 4 : 8, flexWrap: "wrap", marginBottom: 16 }}>
         {icon && <span style={{ fontSize: 16 }}>{icon}</span>}
         <span style={{ fontSize: 13, fontWeight: 700, color: t.accent, textTransform: "uppercase", letterSpacing: 1.5 }}>{title || children}</span>
         <div style={{ flex: 1, height: 1, background: t.border, marginLeft: 8 }} />
@@ -500,7 +512,7 @@ function KeeperModal({ keeper, onSave, onClose, onDeactivate, primaryColor }) {
           <input value={name} onChange={e => setName(e.target.value)} placeholder="Full name"
             style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: `1px solid ${t.border}`, background: t.bg, color: t.bright, fontSize: 15, fontFamily: font, outline: "none", boxSizing: "border-box" }} />
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 16 }}>
           <div>
             <label style={{ fontSize: 11, color: t.dim, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 6 }}>Number</label>
             <input type="number" value={number} onChange={e => setNumber(e.target.value)} placeholder="#"
@@ -762,7 +774,7 @@ function SingleGameView({ match, goals, logRow, keeperName, primaryColor, onBack
       </Card>
 
       {/* Key stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))", gap: 8, marginBottom: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: (bp.isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(80px, 1fr))"), gap: 8, marginBottom: 12 }}>
         {[
           { label: "SOT",     val: match.shots_on_target ?? "–" },
           { label: "Saves",   val: match.saves ?? "–" },
@@ -778,7 +790,7 @@ function SingleGameView({ match, goals, logRow, keeperName, primaryColor, onBack
         ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 12 }}>
         {saveTypes.length > 0 && (
           <Card>
             <Sec icon="🧤">Save Types</Sec>
@@ -864,7 +876,7 @@ function SingleGameView({ match, goals, logRow, keeperName, primaryColor, onBack
 
       <Card s={{ marginBottom: 12 }}>
         <Sec icon="🏃">Physical & Crosses</Sec>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
           <div>
             <div style={{ fontSize: 10, color: t.dim, marginBottom: 8, textTransform: "uppercase" }}>Sweeper</div>
             {[
@@ -999,7 +1011,7 @@ function ReportView({ keeper, keeperData, alerts, targetGame, primaryColor, onBa
         </div>
 
         {/* Radar + Heatmap */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
+        <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 20, marginBottom: 20 }}>
           {radarData.length > 0 && (
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Attribute Profile</div>
@@ -1024,7 +1036,7 @@ function ReportView({ keeper, keeperData, alerts, targetGame, primaryColor, onBa
         {/* Distribution */}
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Distribution Accuracy</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
             {[
               { name: "GK Short",      att: s?.distribution?.gkShort?.att,      suc: s?.distribution?.gkShort?.suc },
               { name: "GK Long",       att: s?.distribution?.gkLong?.att,       suc: s?.distribution?.gkLong?.suc },
@@ -1236,7 +1248,7 @@ function EditMatchModal({ match, onSave, onClose }) {
             <label style={labelStyle}>Opponent</label>
             <input type="text" value={formData.opponent} onChange={e => handleChange("opponent", e.target.value)} style={inputStyle} />
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 16 }}>
             <div>
               <label style={labelStyle}>Match Date</label>
               <input type="date" value={formData.match_date} onChange={e => handleChange("match_date", e.target.value)} style={inputStyle} />
@@ -1250,7 +1262,7 @@ function EditMatchModal({ match, onSave, onClose }) {
             </div>
           </div>
           {isMatch && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 16 }}>
               <div>
                 <label style={labelStyle}>Venue</label>
                 <select value={formData.venue} onChange={e => handleChange("venue", e.target.value)} style={selectStyle}>
@@ -1270,7 +1282,7 @@ function EditMatchModal({ match, onSave, onClose }) {
               </div>
             </div>
           )}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 16 }}>
             <div>
               <label style={labelStyle}>Goals For</label>
               <input type="number" value={formData.goals_for} onChange={e => handleChange("goals_for", parseInt(e.target.value) || 0)} style={inputStyle} />
@@ -1280,7 +1292,7 @@ function EditMatchModal({ match, onSave, onClose }) {
               <input type="number" value={formData.goals_against} onChange={e => handleChange("goals_against", parseInt(e.target.value) || 0)} style={inputStyle} />
             </div>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 16 }}>
             <div>
               <label style={labelStyle}>Shots on Target</label>
               <input type="number" value={formData.shots_on_target} onChange={e => handleChange("shots_on_target", parseInt(e.target.value) || 0)} style={inputStyle} />
@@ -1347,6 +1359,9 @@ export default function DashboardPage() {
   const router = useRouter();
 
   const [darkMode, setDarkMode] = useState(true);
+  const bp = useBreakpoint();
+  const [showSettings, setShowSettings] = useState(false);
+  const [showMoreTabs, setShowMoreTabs] = useState(false);
   t = darkMode ? tDark : tLight;
   const [keepers, setKeepers] = useState([]);
   const [loadingKeepers, setLoadingKeepers] = useState(true);
@@ -1613,19 +1628,20 @@ export default function DashboardPage() {
   return (
     <div style={{ minHeight: "100vh", background: t.bg, fontFamily: font }}>
       {/* HEADER */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px", borderBottom: `1px solid ${t.border}`, maxWidth: 960, margin: "0 auto" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: bp.isMobile ? "8px 12px" : "12px 20px", borderBottom: `1px solid ${t.border}`, maxWidth: bp.isMobile ? "100%" : 960, margin: "0 auto" }}>
         <Link href="/" style={{ textDecoration: "none" }}>
-          <span style={{ fontSize: 20, fontWeight: 700, color: t.bright }}>Stix<span style={{ color: t.accent }}>Analytix</span></span>
+          <img src="/logo.svg" alt="StixAnalytix" style={{ height: bp.isMobile ? 28 : 36 }} />
         </Link>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {!isDelegate && <Link href="/staff" style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 12, textDecoration: "none", fontFamily: font, display: "flex", alignItems: "center", gap: 4 }}>👥 Staff</Link>}
+          {!isDelegate && <Link href="/staff" style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 12, textDecoration: "none", fontFamily: font, display: "flex", alignItems: "center", gap: bp.isMobile ? 4 : 4 }}>👥 Staff</Link>}
           <Link href="/pitchside" style={{ padding: "8px 14px", borderRadius: 8, background: primaryColor, color: "#fff", fontSize: 12, fontWeight: 600, textDecoration: "none", display: "flex", alignItems: "center", gap: 4 }}>📱 Pitchside</Link>
           <button onClick={() => setView(view === "analytics" ? "roster" : "analytics")} style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 12, fontFamily: font, cursor: "pointer" }}>{view === "analytics" ? "👥 Roster" : "📊 Analytics"}</button>
           <button onClick={signOut} style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 12, fontFamily: font, cursor: "pointer" }}>Sign Out</button>
+                <div style={{ position: "relative" }}><button onClick={() => setShowSettings(!showSettings)} style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid " + t.border, background: "transparent", color: t.dim, fontSize: 14, fontFamily: font, cursor: "pointer" }}>⚙</button>{showSettings && <div style={{ position: "absolute", right: 0, top: "100%", marginTop: 4, background: t.card, border: "1px solid " + t.border, borderRadius: 8, padding: 8, zIndex: 100, minWidth: 160, boxShadow: "0 8px 24px rgba(0,0,0,0.3)" }}><button onClick={() => { setDarkMode(!darkMode); setShowSettings(false); }} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 12px", background: "none", border: "none", color: t.text, fontSize: 13, fontFamily: font, cursor: "pointer", borderRadius: 6 }}>{darkMode ? "☀️ Light Mode" : "🌙 Dark Mode"}</button></div>}</div>
         </div>
       </div>
 
-      <div style={{ maxWidth: 960, margin: "0 auto", padding: "20px 16px" }}>
+      <div style={{ maxWidth: bp.isMobile ? "100%" : 960, margin: "0 auto", padding: "20px 16px" }}>
 
         {isDelegate && delegateOf && (
           <div style={{ padding: "10px 16px", borderRadius: 10, marginBottom: 16, background: t.accent + "08", border: `1px solid ${t.accent}22`, display: "flex", alignItems: "center", gap: 10 }}>
@@ -1719,27 +1735,22 @@ export default function DashboardPage() {
 
             {/* Tabs */}
             <div style={{ display: "flex", gap: 4, overflowX: "auto", paddingBottom: 8, marginBottom: 12 }}>
-              {TABS.map(tb => (
+              {(bp.isMobile ? TABS.slice(0, 5) : TABS).map((tb)> (
                 <button key={tb.id} onClick={() => { setTab(tb.id); setSelectedGame(null); if (!scopeTabs.includes(tb.id)) setScope("season"); }}
                   style={{ background: tab === tb.id ? t.accent + "18" : "transparent", border: `1px solid ${tab === tb.id ? t.accent + "44" : "transparent"}`, borderRadius: 7, padding: "6px 10px", color: tab === tb.id ? t.accent : t.dim, fontSize: 10, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap", fontFamily: font, position: "relative" }}>
                   <span style={{ fontSize: 12 }}>{tb.icon}</span>{tb.label}
                   {(tb.badge || 0) > 0 && (
                     <span style={{ position: "absolute", top: -3, right: -3, width: 14, height: 14, borderRadius: 7, background: t.red, color: "#fff", fontSize: 7, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{tb.badge}</span>
                   )}
+              {bp.isMobile && TABS.length > 5 && <button onClick={() => setShowMoreTabs(true)} style={{ padding: "6px 14px", borderRadius: 20, border: "1px solid " + t.border, background: "transparent", color: t.dim, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", fontFamily: font }}>More…</button>}
                 </button>
               ))}
             </div>
 
-            {showScope && <ScopeToggle scope={scope} setScope={setScope} />}
-            <button onClick={() => setDarkMode(!darkMode)} style={{
-              position: "fixed", top: 16, right: 16, zIndex: 9999,
-              background: t.card, border: "1px solid " + t.border, borderRadius: 8,
-              padding: "6px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
-              color: t.text, fontSize: 12, fontWeight: 600, fontFamily: font,
-              boxShadow: "0 2px 8px rgba(0,0,0,0.15)"
-            }}>
-              {darkMode ? "☀️" : "🌙"} {darkMode ? "Light" : "Dark"}
-            </button>
+            {
+            {showMoreTabs && <div style={{ position: "fixed", inset: 0, zIndex: 200 }} onClick={() => setShowMoreTabs(false)}><div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)" }} /><div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: t.card, borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: "16px 16px 32px", maxHeight: "50vh" }} onClick={e => e.stopPropagation()}><div style={{ width: 40, height: 4, borderRadius: 2, background: t.border, margin: "0 auto 16px" }} /><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>{TABS.slice(5).map(tb => <button key={tb.id} onClick={() => { setTab(tb.id); setShowMoreTabs(false); setSelectedGame(null); }} style={{ padding: "12px", borderRadius: 8, border: "1px solid " + (tab === tb.id ? t.accent : t.border), background: tab === tb.id ? t.accent + "18" : t.bg, color: tab === tb.id ? t.accent : t.text, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: font, display: "flex", alignItems: "center", gap: 6 }}><span>{tb.icon}</span> {tb.label}</button>)}</div></div></div>}
+showScope && <ScopeToggle scope={scope} setScope={setScope} />}
+            
 
             {!selectedKeeper && <EmptyState icon="👆" title="Select a Keeper" subtitle="Choose a goalkeeper from the dropdown to view analytics." />}
             {selectedKeeper && !hasMatches && tab !== "compare" && (
@@ -1764,7 +1775,7 @@ export default function DashboardPage() {
 
               {/* Row 1: Goals In + Goals From */}
               <Sec title="Goals Conceded">
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
                   <Card>
                     <div style={{ fontSize: 13, fontWeight: 700, color: t.text, marginBottom: 12 }}>Where Goals Went In</div>
                     <GoalHeatmap zones={dGoals ? dGoals.zones : {}} />
@@ -1778,7 +1789,7 @@ export default function DashboardPage() {
 
               {/* Row 2: Shot Stopping */}
               <Sec title="Shot Stopping">
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
                   <Card>
                     <div style={{ textAlign: "center", padding: 16, color: t.dim, fontSize: 12 }}>
                       <div style={{ fontSize: 24, fontWeight: 800, color: t.accent }}>{s.saves}</div>
@@ -1804,7 +1815,7 @@ export default function DashboardPage() {
 
               {/* Row 3: Savability + Shot Type & Positioning */}
               <Sec title="Savability & Shot Analysis">
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
                   <Card>
                     <div style={{ fontSize: 13, fontWeight: 700, color: t.text, marginBottom: 12 }}>Savability</div>
                     {dGoals && dGoals.ranks && Object.keys(dGoals.ranks).length > 0 ? (
@@ -1894,7 +1905,7 @@ export default function DashboardPage() {
             </Sec>
               {/* Row 4: Distribution */}
               <Sec title="Distribution">
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
                   <Card>
                     <div style={{ fontSize: 13, fontWeight: 700, color: t.text, marginBottom: 12 }}>Distribution Summary</div>
                     {s.distribution ? (
@@ -1967,7 +1978,7 @@ export default function DashboardPage() {
 
               {/* Row 6: Attributes */}
               <Sec title="Attributes">
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
                   <Card>
                     <div style={{ fontSize: 13, fontWeight: 700, color: t.text, marginBottom: 12 }}>Attribute Web</div>
                     {dAttrs && Object.keys(dAttrs).length > 0 ? (
@@ -2283,7 +2294,7 @@ export default function DashboardPage() {
                   </Card>
                   <Card>
                     <div style={{ fontSize: 10, color: t.dim, marginBottom: 10 }}>Rebound Control</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 8, marginBottom: 12 }}>
                       <StatBox label="Controlled" value={s.rebounds.controlled} color={t.green} />
                       <StatBox label="Dangerous" value={s.rebounds.dangerous} color={t.red} />
                     </div>
@@ -2433,7 +2444,7 @@ export default function DashboardPage() {
                 </Card>
                 {cmpData?.season && d?.season ? (
                   <div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 14, marginBottom: 16 }}>
                       <Card>
                         <Sec icon="📊">Season Stats</Sec>
                         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
@@ -2486,7 +2497,7 @@ export default function DashboardPage() {
                         </ResponsiveContainer>
                       </Card>
                     )}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 14 }}>
                       <Card><GoalHeatmap zones={d.seasonGoals?.zones} title={`${selectedKeeperObj?.name?.split(" ")[0]} Goals`} /></Card>
                       <Card><GoalHeatmap zones={cmpData.seasonGoals?.zones} title={`${cmpKeeperObj?.name?.split(" ")[0]} Goals`} /></Card>
                     </div>
