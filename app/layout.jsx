@@ -4,6 +4,19 @@ export const metadata = {
   title: "StixAnalytix — Goalkeeper Coaching Intelligence",
   description: "Track, analyze, and develop your goalkeepers with data-driven coaching intelligence.",
   icons: { icon: "/logo.svg", apple: "/logo.svg" },
+  openGraph: {
+    title: "StixAnalytix — Goalkeeper Coaching Intelligence",
+    description: "Track, analyze, and develop your goalkeepers with data-driven coaching intelligence. Built for the goalkeeper coach.",
+    siteName: "StixAnalytix",
+    type: "website",
+    url: "https://stixanalytix.com",
+    images: [{ url: "/logo.svg", width: 500, height: 168, alt: "StixAnalytix Logo" }],
+  },
+  twitter: {
+    card: "summary",
+    title: "StixAnalytix — Goalkeeper Coaching Intelligence",
+    description: "Track, analyze, and develop your goalkeepers with data-driven coaching intelligence.",
+  },
 };
 
 export default function RootLayout({ children }) {
