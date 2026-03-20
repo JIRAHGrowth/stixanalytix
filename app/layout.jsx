@@ -3,6 +3,7 @@ import { AuthProvider } from "@/context/AuthContext";
 export const metadata = {
   title: "StixAnalytix — Goalkeeper Coaching Intelligence",
   description: "Track, analyze, and develop your goalkeepers with data-driven coaching intelligence.",
+  icons: { icon: "/logo.svg", apple: "/logo.svg" },
 };
 
 export default function RootLayout({ children }) {
@@ -15,6 +16,8 @@ export default function RootLayout({ children }) {
           href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap"
           rel="stylesheet"
         />
+        <link rel="icon" href="/logo.svg" type="image/svg+xml" />
+        <link rel="apple-touch-icon" href="/logo.svg" />
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
         <meta name="theme-color" content="#070b0e" />
         <style>{`
