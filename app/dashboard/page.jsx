@@ -1625,7 +1625,7 @@ export default function DashboardPage() {
       {/* HEADER */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: bp.isMobile ? "8px 12px" : "12px 20px", borderBottom: `1px solid ${t.border}`, maxWidth: bp.isMobile ? "100%" : 960, margin: "0 auto" }}>
         <Link href="/" style={{ textDecoration: "none" }}>
-          <img src="/logo.svg" alt="StixAnalytix" style={{ height: 36 }} />
+          <img src={darkMode ? "/logo.svg" : "/logo-light.svg"} alt="StixAnalytix" style={{ height: 36 }} />
         </Link>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {!isDelegate && <Link href="/staff" style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 12, textDecoration: "none", fontFamily: font, display: "flex", alignItems: "center", gap: 4 }}>👥 Staff</Link>}
