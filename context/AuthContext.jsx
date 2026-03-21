@@ -44,9 +44,9 @@ export function AuthProvider({ children }) {
 
       // Fetch club (coach's own club, or delegate's coach's club)
       if (p?.onboarding_complete) {
-        const { data: c } = await supabase
-          .from("clubs").select("*").eq("coach_id", authUser.id).single();
-        if (mounted && c) setClub(c);
+        const { data: clubs } = await supabase
+          .from("clubs").select("*").eq("coach_id", authUser.id).limit(1);
+        if (mounted && clubs?.[0]) setClub(clubs[0]);
       }
 
       // Check delegate status
@@ -61,21 +61,21 @@ export function AuthProvider({ children }) {
         const { data: coachP } = await supabase
           .from("profiles").select("full_name").eq("id", d.coach_id).single();
         const { data: coachC } = await supabase
-          .from("clubs").select("*").eq("coach_id", d.coach_id).single();
+          .from("clubs").select("*").eq("coach_id", d.coach_id).limit(1);
 
         if (mounted) {
           setDelegateOf({
             delegate_id: d.id,
             coach_id: d.coach_id,
             coach_name: coachP?.full_name || "Coach",
-            club: coachC,
+            club: coachC?.[0] || null,
             role: d.role,
             pitchside_keepers: d.pitchside_keepers || [],
             dashboard_keepers: d.dashboard_keepers || [],
             dashboard_access: d.dashboard_access || false,
           });
           setIsDelegate(true);
-          if (!p?.onboarding_complete && coachC) setClub(coachC);
+          if (!p?.onboarding_complete && coachC?.[0]) setClub(coachC[0]);
         }
       } else {
         if (mounted) {
