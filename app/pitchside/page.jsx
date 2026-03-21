@@ -1173,7 +1173,7 @@ export default function PitchsidePage() {
                   <button key={r} onClick={() => setResult(r)} style={{ padding: "10px 0", borderRadius: 8, border: `1px solid ${result === r ? t.accent : t.border}`, background: result === r ? t.accentGlow : t.cardAlt, color: result === r ? t.accent : t.dim, fontWeight: 700, fontSize: 15, cursor: "pointer", fontFamily: font }}>{r}</button>
                 ))}
               </div>
-              <button onClick={() => { if (confirm("Save and end match?")) document.querySelector("[data-save-btn]")?.click(); }} style={{ width: "100%", padding: "12px 0", borderRadius: 10, border: "none", background: t.accent, color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: font }}>Save Match</button>
+              <button onClick={() => { if (confirm("Save and end match?")) handleEndGame(); }} disabled={!result} style={{ width: "100%", padding: "12px 0", borderRadius: 10, border: "none", background: t.accent, color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: font }}>Save Match</button>
             </div>
           </div>
         ) : (
