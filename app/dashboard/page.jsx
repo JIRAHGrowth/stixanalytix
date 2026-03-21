@@ -474,6 +474,7 @@ function PitchOriginMap({ origins, title }) {
 }
 
 function KeeperModal({ keeper, onSave, onClose, onDeactivate, primaryColor }) {
+  const bp = useBreakpoint();
   const [name, setName] = useState(keeper?.name || "");
   const [number, setNumber] = useState(keeper?.number?.toString() || "");
   const [foot, setFoot] = useState(keeper?.catch_hand || "");
@@ -703,6 +704,7 @@ function ShotCrossRef({ goals }) {
 }
 
 function SingleGameView({ match, goals, logRow, keeperName, primaryColor, onBack, onReport }) {
+  const bp = useBreakpoint();
   if (!match) return (
     <div style={{ padding: 32, color: t.dim, textAlign: "center" }}>
       Match data unavailable.
@@ -926,6 +928,7 @@ function SingleGameView({ match, goals, logRow, keeperName, primaryColor, onBack
 
 // ═══ REPORT VIEW ════════════════════════════════════════════════════════════
 function ReportView({ keeper, keeperData, alerts, targetGame, primaryColor, onBack }) {
+  const bp = useBreakpoint();
   const pc = primaryColor || t.accent;
   if (!keeper || !keeperData) return null;
 
@@ -1214,6 +1217,7 @@ function ReportView({ keeper, keeperData, alerts, targetGame, primaryColor, onBa
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function EditMatchModal({ match, onSave, onClose }) {
+  const bp = useBreakpoint();
   const [formData, setFormData] = useState({
     opponent: match?.opponent || "",
     match_date: match?.match_date || "",
