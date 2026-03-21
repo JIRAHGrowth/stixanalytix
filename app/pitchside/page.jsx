@@ -682,7 +682,7 @@ export default function PitchsidePage() {
         })
         .select().single();
 
-      if (matchError) throw matchError;
+      if (matchError) throw matchError;    if (!matchData) throw new Error("Match record could not be retrieved after save. Check RLS select policies.");
 
       if (goalEvents.length > 0) {
         const goalRows = goalEvents.map(g => ({
