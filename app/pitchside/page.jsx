@@ -35,7 +35,7 @@ const SHOT_METHODS = ["Foot", "Header", "Deflection", "Own Goal"];
 const GOAL_ZONES = ["High L","High C","High R","Mid L","Mid C","Mid R","Low L","Low C","Low R"];
 const OFF_TARGET_ZONES = ["Wide Left", "Wide Right", "Over Bar"];
 const GK_POSITIONING = ["Set", "Moving"];
-const GOAL_RANKS = ["Saveable", "Difficult", "Unsaveable"];h
+const GOAL_RANKS = ["Saveable", "Difficult", "Unsaveable"];
 const SUB_REASONS = ["Removed – Injury", "Removed – Poor Play", "Removed – Other"];
 const ATTRS = [
   "Game Rating","Shot Stopping","Handling","Positioning",
