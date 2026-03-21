@@ -651,7 +651,7 @@ export default function PitchsidePage() {
           id: matchId,
           coach_id: coachId,
           keeper_id: selectedKeeperId,
-          club_id: isDelegate && delegateOf ? delegateOf.club?.id : club.id,
+          club_id: isDelegate && delegateOf ? delegateOf.club?.id : club?.id || null,
           logged_by: user.id,
           logged_by_name: profile?.full_name || user.email,
           session_type: sessionType,
