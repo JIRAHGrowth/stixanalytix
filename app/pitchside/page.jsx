@@ -646,11 +646,12 @@ export default function PitchsidePage() {
       const coachId = isDelegate && delegateOf ? delegateOf.coach_id : user.id;
 
       // Resolve club_id — use context if available, otherwise fetch directly
+      // Note: coach may have multiple clubs, so use .limit(1) not .single()
       let resolvedClubId = isDelegate && delegateOf ? delegateOf.club?.id : club?.id;
       if (!resolvedClubId) {
-        const { data: fallbackClub } = await supabase
-          .from("clubs").select("id").eq("coach_id", coachId).single();
-        resolvedClubId = fallbackClub?.id;
+        const { data: fallbackClubs } = await supabase
+          .from("clubs").select("id").eq("coach_id", coachId).limit(1);
+        resolvedClubId = fallbackClubs?.[0]?.id;
       }
       if (!resolvedClubId) throw new Error("Unable to determine your club. Please reload and try again.");
 
