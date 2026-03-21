@@ -35,7 +35,7 @@ const SHOT_METHODS = ["Foot", "Header", "Deflection", "Own Goal"];
 const GOAL_ZONES = ["High L","High C","High R","Mid L","Mid C","Mid R","Low L","Low C","Low R"];
 const OFF_TARGET_ZONES = ["Wide Left", "Wide Right", "Over Bar"];
 const GK_POSITIONING = ["Set", "Moving"];
-const GOAL_RANKS = ["Saveable", "Difficult", "Unsaveable"];
+const GOAL_RANKS = ["Saveable", "Difficult", "Unsaveable"];h
 const SUB_REASONS = ["Removed – Injury", "Removed – Poor Play", "Removed – Other"];
 const ATTRS = [
   "Game Rating","Shot Stopping","Handling","Positioning",
@@ -641,10 +641,15 @@ export default function PitchsidePage() {
         .map(hf => halves[hf]?.note ? halves[hf].note : null)
         .filter(Boolean).join("\n");
 
-      const { data: matchData, error: matchError } = await supabase
+      // Generate match ID client-side to avoid RLS RETURNING issue
+      const matchId = crypto.randomUUID();
+      const coachId = isDelegate && delegateOf ? delegateOf.coach_id : user.id;
+
+      const { error: matchError } = await supabase
         .from("matches")
         .insert({
-          coach_id: isDelegate && delegateOf ? delegateOf.coach_id : user.id,
+          id: matchId,
+          coach_id: coachId,
           keeper_id: selectedKeeperId,
           club_id: isDelegate && delegateOf ? delegateOf.club?.id : club.id,
           logged_by: user.id,
@@ -680,13 +685,13 @@ export default function PitchsidePage() {
           was_subbed: wasSub, sub_reason: subReason || null,
           sub_minute: subMinute ? parseInt(subMinute) : null,
         })
-        .select().single();
+        ;
 
-      if (matchError) throw matchError;    if (!matchData) throw new Error("Match record could not be retrieved after save. Check RLS select policies.");
+      if (matchError) throw matchError;
 
       if (goalEvents.length > 0) {
         const goalRows = goalEvents.map(g => ({
-          match_id: matchData.id, coach_id: isDelegate && delegateOf ? delegateOf.coach_id : user.id,
+          match_id: matchId, coach_id: coachId,
           goal_zone: g.goalZone || null, shot_origin: g.origin || null,
           goal_source: g.type === "Corner" ? "Corner" : g.type === "Penalty" ? "Penalty" : "Open Play",
           goal_rank: g.rank || null, shot_type: g.method || null,
@@ -695,13 +700,14 @@ export default function PitchsidePage() {
         }));
         const { error: goalsError } = await supabase.from("goals_conceded").insert(goalRows);
         if (goalsError) throw goalsError;
+      }
 
       // --- Write all shot events to shot_events (fail silently) ---
       try {
         const shotRows = events.map(e => ({
-          match_id: matchData.id,
+          match_id: matchId,
           keeper_id: selectedKeeperId,
-          coach_id: isDelegate && delegateOf ? delegateOf.coach_id : user.id,
+          coach_id: coachId,
           shot_origin: e.origin || null,
           gk_action: e.gkAction || null,
           goal_zone: e.isGoal ? (e.goalZone || null) : null,
@@ -715,7 +721,6 @@ export default function PitchsidePage() {
           await supabase.from("shot_events").insert(shotRows);
         }
       } catch (e) { console.error("shot_events insert error:", e); }
-      }
 
       const attrKeys = {
         "Game Rating": "game_rating", "Shot Stopping": "shot_stopping",
@@ -727,19 +732,19 @@ export default function PitchsidePage() {
         "Command of Box": "command_of_box", "Composure": "composure",
         "Compete Level": "compete_level",
       };
-      const attrRow = { match_id: matchData.id, keeper_id: selectedKeeperId, coach_id: isDelegate && delegateOf ? delegateOf.coach_id : user.id };
+      const attrRow = { match_id: matchId, keeper_id: selectedKeeperId, coach_id: coachId };
       Object.entries(attrKeys).forEach(([label, col]) => { attrRow[col] = attrs[label] || null; });
       const { error: attrError } = await supabase.from("match_attributes").insert(attrRow);
       if (attrError) throw attrError;
 
       // Blind-submit: write coach rankings
-      const rkRow = { match_id: matchData.id, coach_id: isDelegate ? delegateOf.coach_id : user.id, keeper_id: selectedKeeperId, author_id: user.id, author_role: "coach", submitted_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      const rkRow = { match_id: matchId, coach_id: coachId, keeper_id: selectedKeeperId, author_id: user.id, author_role: "coach", submitted_at: new Date().toISOString(), updated_at: new Date().toISOString() };
       Object.entries(attrKeys).forEach(([label, col]) => { rkRow[col] = attrs[label] || null; });
       try { await supabase.from("match_rankings").upsert(rkRow, { onConflict: "match_id,keeper_id,author_role" }); } catch (e) { console.error("Rankings sync error:", e); }
 
       // Blind-submit: write coach notes
       if (allNotes && allNotes.trim()) {
-        try { await supabase.from("match_notes").upsert({ match_id: matchData.id, coach_id: isDelegate ? delegateOf.coach_id : user.id, keeper_id: selectedKeeperId, author_id: user.id, author_role: "coach", note_text: allNotes.trim(), submitted_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { onConflict: "match_id,keeper_id,author_role" }); } catch (e) { console.error("Notes sync error:", e); }
+        try { await supabase.from("match_notes").upsert({ match_id: matchId, coach_id: coachId, keeper_id: selectedKeeperId, author_id: user.id, author_role: "coach", note_text: allNotes.trim(), submitted_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { onConflict: "match_id,keeper_id,author_role" }); } catch (e) { console.error("Notes sync error:", e); }
       }
 
       // Clear auto-save — data is safely in Supabase now
