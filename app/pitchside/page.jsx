@@ -1337,7 +1337,7 @@ export default function PitchsidePage() {
             <div style={{ background: t.card, border: `1px solid ${t.gold}33`, borderRadius: 12, padding: "12px 14px", marginBottom: 8 }}>
               <SectionHeader title="Distribution" icon="📤" accentColor={t.gold} />
               <div style={{ fontSize: 10, color: t.dim, fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>Goal Kicks</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 4, marginBottom: 8 }}>
                 <div>
                   <Counter label="Short" value={he.dGkShort} onChange={v => setHE("dGkShort", v)} compact />
                   <Counter label="↳ Unsuccessful" value={he.dGkShortFail} onChange={v => setHE("dGkShortFail", Math.min(v, he.dGkShort))} compact color={t.red} />
