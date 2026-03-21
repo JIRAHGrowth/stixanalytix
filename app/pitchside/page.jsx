@@ -645,13 +645,22 @@ export default function PitchsidePage() {
       const matchId = crypto.randomUUID();
       const coachId = isDelegate && delegateOf ? delegateOf.coach_id : user.id;
 
+      // Resolve club_id — use context if available, otherwise fetch directly
+      let resolvedClubId = isDelegate && delegateOf ? delegateOf.club?.id : club?.id;
+      if (!resolvedClubId) {
+        const { data: fallbackClub } = await supabase
+          .from("clubs").select("id").eq("coach_id", coachId).single();
+        resolvedClubId = fallbackClub?.id;
+      }
+      if (!resolvedClubId) throw new Error("Unable to determine your club. Please reload and try again.");
+
       const { error: matchError } = await supabase
         .from("matches")
         .insert({
           id: matchId,
           coach_id: coachId,
           keeper_id: selectedKeeperId,
-          club_id: isDelegate && delegateOf ? delegateOf.club?.id : club?.id || null,
+          club_id: resolvedClubId,
           logged_by: user.id,
           logged_by_name: profile?.full_name || user.email,
           session_type: sessionType,
