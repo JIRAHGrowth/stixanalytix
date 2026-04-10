@@ -28,7 +28,12 @@ _(empty — drop tasks here)_
 
 ## Needs Josh
 
-_(empty — agents will append blockers and decisions here)_
+### Nightly build failing - Missing Supabase environment variables
+- **Issue:** Build fails during static page generation because Supabase environment variables (NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY) are not available in CI environment
+- **Impact:** All pages that initialize Supabase clients fail to prerender, causing build to fail
+- **Category:** Non-trivial infrastructure issue (touches auth/data layer)
+- **Next step:** Configure environment variables in GitHub Actions workflow or adjust build configuration to handle missing env vars gracefully
+- **Detected:** 2026-04-10 nightly build
 
 ---
 
