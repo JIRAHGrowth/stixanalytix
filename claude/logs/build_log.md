@@ -10,6 +10,7 @@ Nightly build results. Each entry includes date, status, and any relevant detail
 
 ## Entries
 
+❌ 2026-04-11: Failure - Missing Supabase environment variables during build prerendering
 ❌ 2026-04-10: Failure - Missing Supabase environment variables during build prerendering
 
 Error: @supabase/ssr: Your project's URL and API key are required to create a Supabase client!
