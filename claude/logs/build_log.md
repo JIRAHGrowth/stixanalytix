@@ -28,3 +28,7 @@ Affects all pages that use Supabase during static generation:
 - /signup/page: /signup
 
 Build process requires environment variables for prerendering but .env.local is not present in CI environment.
+
+❌ 2026-04-12: Failure - Missing Supabase environment variables during build prerendering
+
+Same error as previous days - build fails during static generation because pages require Supabase client initialization but environment variables are not available in CI environment. All pages affected during prerendering phase.
