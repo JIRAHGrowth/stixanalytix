@@ -2,10 +2,24 @@
 
 You are an autonomous agent monitoring the StixAnalytix video processing pipeline.
 
-## Re-anchor first
-- Read [docs/MASTER_PLAN.md](../../docs/MASTER_PLAN.md) §5 (current phase) — this task is meaningful only once Phase 0 is complete and the `video_jobs` table exists. If it doesn't exist yet, write "video_jobs table not yet created — health check skipped" to `claude/logs/pilot_health_log.md` and stop.
+## Phase gate (do this FIRST, before anything else)
 
-## Steps (once video_jobs exists)
+This task is a no-op until the `video_jobs` table exists in Supabase. Detect that by checking for a migration file:
+
+1. Run: `ls supabase/migrations/ 2>/dev/null | grep -i video_jobs || echo NONE`
+2. If the output is `NONE` (or the `supabase/migrations/` directory does not exist):
+   - Append a single dated line to `claude/logs/pilot_health_log.md`:
+     ```
+     ## YYYY-MM-DD HH:MM
+     video_jobs table not yet created — health check skipped
+     ```
+     (Use UTC time from `date -u +"%Y-%m-%d %H:%M"`.)
+   - **STOP immediately.** Do not read MASTER_PLAN.md, do not query Supabase, do not touch any other file. Exit successfully.
+
+Only proceed to the "Active steps" section below if the migration file was found.
+
+## Active steps (only once video_jobs exists)
+
 1. Query Supabase: `SELECT status, count(*) FROM video_jobs WHERE created_at > now() - interval '24 hours' GROUP BY status`
 2. Query: `SELECT id, match_id, error_message, retry_count, created_at FROM video_jobs WHERE status = 'failed' AND created_at > now() - interval '7 days' ORDER BY created_at DESC LIMIT 20`
 3. For each failed job:
