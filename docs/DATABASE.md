@@ -28,6 +28,18 @@
 | match_rankings | Same 15 attributes, blind-submit by coach and keeper | match_id, keeper_id, author_id, author_role + 15 skill attributes |
 | match_notes | Free-text notes, blind-submit pattern | match_id, keeper_id, coach_id, author_id, author_role, note_text |
 
+### Video Pipeline Tables
+
+| Table | Purpose | Key columns |
+|-------|---------|-------------|
+| video_jobs | Async work queue for the video → stats pipeline | id, match_id, coach_id, org_id, version, status, video_url, gemini_output, error_message, retry_count, started_at, finished_at |
+
+`video_jobs.status` ∈ `queued | running | done | failed | retrying`. Idempotency key = `(match_id, version)` — retries bump `version`. RLS: coach sees/inserts/updates own rows only; **no DELETE policy** (per MASTER_PLAN §3, jobs are never deleted — only state-transitioned).
+
+### Multi-tenant column
+
+All tenant-scoped tables (profiles, clubs, keepers, delegates, matches, goals_conceded, shot_events, match_attributes, match_rankings, match_notes) have a nullable `org_id uuid` column. Populated starting in Phase 2 when orgs are introduced; no FK yet. Current RLS still scopes on `coach_id`.
+
 ## Row Level Security (RLS)
 
 All tables have RLS enabled.

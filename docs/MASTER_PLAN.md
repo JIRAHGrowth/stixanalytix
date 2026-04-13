@@ -136,8 +136,8 @@ Phases are sequential. Each has a clear "done" gate. We do not start phase N+1 u
 ### Phase 0 — Foundations
 - [x] Pick video worker host — **Modal** (decided 2026-04-09, see §8)
 - [ ] Set up Cloudflare R2 bucket + signed URL helper
-- [ ] Create `video_jobs` table in Supabase (status, video_url, match_id, gemini_output, errors, org_id)
-- [ ] Add `org_id` column (nullable) to all tenant-scoped tables
+- [x] Create `video_jobs` table in Supabase (status, video_url, match_id, gemini_output, errors, org_id) — applied 2026-04-13, migration `20260413_video_jobs_and_org_id.sql`
+- [x] Add `org_id` column (nullable) to all tenant-scoped tables — applied 2026-04-13, same migration
 - [ ] Get Gemini API key, confirm cost on one real VEO export
 - [ ] Set up Sentry (or equivalent) for error tracking
 - [ ] Set up staging environment (Vercel preview + separate Supabase project)
