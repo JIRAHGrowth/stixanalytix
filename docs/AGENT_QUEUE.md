@@ -33,7 +33,7 @@ _(empty — drop tasks here)_
 - **Impact:** All pages that initialize Supabase clients fail to prerender, causing build to fail
 - **Category:** Non-trivial infrastructure issue (touches auth/data layer)
 - **Next step:** Configure environment variables in GitHub Actions workflow or adjust build configuration to handle missing env vars gracefully
-- **Detected:** 2026-04-10 nightly build (recurring: 2026-04-12)
+- **Detected:** 2026-04-10 nightly build (recurring: 2026-04-12, 2026-04-13)
 
 ---
 
