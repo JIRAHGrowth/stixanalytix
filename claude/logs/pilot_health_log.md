@@ -15,3 +15,6 @@ video_jobs table not yet created — health check skipped
 
 ## 2026-04-14 15:57
 Supabase connection failed — health check stopped (missing environment variables)
+
+## 2026-04-15 15:54
+ERROR: Health check failed - Supabase credentials not available (NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are empty)
