@@ -50,3 +50,12 @@ Same ongoing issue - build fails during static generation phase. All pages that 
 - /_not-found, /dashboard, /forgot-password, /login, /onboarding, /, /pitchside, /reset-password, /signup, /staff
 
 Environment configuration issue persists in CI environment. This touches auth infrastructure and is beyond trivial fix scope.
+
+❌ 2026-04-15: Failure - Missing Supabase environment variables during build prerendering
+
+Error: @supabase/ssr: Your project's URL and API key are required to create a Supabase client!
+
+Same persistent issue - build fails during static generation phase. All pages that initialize Supabase client fail during prerendering:
+- /_not-found, /dashboard, /forgot-password, /login, /onboarding, /, /pitchside, /reset-password, /signup, /staff
+
+This is a non-trivial environment configuration issue affecting the auth system. CI environment needs Supabase environment variables configured for successful builds. Beyond scope of trivial nightly fixes.
