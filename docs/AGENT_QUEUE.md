@@ -34,6 +34,7 @@ _(empty — drop tasks here)_
 - **Category:** Non-trivial infrastructure issue (touches auth/data layer)
 - **Next step:** Configure environment variables in GitHub Actions workflow or adjust build configuration to handle missing env vars gracefully
 - **Detected:** 2026-04-10 nightly build (recurring: 2026-04-12, 2026-04-13, 2026-04-14, 2026-04-15, 2026-04-16)
+- **Additional impact:** Pilot health check 2026-04-16 failed - unable to monitor video_jobs table without DB access
 
 ---
 
