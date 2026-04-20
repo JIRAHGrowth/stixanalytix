@@ -1,7 +1,7 @@
 # StixAnalytix Master Plan
 
 **Status:** Living document. Updated as decisions are made and phases complete.
-**Last updated:** 2026-04-09
+**Last updated:** 2026-04-20
 **Owner:** Josh Marshall
 
 This is the single source of truth for where StixAnalytix is going, how we get there, and the rules we follow along the way. If something contradicts this doc, this doc wins until we update it. If we make a decision in a conversation, it gets written here before the conversation ends.
@@ -157,6 +157,7 @@ Phases are sequential. Each has a clear "done" gate. We do not start phase N+1 u
 - **Gate:** ≥80% accuracy on basic events across 5 test matches (Josh scores them)
 
 ### Phase 3 — GK-specific depth (the moat)
+- [ ] **Define canonical STIX GK event taxonomy + Gemini→STIX nomenclature map.** Gemini's default vocabulary is generic (e.g. "forward dive"); coaches and STIX use specific terms (e.g. "smother"). Claude's normaliser layer does the translation. Surfaced 2026-04-20 during video Test 1.
 - [ ] Save type breakdown, savaibility, shot zones, attribute ratings
 - [ ] Josh manually tags 5–10 ground-truth matches; corrections feed into Claude prompt iteratively
 - [ ] Build the "coach correction" UI — single click to fix an event, correction stored as training signal
@@ -222,7 +223,6 @@ Decisions waiting on input. Once made, they move to §8.
 
 | # | Decision | Options | Owner | Notes |
 |---|---|---|---|---|
-| D2 | Object storage | Cloudflare R2 / Supabase Storage | Josh | R2 likely cheaper at scale |
 | D3 | Error tracking | Sentry / Highlight / Axiom | Josh | Sentry is default safe pick |
 | D4 | First ground-truth matches | 2–3 VEO exports incoming (~2 weeks) | Josh | Tracked, not blocking yet |
 
@@ -232,6 +232,7 @@ Decisions waiting on input. Once made, they move to §8.
 
 Decisions made, with date and reasoning. Append-only.
 
+- **2026-04-20** — **D2: Supabase Storage selected for Phase 0 object storage.** Reasoning: Supabase project already provisioned, no new vendor this week, and §3.2 (S3-compatible abstraction) means the swap to R2 is a config change, not a rewrite. **Switch trigger to R2:** any of — (a) monthly Supabase egress bill exceeds R2's zero-egress equivalent by >$50, (b) clip storage crosses 1 TB, or (c) we hit Phase 2 (≥1,000 matches/day) — whichever comes first. Owner on the revisit: Josh (cost check monthly once pilot starts).
 - **2026-04-09** — **D1: Modal selected as Phase 0 video worker host.** Reasoning: built-in queue, retries, secrets, and one-command deploy remove BYO orchestration burden. Python-only is a non-issue for the workload (`download → Gemini → ffmpeg → upload → supabase insert`). Cost is a rounding error at pilot volume; the win is not having to build Pub/Sub bindings or a Postgres job poller before processing the first video. Revisit at Phase 2 (~1,000 matches/day) if economics shift — Fly.io is the likely fallback for compute+egress at scale.
 - **2026-04-09** — **D5: Integrator layer scaffolded and wired to GitHub Actions cron.** Session-local CronCreate rejected because it only fires while Claude Code REPL is open on Josh's laptop — not true 24/7. GitHub Actions cron runs in the cloud, free at this volume, version-controlled in the repo. Workflow at [.github/workflows/integrator.yml](../.github/workflows/integrator.yml).
 - **2026-04-09** — Master plan adopted. Scale target: 5,000 clubs / 1M parents. Architecture principles in §3 are now binding.

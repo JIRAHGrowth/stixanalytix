@@ -22,3 +22,12 @@ npm-debug.log*
 
 # claude code local settings
 .claude/
+
+# python (video worker)
+__pycache__/
+*.py[cod]
+.venv/
+worker/.venv/
+
+# gemini test outputs (ephemeral)
+scripts/results/
