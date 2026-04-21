@@ -1,0 +1,9 @@
+# Deps for the Modal worker image (python 3.11 inside Modal).
+# The local CLI (worker/enqueue.py) only needs `modal`, `requests`, and
+# `python-dotenv` — it talks to PostgREST directly to avoid pulling the
+# full `supabase` client on newer local Python versions.
+modal>=1.0.0
+google-genai>=0.3.0
+supabase>=2.9.0
+requests>=2.32.0
+python-dotenv>=1.0.0
