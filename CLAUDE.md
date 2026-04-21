@@ -36,7 +36,13 @@ lib/
   supabase-server.js    — Server Supabase client (cookies)
   supabase-admin.js     — Service role client (admin operations)
 middleware.js           — Auth guard for protected routes
+prompts/                — Gemini/Claude prompts, single source of truth (see prompts/README.md)
+scripts/                — Local iteration scripts (e.g. test-gemini-match.js)
+worker/                 — Modal-hosted video worker (Python 3.11; see worker/README.md)
 ```
+
+## Video pipeline (Phase 0)
+Prompts live in [prompts/](prompts/) and are loaded verbatim at runtime — **never inline-duplicate them in code**. The test harness [scripts/test-gemini-match.js](scripts/test-gemini-match.js) reads directly from `prompts/goals.md`. When editing a prompt, update the consumer's `RESPONSE_SCHEMA` in the same change and log the edit in [prompts/README.md](prompts/README.md#changelog).
 
 ## Environment Variables
 Required in `.env.local`:

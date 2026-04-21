@@ -4,46 +4,23 @@ const path = require('path');
 const { GoogleGenerativeAI, SchemaType } = require('@google/generative-ai');
 const { GoogleAIFileManager, FileState } = require('@google/generative-ai/server');
 
-const HALVES = {
+const VIDEOS = {
   half1: 'C:\\Users\\joshu\\Downloads\\american_vs_virginia_2024_half1_small.mp4',
   half2: 'C:\\Users\\joshu\\Downloads\\american_vs_virginia_2024_half2_small.mp4',
+  wylie1: 'C:\\Users\\joshu\\Downloads\\wylie_vs_cooper_2024_half1.mp4',
+  wylie2: 'C:\\Users\\joshu\\Downloads\\wylie_vs_cooper_2024_half2.mp4',
 };
 
-const half = process.argv[2];
-if (!half || !HALVES[half]) {
-  console.error('Usage: node scripts/test-gemini-match.js half1|half2');
+const key = process.argv[2];
+if (!key || !VIDEOS[key]) {
+  console.error(`Usage: node scripts/test-gemini-match.js <${Object.keys(VIDEOS).join('|')}>`);
   process.exit(1);
 }
-const VIDEO_PATH = HALVES[half];
+const VIDEO_PATH = VIDEOS[key];
 
-const PROMPT = `You are analysing video of a live soccer match recorded from a TV broadcast. Your only job right now is to find goals.
-
-CRITICAL — this is a TV broadcast, not raw stadium footage:
-- It contains REPLAYS (tighter zoom, slower motion, different camera angle, sometimes split-screen).
-  Replays show events that already happened. They are NOT new goals.
-- It shows a PERSISTENT SCOREBOARD with the current score. A goal only counts if the scoreboard
-  number for one team increases after the event. Use the scoreboard as ground truth.
-- If you see what looks like a goal but the scoreboard does not change, it is a replay, a disallowed
-  goal (offside/foul), or not a goal at all — do NOT include it.
-
-Definition of a goal: the ball fully crosses the goal line between the posts and under the crossbar
-AND the scoreboard updates to reflect this.
-
-For each confirmed goal, report:
-- timestamp_seconds: integer seconds from the start of THIS video, at the moment the ball crosses the line (not the replay timestamp)
-- scoring_team: describe the scoring team by jersey colour (e.g. "white jerseys", "dark navy jerseys")
-- conceding_team: describe the goalkeeper's team by jersey colour
-- shot_description: one short sentence (max 20 words): shot type, approximate distance, where it entered the net
-- scoreboard_before: the scoreline shown on screen just before the goal (e.g. "0-0" or "1-2")
-- scoreboard_after: the scoreline shown on screen just after the goal (should differ from before by exactly one)
-- confidence: "high", "medium", or "low"
-
-Rules:
-- Do not include replays, disallowed goals, or near-misses.
-- Count each goal exactly once (based on the scoreboard increment), using the LIVE timestamp, not the replay timestamp.
-- If you cannot verify a goal against the scoreboard, do not include it.
-
-Return an empty list if you see no verified goals.`;
+// Prompt loaded from prompts/goals.md — single source of truth.
+// See prompts/README.md for editing rules.
+const PROMPT = fs.readFileSync(path.join(__dirname, '..', 'prompts', 'goals.md'), 'utf8');
 
 const RESPONSE_SCHEMA = {
   type: SchemaType.OBJECT,
@@ -54,14 +31,21 @@ const RESPONSE_SCHEMA = {
         type: SchemaType.OBJECT,
         properties: {
           timestamp_seconds: { type: SchemaType.INTEGER },
+          match_clock: { type: SchemaType.STRING },
           scoring_team: { type: SchemaType.STRING },
           conceding_team: { type: SchemaType.STRING },
-          shot_description: { type: SchemaType.STRING },
           scoreboard_before: { type: SchemaType.STRING },
           scoreboard_after: { type: SchemaType.STRING },
+          attack_type: { type: SchemaType.STRING },
+          buildup: { type: SchemaType.STRING },
+          shot_type: { type: SchemaType.STRING },
+          shot_location: { type: SchemaType.STRING },
+          goal_placement_height: { type: SchemaType.STRING },
+          goal_placement_side: { type: SchemaType.STRING },
+          gk_observations: { type: SchemaType.STRING },
           confidence: { type: SchemaType.STRING },
         },
-        required: ['timestamp_seconds', 'scoring_team', 'conceding_team', 'shot_description', 'scoreboard_before', 'scoreboard_after', 'confidence'],
+        required: ['timestamp_seconds', 'match_clock', 'scoring_team', 'conceding_team', 'scoreboard_before', 'scoreboard_after', 'attack_type', 'buildup', 'shot_type', 'shot_location', 'goal_placement_height', 'goal_placement_side', 'gk_observations', 'confidence'],
       },
     },
   },
@@ -82,7 +66,7 @@ async function main() {
   }
 
   const fileSizeGb = (fs.statSync(VIDEO_PATH).size / 1024 / 1024 / 1024).toFixed(2);
-  console.log(`Target: ${half} (${fileSizeGb} GB)`);
+  console.log(`Target: ${key} (${fileSizeGb} GB)`);
   console.log('Expect 5-20 min upload + 5-15 min Gemini processing. Be patient.\n');
 
   const fileManager = new GoogleAIFileManager(apiKey);
@@ -91,7 +75,7 @@ async function main() {
   const uploadStart = Date.now();
   const uploadResult = await fileManager.uploadFile(VIDEO_PATH, {
     mimeType: 'video/mp4',
-    displayName: `stix match ${half}`,
+    displayName: `stix match ${key}`,
   });
   console.log(`Uploaded in ${((Date.now() - uploadStart) / 60000).toFixed(1)} min`);
 
@@ -118,7 +102,7 @@ async function main() {
     responseSchema: RESPONSE_SCHEMA,
   };
 
-  const modelsToTry = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'];
+  const modelsToTry = ['gemini-2.5-pro'];
   const maxAttempts = 3;
   let result = null;
   let lastError = null;
@@ -158,13 +142,17 @@ async function main() {
   const text = result.response.text();
   const parsed = JSON.parse(text);
 
-  console.log(`\n=== Results from ${modelUsed} on ${half} ===\n`);
+  console.log(`\n=== Results from ${modelUsed} on ${key} ===\n`);
   console.log(`Goals detected: ${parsed.goals.length}`);
   parsed.goals.forEach((g, i) => {
-    console.log(`\n  ${i + 1}. [${fmtTime(g.timestamp_seconds)}] confidence: ${g.confidence}`);
+    console.log(`\n  ${i + 1}. video ${fmtTime(g.timestamp_seconds)}  match clock ${g.match_clock}  confidence: ${g.confidence}`);
     console.log(`     ${g.scoring_team} scored vs ${g.conceding_team}`);
     console.log(`     scoreboard: ${g.scoreboard_before} -> ${g.scoreboard_after}`);
-    console.log(`     ${g.shot_description}`);
+    console.log(`     attack_type: ${g.attack_type}`);
+    console.log(`     buildup: ${g.buildup}`);
+    console.log(`     shot: ${g.shot_type} from ${g.shot_location}`);
+    console.log(`     placement: ${g.goal_placement_height} / ${g.goal_placement_side}`);
+    console.log(`     GK: ${g.gk_observations}`);
   });
 
   const usage = result.response.usageMetadata;
@@ -174,8 +162,8 @@ async function main() {
 
   const outDir = path.join(__dirname, 'results');
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir);
-  const outPath = path.join(outDir, `match-${half}-${Date.now()}.json`);
-  fs.writeFileSync(outPath, JSON.stringify({ modelUsed, half, usage, parsed, rawText: text }, null, 2));
+  const outPath = path.join(outDir, `match-${key}-${Date.now()}.json`);
+  fs.writeFileSync(outPath, JSON.stringify({ modelUsed, key, usage, parsed, rawText: text }, null, 2));
   console.log(`\nFull output saved to ${path.relative(process.cwd(), outPath)}`);
 }
 
