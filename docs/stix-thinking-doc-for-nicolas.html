@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>stixanalytix — where I'm at</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;800&family=DM+Sans:ital,wght@0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --pitch-black: #0A0A08;
+    --chalk: #EDEAE1;
+    --terminal-green: #10B981;
+    --forest: #047857;
+    --paper: #F2EFE8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-font-smoothing: antialiased; }
+  body {
+    background: var(--pitch-black);
+    color: var(--chalk);
+    font-family: 'DM Sans', -apple-system, sans-serif;
+    font-weight: 400;
+    line-height: 1.55;
+    font-size: 14px;
+    padding: 48px 24px 80px;
+  }
+  .sheet {
+    max-width: 780px;
+    margin: 0 auto;
+  }
+  header {
+    border-bottom: 1px solid rgba(237, 234, 225, 0.12);
+    padding-bottom: 28px;
+    margin-bottom: 36px;
+  }
+  .wordmark {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 800;
+    font-size: 26px;
+    letter-spacing: -0.02em;
+    color: var(--terminal-green);
+    margin-bottom: 6px;
+  }
+  h1 {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 700;
+    font-size: 30px;
+    letter-spacing: -0.015em;
+    color: var(--chalk);
+    margin-bottom: 8px;
+  }
+  .meta {
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 300;
+    font-style: italic;
+    font-size: 13px;
+    color: rgba(237, 234, 225, 0.6);
+  }
+  h2 {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    color: var(--terminal-green);
+    margin-top: 32px;
+    margin-bottom: 12px;
+    letter-spacing: -0.01em;
+  }
+  p {
+    margin-bottom: 14px;
+    color: var(--chalk);
+  }
+  strong { font-weight: 500; color: #ffffff; }
+  em { color: rgba(237, 234, 225, 0.85); }
+  ol, ul { padding-left: 22px; margin-bottom: 14px; }
+  li { margin-bottom: 8px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0 24px;
+    font-size: 13px;
+  }
+  th {
+    text-align: left;
+    font-family: 'Outfit', sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+    color: var(--terminal-green);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(237, 234, 225, 0.2);
+  }
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(237, 234, 225, 0.08);
+    vertical-align: top;
+  }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr:last-child td { border-bottom: none; }
+  .stix-row td {
+    color: var(--terminal-green);
+    font-weight: 500;
+  }
+  footer {
+    margin-top: 48px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(237, 234, 225, 0.12);
+    font-size: 11px;
+    color: rgba(237, 234, 225, 0.5);
+    font-family: 'DM Sans', sans-serif;
+    font-style: italic;
+    font-weight: 300;
+    letter-spacing: 0.02em;
+  }
+  @media print {
+    body { background: var(--paper); color: var(--pitch-black); padding: 24px; }
+    .wordmark { color: var(--forest); }
+    h2 { color: var(--forest); }
+    strong { color: var(--pitch-black); }
+    th { color: var(--forest); border-bottom-color: rgba(10, 10, 8, 0.2); }
+    td { border-bottom-color: rgba(10, 10, 8, 0.08); }
+    .stix-row td { color: var(--forest); }
+    footer { color: rgba(10, 10, 8, 0.6); border-top-color: rgba(10, 10, 8, 0.15); }
+    em { color: rgba(10, 10, 8, 0.85); }
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+<header>
+  <div class="wordmark">stixanalytix</div>
+  <h1>Where I'm at</h1>
+  <div class="meta">For Nicolas &nbsp;•&nbsp; April 2026 &nbsp;•&nbsp; Joshua Marshall</div>
+</header>
+
+<h2>Where it started → where it is</h2>
+<p>Built originally from a pro hockey goalie coach's spreadsheet. Pivoted to soccer when NHL coaches said it wasn't nuanced enough. Validated in soccer: <strong>BC Soccer</strong> (head of goalkeeper identification) and <strong>Excelsior Rotterdam</strong> (Eredivisie club) both said they love the depth of data and visualizations. Neither will use it if manual entry stays in the workflow. That's the real gap between "this is impressive" and "we'd buy this."</p>
+
+<h2>The wedge</h2>
+<p>Every existing platform treats goalkeeping as secondary. Per the BC Soccer reports I reviewed:</p>
+
+<table>
+  <thead>
+    <tr><th>Platform</th><th class="num">GK data points per report</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>InStat</td><td class="num">~8 (saves by distance, crosses, passes)</td></tr>
+    <tr><td>SciSports</td><td class="num">5 (saves, xSaves, conceded, claims, goalkicks)</td></tr>
+    <tr><td>Hudl</td><td class="num">Basic save counts</td></tr>
+    <tr class="stix-row"><td><strong>stixanalytix</strong></td><td class="num"><strong>50+</strong></td></tr>
+  </tbody>
+</table>
+
+<p>Save type breakdown, shot origin / goal zone mapping, savaibility ranking, 1v1 outcomes, cross handling, distribution accuracy, sweeper actions, rebound control, 15 attribute ratings, 10 coaching alerts, season trend tracking. Not a better spreadsheet — a different product category. Built by a GK coach, for GK coaches.</p>
+
+<h2>The real problem</h2>
+<p>Coaches won't enter data. Not pitchside, not post-match. The core product challenge isn't data depth — it's <strong>getting data in without coach labor</strong>. Which means STIX either automates from video or dies.</p>
+
+<h2>The video direction (where I've landed)</h2>
+<p>Three integration paths:</p>
+<ol>
+  <li><strong>Manual clip linking with VEO.</strong> Friction remains, coaches still do work. Not enough.</li>
+  <li><strong>AI video pipeline.</strong> Upload match video → Gemini 2.5 identifies GK events → auto-populates STIX. Technically possible today. Tiered accuracy: ~85% for basic events, ~55–65% for GK-specific detail, improves with training data. ~$2–8 per match in API cost, under 20 minutes turnaround. <em>This is the direction.</em></li>
+  <li><strong>Platform partnership (VEO).</strong> No public API exists. Partnership is eventual-state, not starting point.</li>
+</ol>
+<p>Adjacent insight: a phone behind the goal is probably a better angle for GK-specific AI analysis than VEO's panoramic midfield view. Workflow and data advantage, VEO-independent.</p>
+
+<h2>The honest hockey update</h2>
+<p>You mentioned the Rink Hockey angle. Worth knowing:</p>
+<ul>
+  <li><strong>Ian Clarke</strong> — NHL-calibre goalie coach with WHL relationships — has a working app "pretty close" to STIX, per Travis (who built STIX's original data model with me)</li>
+  <li>Travis has cooled on hockey marketability after seeing Ian's app and talking to other coaches</li>
+  <li>If hockey is revisited, it can't be the NHL pipeline segment Ian is targeting. Would need to be youth / parent-funded (e.g. your Pursuit of Excellence connection)</li>
+  <li>I don't want to overreach on hockey. Soccer has validation and a clear competitive gap. Hockey needs more intel before it's a direction</li>
+</ul>
+
+<h2>Where I am today</h2>
+<ul>
+  <li>Production app live (Supabase / Vercel / Next.js)</li>
+  <li>Users logging real matches manually — the analytics engine works</li>
+  <li>Strategic docs worked through: video feature spec, dashboard visual upgrade plan, VEO research, AI pipeline approach</li>
+  <li>Solo-building with Claude Code. Self-aware about the limits of that</li>
+</ul>
+
+<h2>Where I know I need help</h2>
+<ol>
+  <li><strong>Architecture and security review.</strong> You offered this in March. Database scaling, RLS hardening, preparing for real-user load. I'd pay for it or trade for it.</li>
+  <li><strong>Video pipeline engineering.</strong> The ML and orchestration stack for automated GK event detection. Beyond what I can responsibly build alone.</li>
+  <li><strong>Product positioning decisions I can't make alone.</strong> The hockey question, pricing model, when and how to bring on paying clubs.</li>
+  <li><strong>Honest sanity checks.</strong> Someone who has been through the prototype → production gauntlet telling me when I'm kidding myself.</li>
+</ol>
+
+<h2>Where I don't know what I need</h2>
+<ul>
+  <li>Capital vs. sweat equity vs. incubation structure — genuinely open</li>
+  <li>Pace — "best moat" (video AI) is a 12+ month build; "fastest revenue" is a different path</li>
+  <li>Whether the Rink Hockey angle is distraction or adjacent-expansion opportunity — your read matters more than mine</li>
+</ul>
+
+<h2>What I'm not asking for</h2>
+<p>I don't have a deck, valuation, or pitch. Markus told me you rarely partner or incubate — that context isn't lost on me. I'm not here to convince you into something. I'd rather understand what kind of involvement, if any, genuinely interests you, then figure out a structure that makes sense for both of us.</p>
+
+<footer>stixanalytix — goalkeeper intelligence platform</footer>
+
+</div>
+</body>
+</html>
