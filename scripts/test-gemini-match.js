@@ -4,11 +4,19 @@ const path = require('path');
 const { GoogleGenerativeAI, SchemaType } = require('@google/generative-ai');
 const { GoogleAIFileManager, FileState } = require('@google/generative-ai/server');
 
+// Resolve test videos from STIXANALYTIX_DATA_ROOT (set in .env.local).
+// Match Library lives at [STIXANALYTIX_DATA_ROOT]/05 - Match Library/Raw Recordings/[Year]/.
+const DATA_ROOT = process.env.STIXANALYTIX_DATA_ROOT;
+if (!DATA_ROOT) {
+  console.error('STIXANALYTIX_DATA_ROOT is not set. Configure it in .env.local — see .env.example.');
+  process.exit(1);
+}
+const MATCH_2024 = path.join(DATA_ROOT, '05 - Match Library', 'Raw Recordings', '2024');
 const VIDEOS = {
-  half1: 'C:\\Users\\joshu\\Downloads\\american_vs_virginia_2024_half1_small.mp4',
-  half2: 'C:\\Users\\joshu\\Downloads\\american_vs_virginia_2024_half2_small.mp4',
-  wylie1: 'C:\\Users\\joshu\\Downloads\\wylie_vs_cooper_2024_half1.mp4',
-  wylie2: 'C:\\Users\\joshu\\Downloads\\wylie_vs_cooper_2024_half2.mp4',
+  half1: path.join(MATCH_2024, 'american_vs_virginia_2024_half1_small.mp4'),
+  half2: path.join(MATCH_2024, 'american_vs_virginia_2024_half2_small.mp4'),
+  wylie1: path.join(MATCH_2024, 'wylie_vs_cooper_2024_half1.mp4'),
+  wylie2: path.join(MATCH_2024, 'wylie_vs_cooper_2024_half2.mp4'),
 };
 
 const key = process.argv[2];
