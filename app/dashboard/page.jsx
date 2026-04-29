@@ -1632,9 +1632,16 @@ export default function DashboardPage() {
           <img src={darkMode ? "/logo.svg" : "/logo-light.svg"} alt="StixAnalytix" style={{ height: 36 }} />
         </Link>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {!isDelegate && <Link href="/staff" style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 12, textDecoration: "none", fontFamily: font, display: "flex", alignItems: "center", gap: 4 }}>👥 Staff</Link>}
+          {!isDelegate && (
+            selectedKeeper ? (
+              <Link href={`/upload?keeper=${selectedKeeper}`} style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 12, textDecoration: "none", fontFamily: font, display: "flex", alignItems: "center", gap: 4 }}>📤 Upload</Link>
+            ) : (
+              <span title="Select a keeper first" style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${t.border}`, background: "transparent", color: t.dim + "88", fontSize: 12, fontFamily: font, display: "flex", alignItems: "center", gap: 4, cursor: "not-allowed" }}>📤 Upload</span>
+            )
+          )}
           <Link href="/pitchside" style={{ padding: "8px 14px", borderRadius: 8, background: primaryColor, color: "#fff", fontSize: 12, fontWeight: 600, textDecoration: "none", display: "flex", alignItems: "center", gap: 4 }}>📱 Pitchside</Link>
           <button onClick={() => setView(view === "analytics" ? "roster" : "analytics")} style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 12, fontFamily: font, cursor: "pointer" }}>{view === "analytics" ? "👥 Roster" : "📊 Analytics"}</button>
+          {!isDelegate && <Link href="/staff" style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 12, textDecoration: "none", fontFamily: font, display: "flex", alignItems: "center", gap: 4 }}>👥 Staff</Link>}
           <button onClick={signOut} style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 12, fontFamily: font, cursor: "pointer" }}>Sign Out</button><div style={{ position: "relative", display: "inline-block" }}><button onClick={() => setShowSettings(!showSettings)} style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid " + t.border, background: "transparent", color: t.dim, fontSize: 14, fontFamily: font, cursor: "pointer" }}>⚙</button>{showSettings && <div onClick={() => setShowSettings(false)} style={{ position: "absolute", right: 0, top: "100%", marginTop: 4, background: t.card, border: "1px solid " + t.border, borderRadius: 8, padding: 8, zIndex: 100, minWidth: 160, boxShadow: "0 8px 24px rgba(0,0,0,0.3)" }}><button onClick={() => { setDarkMode(!darkMode); setShowSettings(false); }} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 12px", background: "none", border: "none", color: t.text, fontSize: 13, fontFamily: font, cursor: "pointer", borderRadius: 6 }}>{darkMode ? "☀️ Light Mode" : "🌙 Dark Mode"}</button></div>}</div>
         </div>
       </div>

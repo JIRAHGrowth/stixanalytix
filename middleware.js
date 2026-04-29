@@ -36,7 +36,7 @@ export async function middleware(request) {
   const { data: { user } } = await supabase.auth.getUser();
 
   // Protected routes → must be logged in
-  const protectedPaths = ['/dashboard', '/pitchside', '/onboarding', '/staff'];
+  const protectedPaths = ['/dashboard', '/pitchside', '/onboarding', '/staff', '/upload'];
   const isProtected = protectedPaths.some(p => pathname.startsWith(p));
 
   if (isProtected && !user) {

@@ -1,7 +1,7 @@
 # StixAnalytix Master Plan
 
 **Status:** Living document. Updated as decisions are made and phases complete.
-**Last updated:** 2026-04-20
+**Last updated:** 2026-04-29
 **Owner:** Josh Marshall
 
 This is the single source of truth for where StixAnalytix is going, how we get there, and the rules we follow along the way. If something contradicts this doc, this doc wins until we update it. If we make a decision in a conversation, it gets written here before the conversation ends.
@@ -135,20 +135,23 @@ Phases are sequential. Each has a clear "done" gate. We do not start phase N+1 u
 
 ### Phase 0 — Foundations
 - [x] Pick video worker host — **Modal** (decided 2026-04-09, see §8)
-- [ ] Set up Cloudflare R2 bucket + signed URL helper
+- [—] Cloudflare R2 bucket + signed URL helper — **deferred per D2.** Supabase Storage in use; R2 swap when D2 cost/scale triggers fire.
 - [x] Create `video_jobs` table in Supabase (status, video_url, match_id, gemini_output, errors, org_id) — applied 2026-04-13, migration `20260413_video_jobs_and_org_id.sql`
 - [x] Add `org_id` column (nullable) to all tenant-scoped tables — applied 2026-04-13, same migration
-- [ ] Get Gemini API key, confirm cost on one real VEO export
+- [x] Gemini API key + cost confirmed — OFC 2016 run on 2026-04-28 used ~935K tokens on `gemini-2.5-pro`, costing roughly $2.50 for a 52-min match.
 - [ ] Set up Sentry (or equivalent) for error tracking
 - [ ] Set up staging environment (Vercel preview + separate Supabase project)
-- **Gate:** one VEO video uploaded → Gemini returns *something* → row in Supabase, all observed in logs
+- **Gate met (2026-04-28):** OFC 2016 video → Gemini returned 12-goal candidate JSON → `video_jobs` row written → coach review JSON loaded into `matches`/`goals_conceded`. Observed end-to-end.
 
 ### Phase 1 — Vertical slice on ONE event type
-- [ ] Pick the easiest event: **goals conceded**
-- [ ] Build the full pipeline end-to-end for goals only:
-  - Upload → R2 → enqueue job → worker runs Gemini → Claude normalises → writes `goals_conceded` row → dashboard renders it
-- [ ] All steps idempotent, all errors caught, all costs logged
-- **Gate:** Josh uploads a real match, walks away, comes back, goals are populated correctly with no manual touch
+- [x] Pick the easiest event: **goals conceded**
+- [x] Build the full pipeline end-to-end for goals only:
+  - File upload (TUS resumable) or URL paste → Supabase Storage signed URL → `/api/video-jobs` → Modal worker → Gemini against [prompts/goals.md](../prompts/goals.md) with team-colour variables → coach review at `/upload/[id]/review` → writes `matches` + `goals_conceded` → dashboard renders it
+- [x] All steps idempotent, all errors caught
+- [ ] Cost logging per `org_id` (deferred — Gemini token usage captured in `video_jobs.gemini_output.usage`, but not aggregated to `org_id`-scoped reporting yet)
+- **Gate (revised, see D7):** Josh uploads a real match, completes the **coach review step** (a deliberate manual checkpoint), goals are populated correctly, and the match shows on the dashboard.
+
+> **Why the gate change:** the original gate said "walks away, comes back, no manual touch." The OFC 2016 run on 2026-04-28 proved Gemini over-detects goals on no-scoreboard youth video (12 candidates for 5 actual goals; missed the only concession). A coach review step is now mandatory for accuracy. This is intentional, not a bug.
 
 ### Phase 2 — Expand event coverage
 - [ ] Add shots, saves, distribution, crosses, 1v1s in priority order
@@ -225,6 +228,9 @@ Decisions waiting on input. Once made, they move to §8.
 |---|---|---|---|---|
 | D3 | Error tracking | Sentry / Highlight / Axiom | Josh | Sentry is default safe pick |
 | D4 | First ground-truth matches | 2–3 VEO exports incoming (~2 weeks) | Josh | Tracked, not blocking yet |
+| D9 | Per-platform integrations (XbotGo, Veo, Hudl OAuth/API fetch) | Build now / phased / never (file upload covers it) | Josh | XbotGo first since user base is XbotGo-heavy. Each ~1–2 days. Could be Phase 1.5. |
+| D10 | Drag-and-drop on Windows file picker | Investigate / leave as-is (click-to-browse works) | Josh | Low priority — fallback works. |
+| D11 | Per-coach correction feedback loop into Gemini prompt | Build now (Phase 1.5) / wait until 5+ matches reviewed / never | Josh | Store every coach correction (Gemini said X, coach said Y) in a `coach_corrections` table, then prepend the last N corrections from the same coach as a calibration preamble to future Gemini prompts. Real differentiator: the model gets smarter per-coach over time. Surfaced 2026-04-29 by user during Judah 2026-04-25 review. ~half-day to build the table + injection layer. |
 
 ---
 
@@ -232,6 +238,10 @@ Decisions waiting on input. Once made, they move to §8.
 
 Decisions made, with date and reasoning. Append-only.
 
+- **2026-04-29** — **D8: Storage provider abstraction (§3.2) flagged as tech debt.** Phase 1 hardcodes `from('match-videos')` in three files (upload page, /api/video-jobs, /api/video-jobs/[id]/publish). Acceptable for now since R2 swap is gated by D2 triggers, but the eventual swap will need ~half a day to introduce a thin storage adapter and update call sites. Tracked in [ROADMAP.md](ROADMAP.md).
+- **2026-04-29** — **D7: Coach review step added to Phase 1 pipeline.** Driver: OFC 2016 ground-truth run on 2026-04-28 — Gemini over-detected (12 candidates / 5 actual goals) and missed the only concession. Auto-publish would corrupt the dashboard. Review screen at `/upload/[id]/review` now sits between Gemini output and writes to `matches`/`goals_conceded`. Phase 1 gate updated to reflect the manual checkpoint as intentional.
+- **2026-04-29** — **D6: File upload pulled into Phase 1 from Phase 4.** Driver: pasting URLs only worked for direct-MP4 endpoints. XbotGo, Veo, and Hudl all serve viewer-pages, not video bytes — making URL-only flow useless to most coaches. File upload via TUS resumable now in /upload form alongside URL paste. URL paste retained as a secondary option for the rare case someone has a direct link.
+- **2026-04-29** — **D2 update: Supabase Storage Pro tier activated.** Driver: Free-tier hard cap of 50 MB per file blocked the first real game upload (1.9 GB). Pro at $25/mo gives up to 50 GB per-file (with the project-level upload-size setting also raised manually to 5 GB). Original D2 swap-to-R2 triggers (a/b/c) still apply, with (a) refined to "Supabase Pro+egress > R2 equivalent by >$50/mo."
 - **2026-04-20** — **D2: Supabase Storage selected for Phase 0 object storage.** Reasoning: Supabase project already provisioned, no new vendor this week, and §3.2 (S3-compatible abstraction) means the swap to R2 is a config change, not a rewrite. **Switch trigger to R2:** any of — (a) monthly Supabase egress bill exceeds R2's zero-egress equivalent by >$50, (b) clip storage crosses 1 TB, or (c) we hit Phase 2 (≥1,000 matches/day) — whichever comes first. Owner on the revisit: Josh (cost check monthly once pilot starts).
 - **2026-04-09** — **D1: Modal selected as Phase 0 video worker host.** Reasoning: built-in queue, retries, secrets, and one-command deploy remove BYO orchestration burden. Python-only is a non-issue for the workload (`download → Gemini → ffmpeg → upload → supabase insert`). Cost is a rounding error at pilot volume; the win is not having to build Pub/Sub bindings or a Postgres job poller before processing the first video. Revisit at Phase 2 (~1,000 matches/day) if economics shift — Fly.io is the likely fallback for compute+egress at scale.
 - **2026-04-09** — **D5: Integrator layer scaffolded and wired to GitHub Actions cron.** Session-local CronCreate rejected because it only fires while Claude Code REPL is open on Josh's laptop — not true 24/7. GitHub Actions cron runs in the cloud, free at this volume, version-controlled in the repo. Workflow at [.github/workflows/integrator.yml](../.github/workflows/integrator.yml).
@@ -247,3 +257,15 @@ Decisions made, with date and reasoning. Append-only.
 - **When making a decision**: write it in §8 the same day
 - **When a phase gate is met**: check the boxes, move to next phase, update §1 timestamp
 - **When this doc gets out of date**: that is a bug. Fix it before doing anything else.
+
+---
+
+## 10. Known Limitations (as of Phase 1, 2026-04-29)
+
+These are things the current build cannot do that we know about. Each has either a workaround, a planned fix, or both.
+
+- **Share URLs from XbotGo / Veo / Hudl don't work in URL-paste mode.** They serve HTML viewer pages, not video bytes. *Workaround:* download from the platform once, then use the file-upload path. *Planned fix:* per-platform integrations (D9).
+- **Gemini accuracy on no-scoreboard, no-clock youth video is materially below pro/college matches.** OFC 2016 baseline: 12 detected vs 5 actual goals; missed the only concession. *Mitigation:* coach review step (D7) is the load-bearing accuracy mechanism; Gemini is treated as a candidate generator, not a source of truth.
+- **TUS resumable upload requires Supabase Pro tier** plus a manual project-level upload-size limit raise. Free tier caps at 50 MB which is below any realistic game video. Documented in D2 update (2026-04-29).
+- **Drag-and-drop file picker doesn't fire on Windows** in some browser/OS combinations. *Workaround:* click the picker area to open the OS file dialog (works reliably). Tracked as D10.
+- **No cost reporting per `org_id` yet.** Gemini token usage is captured per-job in `video_jobs.gemini_output.usage`, but not aggregated. Phase 5 (first paying pilot) will require this; not a blocker for Phase 1 validation.

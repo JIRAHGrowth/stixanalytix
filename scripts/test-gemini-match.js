@@ -19,12 +19,24 @@ const VIDEOS = {
   wylie2: path.join(MATCH_2024, 'wylie_vs_cooper_2024_half2.mp4'),
 };
 
-const key = process.argv[2];
-if (!key || !VIDEOS[key]) {
-  console.error(`Usage: node scripts/test-gemini-match.js <${Object.keys(VIDEOS).join('|')}>`);
+const arg = process.argv[2];
+if (!arg) {
+  console.error(`Usage: node scripts/test-gemini-match.js <${Object.keys(VIDEOS).join('|')}|absolute/path/to/video.mp4>`);
   process.exit(1);
 }
-const VIDEO_PATH = VIDEOS[key];
+let VIDEO_PATH;
+let key;
+if (VIDEOS[arg]) {
+  key = arg;
+  VIDEO_PATH = VIDEOS[arg];
+} else if (fs.existsSync(arg)) {
+  VIDEO_PATH = path.resolve(arg);
+  key = path.basename(VIDEO_PATH, path.extname(VIDEO_PATH));
+} else {
+  console.error(`Not a known key and not an existing file: ${arg}`);
+  console.error(`Known keys: ${Object.keys(VIDEOS).join(', ')}`);
+  process.exit(1);
+}
 
 // Prompt loaded from prompts/goals.md — single source of truth.
 // See prompts/README.md for editing rules.

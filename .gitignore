@@ -16,6 +16,7 @@ out/
 
 # debug
 npm-debug.log*
+dev.log
 
 # vercel
 .vercel

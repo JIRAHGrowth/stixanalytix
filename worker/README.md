@@ -1,16 +1,19 @@
 # StixAnalytix Video Worker
 
-Modal-hosted video processing pipeline. See [docs/MASTER_PLAN.md](../docs/MASTER_PLAN.md) §3.1 for why this lives outside the Next.js app.
+Modal-hosted video processing pipeline. Phase 1 of the upload pipeline: takes a `video_jobs` row created by the Next.js `/upload` flow, downloads the source video, runs Gemini against [`prompts/goals.md`](../prompts/goals.md) with team-colour variables substituted in, writes the structured output to `gemini_output`, and parks the job at `status='review_needed'` for the coach to review and publish via the dashboard.
+
+See [docs/MASTER_PLAN.md](../docs/MASTER_PLAN.md) §3.1 for why this lives outside the Next.js app.
 
 ## One-time setup
 
 1. `pip install -r worker/requirements.txt`
 2. `python -m modal setup` — browser auth, ~1 min.
-3. In the Modal dashboard, create a secret named **`stix-env`** with:
+3. Create a Modal secret named **`stix-env`** in the dashboard with:
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
    - `GEMINI_API_KEY`
-   - `GEMINI_MODEL` (optional, defaults to `gemini-2.5-flash`)
+   - `GEMINI_MODEL` (optional, defaults to `gemini-2.5-pro`)
+   - `MODAL_TRIGGER_SECRET` — generate with `python -c "import secrets;print(secrets.token_urlsafe(32))"`. The Next.js API route presents this in the `X-Trigger-Secret` header; the Modal endpoint rejects unmatched values.
 
 ## Deploy
 
@@ -18,46 +21,44 @@ Modal-hosted video processing pipeline. See [docs/MASTER_PLAN.md](../docs/MASTER
 modal deploy worker/app.py
 ```
 
-## Invoke (Phase 0 manual test)
+The deploy output prints the public URL of the `trigger` web endpoint — looks like `https://<workspace>--stixanalytix-worker-trigger.modal.run`. Copy it into `.env.local` as:
 
-If your test MP4 is on your laptop, first upload it to Supabase Storage to get a URL the Modal worker can reach:
+```
+MODAL_TRIGGER_URL=https://<workspace>--stixanalytix-worker-trigger.modal.run
+MODAL_TRIGGER_SECRET=<the same value you put in the stix-env Modal secret>
+```
+
+Both variables are required for the upload flow to work. Without them, `POST /api/video-jobs` will mark new jobs as failed with a "Worker not configured" message.
+
+## How it runs end-to-end
+
+1. Coach fills in `/upload` form → POST `/api/video-jobs`.
+2. The API route inserts a `video_jobs` row (status='queued') and POSTs `{ job_id }` to the Modal trigger URL.
+3. Modal `trigger` validates `X-Trigger-Secret`, then `process.spawn(job_id)` and returns immediately.
+4. `process` flips status to `analyzing`, downloads the video, uploads it to Gemini Files API (resumable), runs `prompts/goals.md` with `{{my_team_color}}` / `{{my_keeper_color}}` / `{{opponent_color}}` substituted from `match_metadata`, and writes the parsed JSON to `gemini_output` with status='review_needed'.
+5. The coach opens `/upload/[jobId]/review`, accepts/edits/rejects candidate goals, hits Save & Publish.
+6. POST `/api/video-jobs/[id]/publish` writes `matches` + `goals_conceded` rows and sets `published_match_id`. The match appears in the dashboard.
+
+## Manual invoke (debug only)
 
 ```bash
-python worker/upload_test_video.py path/to/match.mp4
-# prints a signed URL — copy it
+modal run worker/app.py::process --job-id <uuid>
 ```
 
-Then enqueue the job:
+Useful for re-processing without recreating the row, or for a job that was created another way (e.g. `worker/enqueue.py`, the legacy CLI path).
 
-```bash
-python worker/enqueue.py \
-  --match-id <uuid of a matches row> \
-  --coach-id <uuid of your profiles row> \
-  --video-url <signed url from step above>
-```
+## Phase 1 scope (currently in)
 
-Then watch `video_jobs` in Supabase:
+- Goal candidates only (uses `prompts/goals.md`)
+- URL-only video source (no in-app file upload)
+- Coach review required before anything reaches `matches`
+- Source URL stored on the published match for deep-link-back
 
-```sql
-select id, status, error_message, gemini_output
-from video_jobs
-order by created_at desc
-limit 5;
-```
+## Out of scope until later phases
 
-## What happens on invoke
-
-1. `enqueue.py` inserts a `video_jobs` row with `status='queued'`.
-2. `modal spawn` kicks off `process(job_id)`.
-3. The worker flips status to `running`, downloads the MP4 to `/tmp`, uploads to Gemini Files API, generates JSON, writes to `gemini_output`, flips to `done`.
-4. On exception: flips to `failed` with `error_message` and `retry_count++`.
-
-## Phase 0 scope
-
-This skeleton intentionally skips:
-- Clip extraction (Phase 4)
-- Multi-event taxonomy (Phase 2)
-- Claude normalisation layer (Phase 1)
-- R2 storage (Phase 0 uses the source `video_url` directly; storage abstraction lives in `lib/supabase-server.js` for Next.js and will move to R2 per MASTER_PLAN D2 trigger)
-
-The goal is the Phase 0 gate: one MP4 → Gemini returns JSON → row in Supabase.
+- Saves on target / shot location (Phase 2)
+- Cross/corner outcomes (Phase 3)
+- Distribution success/fail (Phase 4)
+- Sweeper / rebound / 1v1 / errors (Phase 5)
+- Video file upload + R2 storage (held until coaches need in-app review)
+- Auto-clip extraction (rides on R2)

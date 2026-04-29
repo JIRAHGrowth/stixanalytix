@@ -1,9 +1,11 @@
-# Deps for the Modal worker image (python 3.11 inside Modal).
-# The local CLI (worker/enqueue.py) only needs `modal`, `requests`, and
-# `python-dotenv` — it talks to PostgREST directly to avoid pulling the
-# full `supabase` client on newer local Python versions.
+# Local-only deps for the Modal CLI.
+# The Modal worker image installs its own deps (google-generativeai, supabase,
+# requests) inside the Linux image — see the IMAGE block in worker/app.py.
+# The full supabase client pulls in pyiceberg which doesn't ship Windows
+# wheels for recent Python versions; we don't need it locally so we skip it.
 modal>=1.0.0
-google-genai>=0.3.0
-supabase>=2.9.0
-requests>=2.32.0
 python-dotenv>=1.0.0
+requests>=2.32.0
+# fastapi is only needed locally so `@modal.fastapi_endpoint` can introspect
+# `Header(...)` defaults at deploy time. The Modal image installs its own copy.
+fastapi>=0.115.0
