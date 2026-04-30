@@ -10,7 +10,10 @@ Referenced from:
 
 | File | Purpose | Used by |
 |---|---|---|
-| [goals.md](goals.md) | Goal detection + rich GK-relevant context (attack type, buildup, shot, GK action) | `test-gemini-match.js`, eventually `worker/app.py` |
+| [goals.md](goals.md) | Goal detection + rich GK-relevant context (attack type, buildup, shot, GK action) | `test-gemini-match.js`, `worker/app.py` |
+| [saves.md](saves.md) | Phase 2.1 — every shot the analyzed team's keeper faces, with GK action classification (catch/block/parry/deflect/punch/missed) and Mike Salmon A/B/C body-distance zones | `worker/app.py` |
+| [gk_techniques.md](gk_techniques.md) | STIX GK Technique Encyclopedia — canonical vocabulary, imported from .docx (139 KB / ~35K tokens) | `worker/app.py` (cached, included in every analysis) |
+| [gk_techniques_extraction.md](gk_techniques_extraction.md) | Extraction prompt for pulling structured technique entries from coaching videos (T1TAN etc.) | `scripts/build-gk-encyclopedia.js` |
 
 ## Rules of editing
 

@@ -29,6 +29,13 @@ const SHOT_TYPES = ["Foot", "Header", "Deflection", "Own Goal"];
 const GOAL_SOURCES = ["Open Play", "Corner", "Penalty"];
 const POSITIONING = ["Set", "Moving"];
 const RANKS = ["Saveable", "Difficult", "Unsaveable"];
+const GK_ACTIONS = ["Catch", "Block", "Parry", "Deflect", "Punch", "Missed", "Goal", "unclear"];
+const ON_TARGET_OPTIONS = ["yes", "no", "unclear"];
+const GK_VISIBLE_OPTIONS = ["yes", "partial", "no"];
+const OUTCOMES = ["held", "rebound_safe", "rebound_dangerous", "corner", "out_of_play", "goal"];
+const BODY_ZONES = ["A", "B", "C", "unclear"];
+const GMH_OPTIONS = ["top", "mid", "low", "unclear"];
+const GMS_OPTIONS = ["left_third", "centre", "right_third", "unclear"];
 
 const inputStyle = {
   width: "100%", padding: "8px 10px", fontSize: 12, borderRadius: 6,
@@ -98,6 +105,9 @@ export default function ReviewPage() {
   const [extraGoals, setExtraGoals] = useState([]); // goals Gemini missed (either team)
   const [scoreOverride, setScoreOverride] = useState(null); // {goals_for, goals_against} or null = derive
 
+  // Phase 2.1 — saves review state
+  const [saveRows, setSaveRows] = useState([]);
+
   useEffect(() => {
     if (!user) return;
     let mounted = true;
@@ -135,6 +145,29 @@ export default function ReviewPage() {
         };
       });
       setCandidates(cands);
+
+      // Phase 2.1 — load save events from gemini_output.saves.parsed.saves
+      const savesParsed = json.job?.gemini_output?.saves?.parsed || null;
+      const initialSaves = (savesParsed?.saves || []).map((s, i) => ({
+        _id: `s${i}`,
+        keep: true,
+        timestamp_seconds: s.timestamp_seconds,
+        match_clock: s.match_clock,
+        shot_origin: s.shot_origin || "",
+        shot_type: s.shot_type || "Foot",
+        on_target: s.on_target || "unclear",
+        gk_action: s.gk_action || "unclear",
+        gk_visible: s.gk_visible || "yes",
+        outcome: s.outcome || "",
+        body_distance_zone: s.body_distance_zone || "",
+        goal_placement_height: s.goal_placement_height || "",
+        goal_placement_side: s.goal_placement_side || "",
+        notes: "",
+        // raw Gemini context preserved for review-diff and reference
+        gemini: s,
+      }));
+      setSaveRows(initialSaves);
+
       setLoading(false);
     })();
     return () => { mounted = false; };
@@ -238,6 +271,20 @@ export default function ReviewPage() {
       })),
     };
 
+    // Phase 2.1 — saves payload. Only kept rows go to shot_events.
+    const savesPayload = saveRows.filter(r => r.keep).map(r => ({
+      timestamp_seconds: r.timestamp_seconds,
+      shot_origin: r.shot_origin || null,
+      shot_type: r.shot_type || null,
+      on_target: r.on_target || null,
+      gk_action: r.gk_action || null,
+      gk_visible: r.gk_visible || null,
+      outcome: r.outcome || null,
+      body_distance_zone: r.body_distance_zone || null,
+      goal_placement_height: r.goal_placement_height || null,
+      goal_placement_side: r.goal_placement_side || null,
+    }));
+
     setPublishing(true);
     try {
       const res = await fetch(`/api/video-jobs/${jobId}/publish`, {
@@ -248,6 +295,7 @@ export default function ReviewPage() {
           goals_against: finalScore.goals_against,
           concessions,
           team_scored: teamScored,
+          saves: savesPayload,
           review_diff: reviewDiff,
           notes: notesFromGemini(job, candidates, extraGoals),
         }),
@@ -428,6 +476,9 @@ export default function ReviewPage() {
           <button onClick={() => addExtraGoal(false)} style={{ padding: "8px 14px", borderRadius: 8, border: `1px dashed ${t.red}66`, background: "transparent", color: t.red, fontSize: 12, fontFamily: font, cursor: "pointer" }}>+ Add a goal opponent scored</button>
         </div>
 
+        {/* SAVES TABLE — Phase 2.1 */}
+        <SavesTable rows={saveRows} onChange={setSaveRows} t={t} font={font} />
+
         {/* PUBLISH */}
         {error && <div style={{ color: t.red, fontSize: 12, marginBottom: 12 }}>{error}</div>}
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", padding: "16px 0", borderTop: `1px solid ${t.border}` }}>
@@ -460,6 +511,163 @@ function ConcessionField({ label, value, options, optionLabels, onChange }) {
         {options.map(o => <option key={o} value={o}>{optionLabels?.[o] || o}</option>)}
       </select>
     </div>
+  );
+}
+
+function SavesTable({ rows, onChange, t, font }) {
+  if (!rows || rows.length === 0) {
+    return (
+      <>
+        <h3 style={{ fontSize: 13, fontWeight: 700, color: t.bright, letterSpacing: 0.4, margin: "20px 0 10px" }}>SAVES</h3>
+        <div style={{ background: t.card, border: `1px dashed ${t.border}`, borderRadius: 12, padding: 24, textAlign: "center", color: t.dim, fontSize: 13, marginBottom: 24 }}>
+          Gemini didn't tag any save events for this match. (This is normal if the analysis only ran the goals prompt — the saves prompt was added in Phase 2.1 and only runs on jobs uploaded after the worker redeploy.)
+        </div>
+      </>
+    );
+  }
+
+  const update = (id, patch) => onChange(rows.map(r => r._id === id ? { ...r, ...patch } : r));
+
+  // Compact dropdown styling
+  const sel = {
+    width: "100%", padding: "5px 4px", fontSize: 11, borderRadius: 4,
+    background: t.cardAlt, border: `1px solid ${t.border}`, color: t.bright,
+    fontFamily: font,
+  };
+  const cellStyle = { padding: "8px 6px", borderTop: `1px solid ${t.border}`, verticalAlign: "top" };
+  const headStyle = { padding: "8px 6px", fontSize: 10, color: t.dim, textTransform: "uppercase", letterSpacing: 0.4, fontWeight: 600, textAlign: "left", borderBottom: `1px solid ${t.border}` };
+
+  const fmtTs = (s) => {
+    if (s == null) return "—";
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${m}:${String(r).padStart(2, '0')}`;
+  };
+
+  // Bulk-accept high-confidence rows
+  const acceptHighConfidence = () => {
+    onChange(rows.map(r => ({ ...r, keep: r.gemini?.confidence === "high" ? true : r.keep })));
+  };
+  const rejectLowConfidence = () => {
+    onChange(rows.map(r => ({ ...r, keep: r.gemini?.confidence === "low" ? false : r.keep })));
+  };
+  const acceptAll = () => onChange(rows.map(r => ({ ...r, keep: true })));
+  const rejectAll = () => onChange(rows.map(r => ({ ...r, keep: false })));
+
+  const counts = { high: 0, medium: 0, low: 0, kept: 0 };
+  for (const r of rows) {
+    counts[r.gemini?.confidence || "medium"]++;
+    if (r.keep) counts.kept++;
+  }
+
+  return (
+    <>
+      <h3 style={{ fontSize: 13, fontWeight: 700, color: t.bright, letterSpacing: 0.4, margin: "20px 0 10px" }}>SAVES — {rows.length} candidate{rows.length === 1 ? "" : "s"}</h3>
+      <div style={{ display: "flex", gap: 6, marginBottom: 10, alignItems: "center", flexWrap: "wrap", fontSize: 11, color: t.dim }}>
+        <span>Confidence: {counts.high} high / {counts.medium} medium / {counts.low} low · Keeping {counts.kept}</span>
+        <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+          <button type="button" onClick={acceptHighConfidence} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 11, fontFamily: font, cursor: "pointer" }}>Accept high</button>
+          <button type="button" onClick={rejectLowConfidence} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 11, fontFamily: font, cursor: "pointer" }}>Reject low</button>
+          <button type="button" onClick={acceptAll} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 11, fontFamily: font, cursor: "pointer" }}>Accept all</button>
+          <button type="button" onClick={rejectAll} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 11, fontFamily: font, cursor: "pointer" }}>Reject all</button>
+        </span>
+      </div>
+      <div style={{ background: t.card, border: `1px solid ${t.border}`, borderRadius: 12, padding: 8, marginBottom: 24, overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, color: t.text }}>
+          <thead>
+            <tr>
+              <th style={{ ...headStyle, width: 40 }}>Keep</th>
+              <th style={{ ...headStyle, width: 60 }}>Time</th>
+              <th style={headStyle}>Origin</th>
+              <th style={headStyle}>Type</th>
+              <th style={headStyle}>On Tgt</th>
+              <th style={headStyle}>GK Action</th>
+              <th style={headStyle}>Visible</th>
+              <th style={headStyle}>Outcome</th>
+              <th style={headStyle}>Body</th>
+              <th style={headStyle}>Height</th>
+              <th style={headStyle}>Side</th>
+              <th style={headStyle}>Conf</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => {
+              const dim = !r.keep;
+              const confColor = r.gemini?.confidence === "high" ? t.green : r.gemini?.confidence === "low" ? t.red : t.yellow;
+              return (
+                <tr key={r._id} style={{ opacity: dim ? 0.4 : 1 }}>
+                  <td style={cellStyle}><input type="checkbox" checked={r.keep} onChange={e => update(r._id, { keep: e.target.checked })} /></td>
+                  <td style={{ ...cellStyle, fontWeight: 600, color: t.bright, whiteSpace: "nowrap" }}>{fmtTs(r.timestamp_seconds)}</td>
+                  <td style={cellStyle}>
+                    <select value={r.shot_origin} onChange={e => update(r._id, { shot_origin: e.target.value })} style={sel}>
+                      <option value="">—</option>
+                      <option value="6yard">6yd</option>
+                      <option value="boxL">box L</option>
+                      <option value="boxC">box C</option>
+                      <option value="boxR">box R</option>
+                      <option value="outL">out L</option>
+                      <option value="outC">out C</option>
+                      <option value="outR">out R</option>
+                      <option value="cornerL">corner L</option>
+                      <option value="cornerR">corner R</option>
+                      <option value="unclear">unclear</option>
+                    </select>
+                  </td>
+                  <td style={cellStyle}>
+                    <select value={r.shot_type} onChange={e => update(r._id, { shot_type: e.target.value })} style={sel}>
+                      {["Foot", "Header", "Deflection"].map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </td>
+                  <td style={cellStyle}>
+                    <select value={r.on_target} onChange={e => update(r._id, { on_target: e.target.value })} style={sel}>
+                      {["yes", "no", "unclear"].map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </td>
+                  <td style={cellStyle}>
+                    <select value={r.gk_action} onChange={e => update(r._id, { gk_action: e.target.value })} style={sel}>
+                      {["Catch", "Block", "Parry", "Deflect", "Punch", "Missed", "Goal", "unclear"].map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </td>
+                  <td style={cellStyle}>
+                    <select value={r.gk_visible} onChange={e => update(r._id, { gk_visible: e.target.value })} style={sel}>
+                      {["yes", "partial", "no"].map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </td>
+                  <td style={cellStyle}>
+                    <select value={r.outcome} onChange={e => update(r._id, { outcome: e.target.value })} style={sel}>
+                      <option value="">—</option>
+                      {["held", "rebound_safe", "rebound_dangerous", "corner", "out_of_play", "goal"].map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </td>
+                  <td style={cellStyle}>
+                    <select value={r.body_distance_zone} onChange={e => update(r._id, { body_distance_zone: e.target.value })} style={sel} title="A = near body, B = within 2yd, C = full extension">
+                      <option value="">—</option>
+                      {["A", "B", "C", "unclear"].map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </td>
+                  <td style={cellStyle}>
+                    <select value={r.goal_placement_height} onChange={e => update(r._id, { goal_placement_height: e.target.value })} style={sel}>
+                      <option value="">—</option>
+                      {["top", "mid", "low", "unclear"].map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </td>
+                  <td style={cellStyle}>
+                    <select value={r.goal_placement_side} onChange={e => update(r._id, { goal_placement_side: e.target.value })} style={sel}>
+                      <option value="">—</option>
+                      <option value="left_third">L</option>
+                      <option value="centre">C</option>
+                      <option value="right_third">R</option>
+                      <option value="unclear">?</option>
+                    </select>
+                  </td>
+                  <td style={{ ...cellStyle, color: confColor, fontWeight: 600, fontSize: 10, textTransform: "uppercase" }}>{r.gemini?.confidence || "—"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 

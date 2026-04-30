@@ -78,6 +78,7 @@ function UploadPage() {
     session_type: "match",
     opponent: "",
     venue: "home",
+    age_group: "",            // U6..U18, Senior — drives Gemini spatial calibration
     my_team_color: "",
     opponent_color: "",
     my_keeper_color: "",
@@ -239,6 +240,7 @@ function UploadPage() {
         session_type: form.session_type,
         opponent: form.session_type === "training" ? null : form.opponent,
         venue: form.session_type === "training" ? null : form.venue,
+        age_group: form.age_group || null,
         my_team_color: form.my_team_color.trim().toLowerCase(),
         opponent_color: form.opponent_color.trim().toLowerCase(),
         my_keeper_color: form.my_keeper_color.trim().toLowerCase(),
@@ -343,6 +345,26 @@ function UploadPage() {
                 </Field>
               </div>
             )}
+
+            <Field label="Age group" hint="Calibrates how the analyzer reads the field. Box and goal sizes vary by age.">
+              <select value={form.age_group} onChange={e => setF({ age_group: e.target.value })} style={inputStyle}>
+                <option value="">— pick age group (optional)</option>
+                <option value="U6">U6</option>
+                <option value="U7">U7</option>
+                <option value="U8">U8</option>
+                <option value="U9">U9</option>
+                <option value="U10">U10</option>
+                <option value="U11">U11</option>
+                <option value="U12">U12</option>
+                <option value="U13">U13</option>
+                <option value="U14">U14</option>
+                <option value="U15">U15</option>
+                <option value="U16">U16</option>
+                <option value="U17">U17</option>
+                <option value="U18">U18</option>
+                <option value="Senior">Senior</option>
+              </select>
+            </Field>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
               <Field label="Your team kit" hint="Outfield" required>

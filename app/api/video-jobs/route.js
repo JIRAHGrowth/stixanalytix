@@ -41,6 +41,7 @@ export async function POST(request) {
       session_type: body.session_type,
       opponent: body.opponent || null,
       venue: body.venue || null,
+      age_group: body.age_group || null,
       my_team_color: body.my_team_color,
       opponent_color: body.opponent_color,
       my_keeper_color: body.my_keeper_color,

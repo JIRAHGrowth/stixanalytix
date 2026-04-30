@@ -3,11 +3,23 @@ import { createClient } from '@/lib/supabase-server';
 import { createAdminClient } from '@/lib/supabase-admin';
 
 const VALID_ZONES = new Set(['High L','High C','High R','Mid L','Mid C','Mid R','Low L','Low C','Low R']);
-const VALID_ORIGINS = new Set(['6yard','boxL','boxC','boxR','outL','outC','outR','cornerL','cornerR','crossL','crossR']);
+const VALID_ORIGINS = new Set(['6yard','boxL','boxC','boxR','outL','outC','outR','cornerL','cornerR','crossL','crossR','unclear']);
 const VALID_SOURCES = new Set(['Open Play','Corner','Penalty']);
 const VALID_SHOT_TYPES = new Set(['Foot','Header','Deflection','Own Goal']);
 const VALID_POSITIONING = new Set(['Set','Moving']);
 const VALID_RANKS = new Set(['Saveable','Difficult','Unsaveable']);
+const VALID_GK_ACTIONS = new Set(['Catch','Block','Parry','Deflect','Punch','Missed','Goal','unclear']);
+
+const GK_ACTION_TO_COL = {
+  Catch:   'saves_catch',
+  Parry:   'saves_parry',
+  Block:   'saves_block',
+  Deflect: 'saves_tip',     // matches existing pitchside mapping (saves_tip = deflect)
+  Punch:   'saves_punch',
+  // 'Missed' → counts as goal_against, not a save
+  // 'Goal' → counts as goal_against, not a save
+  // 'unclear' → not counted (coach review needed)
+};
 
 function validateConcession(c, i) {
   const errs = [];
@@ -59,11 +71,27 @@ export async function POST(request, { params }) {
 
     const concessions = Array.isArray(body.concessions) ? body.concessions : [];
     const teamScored = Array.isArray(body.team_scored) ? body.team_scored : [];
+    const saves = Array.isArray(body.saves) ? body.saves : [];
     if (concessions.length !== goalsAgainst) {
       return NextResponse.json({ error: `concessions array length (${concessions.length}) must equal goals_against (${goalsAgainst})` }, { status: 400 });
     }
     const validationErrs = concessions.flatMap((c, i) => validateConcession(c, i));
     if (validationErrs.length) return NextResponse.json({ error: validationErrs.join('; ') }, { status: 400 });
+
+    // Compute saves_* counters and shots-on-target from the kept save events
+    const saveCounts = { saves_catch: 0, saves_parry: 0, saves_block: 0, saves_tip: 0, saves_punch: 0, saves_dive: 0 };
+    let shotsOnTarget = 0, savesTotal = 0;
+    for (const s of saves) {
+      if (s.on_target === 'yes') shotsOnTarget++;
+      const col = GK_ACTION_TO_COL[s.gk_action];
+      if (col) {
+        saveCounts[col] = (saveCounts[col] || 0) + 1;
+        savesTotal++;
+      }
+    }
+    // Goals against also count as shots on target (the shot beat the keeper)
+    shotsOnTarget += goalsAgainst;
+    const savePct = shotsOnTarget > 0 ? savesTotal / shotsOnTarget : 0;
 
     const meta = job.match_metadata || {};
     const result = goalsFor > goalsAgainst ? 'Win' : goalsFor < goalsAgainst ? 'Loss' : 'Draw';
@@ -86,6 +114,10 @@ export async function POST(request, { params }) {
       goals_against: goalsAgainst,
       result,
       goals_conceded: goalsAgainst,
+      shots_on_target: shotsOnTarget,
+      saves: savesTotal,
+      save_percentage: savePct,
+      ...saveCounts,
       was_subbed: !!meta.was_subbed,
       sub_minute: meta.sub_minute || null,
       sub_reason: meta.sub_reason || null,
@@ -120,10 +152,50 @@ export async function POST(request, { params }) {
       }
     }
 
+    // Phase 2.1 — write a shot_events row per kept save event.
+    // Schema: match_id, keeper_id, coach_id, shot_origin, gk_action, goal_zone,
+    //         is_goal, is_off_target, shot_type, event_type, half
+    if (saves.length) {
+      const shotRows = saves.map(s => {
+        const isGoal = s.gk_action === 'Goal';
+        const isOffTarget = s.on_target === 'no';
+        // Map our 3-third side + height into the 9-zone label the dashboard uses
+        // ("High L", "Mid C", etc.). Best-effort — review screen captures both.
+        let goalZone = null;
+        if (s.goal_placement_height && s.goal_placement_side) {
+          const h = s.goal_placement_height === 'top' ? 'High'
+                  : s.goal_placement_height === 'mid' ? 'Mid'
+                  : s.goal_placement_height === 'low' ? 'Low' : null;
+          const sd = s.goal_placement_side === 'left_third' ? 'L'
+                   : s.goal_placement_side === 'centre' ? 'C'
+                   : s.goal_placement_side === 'right_third' ? 'R' : null;
+          if (h && sd) goalZone = `${h} ${sd}`;
+        }
+        return {
+          match_id: matchId,
+          keeper_id: job.keeper_id,
+          coach_id: user.id,
+          shot_origin: s.shot_origin === 'unclear' ? null : (s.shot_origin || null),
+          gk_action: s.gk_action === 'unclear' ? null : (s.gk_action || null),
+          goal_zone: goalZone,
+          is_goal: isGoal,
+          is_off_target: isOffTarget,
+          shot_type: s.shot_type || null,
+          event_type: 'Shot',
+          half: null, // pitchside uses 'H1'/'H2'; we don't capture that today
+        };
+      });
+      const { error: seErr } = await admin.from('shot_events').insert(shotRows);
+      if (seErr) {
+        console.error('shot_events insert failed (non-fatal):', seErr);
+        // Don't roll back the match — shot_events are supplementary.
+      }
+    }
+
     const { error: updErr } = await admin.from('video_jobs').update({
       status: 'published',
       published_match_id: matchId,
-      reviewed_output: { goals_for: goalsFor, goals_against: goalsAgainst, concessions },
+      reviewed_output: { goals_for: goalsFor, goals_against: goalsAgainst, concessions, saves_count: saves.length },
     }).eq('id', id);
     if (updErr) {
       // Match landed but we couldn't flag the job — non-fatal but log it.
