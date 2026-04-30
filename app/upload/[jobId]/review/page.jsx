@@ -204,6 +204,40 @@ export default function ReviewPage() {
       return;
     }
 
+    // Review diff — feeds D11 (per-coach correction feedback loop).
+    // The publish endpoint diffs this against Gemini's original output and
+    // writes per-correction rows to coach_corrections.
+    const reviewDiff = {
+      candidates: candidates.map(c => ({
+        gemini_index: parseInt(c._id.replace('g', ''), 10),
+        keep: !!c.keep,
+        scored_by_us: c.scored_by_us,
+        edited_fields: c.scored_by_us === false ? {
+          goal_zone: c.goal_zone || null,
+          shot_origin: c.shot_origin || null,
+          goal_source: c.goal_source || null,
+          shot_type: c.shot_type || null,
+          gk_positioning: c.gk_positioning || null,
+          goal_rank: c.goal_rank || null,
+        } : null,
+        notes: c.notes || null,
+      })),
+      extras: extraGoals.map(g => ({
+        scored_by_us: g.scored_by_us,
+        timestamp_seconds: tsStrToSeconds(g.timestamp_str),
+        timestamp_str: g.timestamp_str || null,
+        notes: g.notes || null,
+        fields: g.scored_by_us === false ? {
+          goal_zone: g.goal_zone || null,
+          shot_origin: g.shot_origin || null,
+          goal_source: g.goal_source || null,
+          shot_type: g.shot_type || null,
+          gk_positioning: g.gk_positioning || null,
+          goal_rank: g.goal_rank || null,
+        } : null,
+      })),
+    };
+
     setPublishing(true);
     try {
       const res = await fetch(`/api/video-jobs/${jobId}/publish`, {
@@ -214,6 +248,7 @@ export default function ReviewPage() {
           goals_against: finalScore.goals_against,
           concessions,
           team_scored: teamScored,
+          review_diff: reviewDiff,
           notes: notesFromGemini(job, candidates, extraGoals),
         }),
       });

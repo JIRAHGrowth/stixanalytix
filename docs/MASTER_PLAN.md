@@ -1,7 +1,7 @@
 # StixAnalytix Master Plan
 
 **Status:** Living document. Updated as decisions are made and phases complete.
-**Last updated:** 2026-04-29
+**Last updated:** 2026-04-30
 **Owner:** Josh Marshall
 
 This is the single source of truth for where StixAnalytix is going, how we get there, and the rules we follow along the way. If something contradicts this doc, this doc wins until we update it. If we make a decision in a conversation, it gets written here before the conversation ends.
@@ -230,7 +230,6 @@ Decisions waiting on input. Once made, they move to §8.
 | D4 | First ground-truth matches | 2–3 VEO exports incoming (~2 weeks) | Josh | Tracked, not blocking yet |
 | D9 | Per-platform integrations (XbotGo, Veo, Hudl OAuth/API fetch) | Build now / phased / never (file upload covers it) | Josh | XbotGo first since user base is XbotGo-heavy. Each ~1–2 days. Could be Phase 1.5. |
 | D10 | Drag-and-drop on Windows file picker | Investigate / leave as-is (click-to-browse works) | Josh | Low priority — fallback works. |
-| D11 | Per-coach correction feedback loop into Gemini prompt | Build now (Phase 1.5) / wait until 5+ matches reviewed / never | Josh | Store every coach correction (Gemini said X, coach said Y) in a `coach_corrections` table, then prepend the last N corrections from the same coach as a calibration preamble to future Gemini prompts. Real differentiator: the model gets smarter per-coach over time. Surfaced 2026-04-29 by user during Judah 2026-04-25 review. ~half-day to build the table + injection layer. |
 
 ---
 
@@ -238,6 +237,8 @@ Decisions waiting on input. Once made, they move to §8.
 
 Decisions made, with date and reasoning. Append-only.
 
+- **2026-04-30** — **D12: STIX GK Technique Encyclopedia wired into worker.** Imported the user's `Goalkeeper_Encyclopedia_of_Save_Technique.docx` (139 KB / ~35K tokens) into [prompts/gk_techniques.md](../prompts/gk_techniques.md) via [scripts/import-gk-encyclopedia-docx.js](../scripts/import-gk-encyclopedia-docx.js). Worker appends it to every Gemini prompt so `gk_observations` use canonical STIX vocabulary (smother, K-barrier, strong parry, starfish, etc.) instead of generic broadcast terms. Cost: ~$0.04/analysis. Phase 3 §"GK-specific depth (the moat)" foundation now in place.
+- **2026-04-30** — **D11: Per-coach correction feedback loop shipped.** New `coach_corrections` table (RLS: coach reads own, service writes); publish API diffs Gemini's output vs the coach's review and writes correction rows; worker prepends a per-coach calibration preamble to every Gemini prompt. Backfilled 5 corrections from the OFC 2016 review for the dev coach; preamble preview at [scripts/preview-calibration.js](../scripts/preview-calibration.js). Effect: model gets smarter per-coach with every match. Cost: ~$0.0003/analysis (~200 tokens). Closes the loop on Phase 1; Phase 2 events ride on top of it.
 - **2026-04-29** — **D8: Storage provider abstraction (§3.2) flagged as tech debt.** Phase 1 hardcodes `from('match-videos')` in three files (upload page, /api/video-jobs, /api/video-jobs/[id]/publish). Acceptable for now since R2 swap is gated by D2 triggers, but the eventual swap will need ~half a day to introduce a thin storage adapter and update call sites. Tracked in [ROADMAP.md](ROADMAP.md).
 - **2026-04-29** — **D7: Coach review step added to Phase 1 pipeline.** Driver: OFC 2016 ground-truth run on 2026-04-28 — Gemini over-detected (12 candidates / 5 actual goals) and missed the only concession. Auto-publish would corrupt the dashboard. Review screen at `/upload/[id]/review` now sits between Gemini output and writes to `matches`/`goals_conceded`. Phase 1 gate updated to reflect the manual checkpoint as intentional.
 - **2026-04-29** — **D6: File upload pulled into Phase 1 from Phase 4.** Driver: pasting URLs only worked for direct-MP4 endpoints. XbotGo, Veo, and Hudl all serve viewer-pages, not video bytes — making URL-only flow useless to most coaches. File upload via TUS resumable now in /upload form alongside URL paste. URL paste retained as a secondary option for the rare case someone has a direct link.

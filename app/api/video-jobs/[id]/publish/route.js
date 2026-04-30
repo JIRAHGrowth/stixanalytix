@@ -130,6 +130,26 @@ export async function POST(request, { params }) {
       console.error('Failed to mark job published:', updErr);
     }
 
+    // D11: write coach_corrections rows so future analyses for this coach can
+    // be calibrated against past corrections. Non-fatal if this fails.
+    try {
+      const corrections = computeCorrections({
+        geminiOutput: job.gemini_output,
+        reviewDiff: body.review_diff,
+        meta,
+        coachId: user.id,
+        videoJobId: id,
+        matchId,
+      });
+      if (corrections.length) {
+        const { error: corrErr } = await admin.from('coach_corrections').insert(corrections);
+        if (corrErr) console.error('coach_corrections insert failed:', corrErr);
+        else console.log(`[publish] wrote ${corrections.length} coach_corrections row(s)`);
+      }
+    } catch (e) {
+      console.error('coach_corrections diff failed (non-fatal):', e);
+    }
+
     // Clean up the uploaded video file once we have the analyzed output safely
     // in matches/goals_conceded. Storage isn't free.
     if (job.storage_path) {
@@ -141,4 +161,142 @@ export async function POST(request, { params }) {
     console.error('publish error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
+}
+
+/**
+ * D11 — diff Gemini's output against the coach's review and produce
+ * coach_corrections rows. We're conservative: only emit corrections when
+ * we have a clear signal. This data is the lifeblood of the per-coach
+ * calibration loop, so quality > quantity.
+ */
+function computeCorrections({ geminiOutput, reviewDiff, meta, coachId, videoJobId, matchId }) {
+  const out = [];
+  const geminiGoals = geminiOutput?.parsed?.goals || [];
+  const myColor = String(meta?.my_team_color || '').toLowerCase();
+  const oppColor = String(meta?.opponent_color || '').toLowerCase();
+  const baseRow = (correction_type, gemini_value, coach_value) => ({
+    coach_id: coachId,
+    video_job_id: videoJobId,
+    match_id: matchId,
+    correction_type,
+    gemini_value: gemini_value || null,
+    coach_value: coach_value || null,
+    match_metadata: {
+      my_team_color: meta?.my_team_color,
+      opponent_color: meta?.opponent_color,
+      my_keeper_color: meta?.my_keeper_color,
+      session_type: meta?.session_type,
+      opponent: meta?.opponent,
+      // Capture whether scoreboard was visible in Gemini's view — useful
+      // calibration signal (no-scoreboard youth video has different error
+      // patterns than broadcast).
+      scoreboard_visible_any: geminiGoals.some(g =>
+        g.scoreboard_before && g.scoreboard_before !== 'not_visible' && g.scoreboard_before !== ''
+      ),
+    },
+  });
+
+  if (!reviewDiff) return out;
+
+  // Walk each Gemini candidate and the coach's verdict on it
+  for (const cand of (reviewDiff.candidates || [])) {
+    const gemini = geminiGoals[cand.gemini_index];
+    if (!gemini) continue;
+    const geminiThinksMyTeamScored =
+      myColor && String(gemini.scoring_team || '').toLowerCase().includes(myColor);
+    const geminiThinksOppScored =
+      oppColor && String(gemini.scoring_team || '').toLowerCase().includes(oppColor);
+
+    if (!cand.keep) {
+      out.push(baseRow('false_positive', gemini, null));
+      continue;
+    }
+
+    // Team flip detection
+    if (cand.scored_by_us === true && geminiThinksOppScored) {
+      out.push(baseRow('wrong_team', gemini, { scored_by: 'us' }));
+    } else if (cand.scored_by_us === false && geminiThinksMyTeamScored) {
+      out.push(baseRow('wrong_team', gemini, { scored_by: 'opponent' }));
+    }
+
+    // Field-level corrections (only meaningful for concessions where we
+    // capture structured fields)
+    if (cand.scored_by_us === false && cand.edited_fields) {
+      // Compare Gemini's defaults to coach's pick. We re-derive Gemini's
+      // suggested values the same way the review screen does so we can tell
+      // what was changed.
+      const geminiZone = mapZone(gemini);
+      const geminiSource = mapSource(gemini.attack_type);
+      const geminiShotType = mapShotType(gemini.shot_type);
+      const f = cand.edited_fields;
+
+      if (f.goal_zone && geminiZone && f.goal_zone !== geminiZone) {
+        out.push(baseRow('wrong_zone',
+          { gemini_zone: geminiZone, gemini_height: gemini.goal_placement_height, gemini_side: gemini.goal_placement_side },
+          { coach_zone: f.goal_zone }));
+      }
+      if (f.goal_source && geminiSource && f.goal_source !== geminiSource) {
+        out.push(baseRow('wrong_attack_type',
+          { gemini_attack_type: gemini.attack_type, mapped: geminiSource },
+          { coach_source: f.goal_source }));
+      }
+      if (f.shot_type && geminiShotType && f.shot_type !== geminiShotType) {
+        out.push(baseRow('wrong_shot_type',
+          { gemini_shot_type: gemini.shot_type, mapped: geminiShotType },
+          { coach_shot_type: f.shot_type }));
+      }
+    }
+
+    // If the candidate was kept with no team flip and no field change, that's
+    // a positive signal (model got it right or close enough).
+    const teamFlipped =
+      (cand.scored_by_us === true && geminiThinksOppScored) ||
+      (cand.scored_by_us === false && geminiThinksMyTeamScored);
+    if (cand.keep && !teamFlipped) {
+      out.push(baseRow('kept_as_is', gemini, { notes: cand.notes || null }));
+    }
+  }
+
+  // Extras — coach added goals Gemini missed. Each is a missed_goal correction.
+  for (const ex of (reviewDiff.extras || [])) {
+    out.push(baseRow('missed_goal',
+      null,
+      {
+        scored_by_us: ex.scored_by_us,
+        timestamp_seconds: ex.timestamp_seconds,
+        timestamp_str: ex.timestamp_str,
+        notes: ex.notes,
+        fields: ex.fields,
+      }));
+  }
+
+  return out;
+}
+
+// Mirrors the defaults in app/upload/[jobId]/review/page.jsx — kept here so
+// the publish API can compute the same Gemini-suggested values for diffing.
+function mapZone(g) {
+  const h = String(g.goal_placement_height || '').toLowerCase();
+  const s = String(g.goal_placement_side || '').toLowerCase();
+  let height = '';
+  if (h.startsWith('top')) height = 'High';
+  else if (h.startsWith('mid')) height = 'Mid';
+  else if (h.startsWith('low')) height = 'Low';
+  let side = '';
+  if (s === 'centre' || s === 'center') side = 'C';
+  if (!height || !side) return null;
+  return `${height} ${side}`;
+}
+function mapSource(attack_type) {
+  const v = String(attack_type || '').toLowerCase();
+  if (v === 'corner') return 'Corner';
+  if (v === 'penalty') return 'Penalty';
+  if (v === 'open_play' || v === 'counter_attack') return 'Open Play';
+  return null;
+}
+function mapShotType(shot_type) {
+  const v = String(shot_type || '').toLowerCase();
+  if (v.includes('header')) return 'Header';
+  if (v.includes('deflection')) return 'Deflection';
+  return 'Foot';
 }

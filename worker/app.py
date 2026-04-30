@@ -76,6 +76,99 @@ def _render_prompt(template: str, vars: dict) -> str:
     return out
 
 
+def _build_calibration_preamble(sb, coach_id: str, limit: int = 30) -> str:
+    """D11: per-coach calibration from past corrections.
+
+    Pulls the coach's most recent N correction rows, buckets by correction_type,
+    and emits a compact natural-language preamble that nudges Gemini toward
+    this coach's observed judgment patterns. Returns empty string if no
+    corrections exist yet (first-match coaches).
+
+    Cheap by design: a few hundred tokens at most, regardless of how many
+    corrections are stored. The model pattern-matches the bullets itself.
+    """
+    try:
+        res = sb.table("coach_corrections").select(
+            "correction_type, gemini_value, coach_value, match_metadata, created_at"
+        ).eq("coach_id", coach_id).order("created_at", desc=True).limit(limit).execute()
+        rows = res.data or []
+    except Exception as e:
+        print(f"[calibration] could not fetch corrections: {e}")
+        return ""
+
+    if not rows:
+        return ""
+
+    # Bucket by type
+    by_type = {}
+    for r in rows:
+        by_type.setdefault(r["correction_type"], []).append(r)
+
+    n_total = len(rows)
+    n_kept = len(by_type.get("kept_as_is", []))
+    n_false_pos = len(by_type.get("false_positive", []))
+    n_missed = len(by_type.get("missed_goal", []))
+    n_team_flipped = len(by_type.get("wrong_team", []))
+    n_zone_changed = len(by_type.get("wrong_zone", []))
+    n_attack_changed = len(by_type.get("wrong_attack_type", []))
+    n_shot_changed = len(by_type.get("wrong_shot_type", []))
+
+    lines = [
+        "# CALIBRATION FROM THIS COACH",
+        "",
+        f"This coach has reviewed {n_total} of your past goal candidates across previous matches.",
+        f"They kept {n_kept} as-is, rejected {n_false_pos} as false positives, "
+        f"added {n_missed} goals you missed, "
+        f"flipped {n_team_flipped} on scoring team, and edited fields on "
+        f"{n_zone_changed + n_attack_changed + n_shot_changed} (zone/attack/shot type).",
+        "",
+        "Apply this calibration:",
+        "",
+    ]
+
+    # False positives — what kind of events does this coach NOT consider goals?
+    if n_false_pos:
+        examples = by_type["false_positive"][:5]
+        attack_types = [str((e.get("gemini_value") or {}).get("attack_type", "")).lower() for e in examples]
+        shot_types = [str((e.get("gemini_value") or {}).get("shot_type", "")).lower() for e in examples]
+        rebound_count = sum(1 for s in shot_types if "rebound" in s)
+        lines.append(f"- You over-detect ({n_false_pos} false-positives in last {n_total}). " +
+                     ("Many were rebounds (rebound count: " + str(rebound_count) + "). Treat rebound shots as continuations of one play, not new goals." if rebound_count >= 2 else
+                      "Be more conservative — require clear celebration AND restart, not just ball-in-net frames."))
+
+    # Missed goals — coach added goals you didn't see
+    if n_missed:
+        examples = by_type["missed_goal"][:5]
+        opp_misses = sum(1 for e in examples if (e.get("coach_value") or {}).get("scored_by_us") is False)
+        my_misses = sum(1 for e in examples if (e.get("coach_value") or {}).get("scored_by_us") is True)
+        if opp_misses > my_misses:
+            lines.append(f"- You under-detect goals scored by the OPPONENT ({opp_misses} of {n_missed} missed goals were the opponent's). On lopsided matches, the dominated team's rare goals are easy to miss — watch for them deliberately, especially against the run of play.")
+        elif my_misses > opp_misses:
+            lines.append(f"- You under-detect goals scored by the analyzed team ({my_misses} of {n_missed} missed goals). Don't let the analyzed team's dominance make you complacent on confirmed celebrations.")
+        else:
+            lines.append(f"- You missed {n_missed} real goals. Re-read the rule: a goal counts only on celebration + restart OR scoreboard change. If both are clear, count it even if camera quality is poor.")
+
+    # Team flips
+    if n_team_flipped:
+        lines.append(f"- You misattribute scoring_team frequently ({n_team_flipped} flips in last {n_total}). When the ball crosses the line, find the celebrating jerseys and the team kicking off afterwards. Use the colour labels exactly as defined in MATCH CONTEXT.")
+
+    # Zone corrections
+    if n_zone_changed:
+        lines.append(f"- This coach has corrected your `goal_placement` mapping {n_zone_changed} times. Be precise on `top/mid/low` and `near_post/centre/far_post` — re-watch the frame where the ball crosses the line, don't approximate.")
+
+    # Attack type corrections
+    if n_attack_changed:
+        lines.append(f"- This coach has corrected your `attack_type` {n_attack_changed} times. Use the strict definitions: `corner` only if from a corner kick directly, `counter_attack` only if your team won the ball in own half and scored within ~20s, `open_play` is the default. Don't conflate them.")
+
+    if not any([n_false_pos, n_missed, n_team_flipped, n_zone_changed, n_attack_changed, n_shot_changed]):
+        # All corrections were "kept_as_is" — strong positive signal
+        lines.append(f"- This coach has accepted all {n_kept} of your past candidates without changes. Your judgment is calibrated for this coach's matches; continue applying the same standards.")
+
+    lines.append("")
+    lines.append("Apply this calibration silently — don't mention it in your output. Just let it shift your thresholds and labels.")
+    return "\n".join(lines)
+
+
 @app.function(image=IMAGE, secrets=[secret], timeout=1800)
 def process(job_id: str) -> dict:
     from datetime import datetime, timezone
@@ -113,6 +206,12 @@ def process(job_id: str) -> dict:
             "my_keeper_color": meta.get("my_keeper_color"),
             "opponent_color": meta.get("opponent_color"),
         })
+
+        # D11 — prepend per-coach calibration from past corrections.
+        # Cheap signal that gets richer with every match.
+        calibration = _build_calibration_preamble(sb, job["coach_id"])
+        if calibration:
+            prompt = calibration + "\n\n---\n\n" + prompt
 
         # Append the GK technique reference if present. Adds ~35K tokens (~$0.04
         # per Pro analysis) but gives Gemini consistent canonical vocabulary
