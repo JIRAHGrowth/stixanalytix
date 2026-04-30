@@ -114,6 +114,16 @@ def process(job_id: str) -> dict:
             "opponent_color": meta.get("opponent_color"),
         })
 
+        # Append the GK technique reference if present. Adds ~35K tokens (~$0.04
+        # per Pro analysis) but gives Gemini consistent canonical vocabulary
+        # for `gk_observations`. See scripts/import-gk-encyclopedia-docx.js.
+        encyclopedia_path = Path("/root/prompts/gk_techniques.md")
+        if encyclopedia_path.exists():
+            prompt += "\n\n---\n\n# REFERENCE — STIX Goalkeeper Technique Encyclopedia\n\n"
+            prompt += "Use the technique names from this reference when describing GK actions. "
+            prompt += "Do not invent vocabulary; if a technique you observe is not in this reference, describe it in plain observables.\n\n"
+            prompt += encyclopedia_path.read_text(encoding="utf-8")
+
         with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
             r = requests.get(job["video_url"], stream=True, timeout=600)
             r.raise_for_status()
