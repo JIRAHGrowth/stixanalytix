@@ -9,6 +9,7 @@ Local utilities supporting the video pipeline. The live production flow runs thr
 - `build-gk-encyclopedia.js` — extract GK technique knowledge from coaching videos (T1TAN academy, etc.) into per-video JSONs. See [GK Encyclopedia workflow](#gk-encyclopedia-workflow) below.
 - `aggregate-gk-encyclopedia.js` — merge per-video JSONs into a single `prompts/gk_techniques.md` reference doc.
 - `setup-vercel-env.js` — push `.env.local` Modal vars to Vercel via API. One-shot.
+- `eval-match.js` — eval harness: compares Gemini's output for a match to coach-tagged ground truth, prints precision/recall per event type. See [Eval workflow](#eval-workflow) below.
 
 ---
 
@@ -134,3 +135,67 @@ The aggregator is conservative — if two videos use slightly different names fo
 - Pro on the same: ~$0.50–2
 
 Dozens of videos at Flash: well under $20 total. One-time cost.
+
+---
+
+## Eval workflow
+
+Goal: every prompt change becomes **measurable** rather than vibes-based. Without this, "I tweaked the prompt and goals look better" is unfalsifiable.
+
+The eval compares Gemini's output for a match against a coach-tagged ground-truth JSON file and prints:
+
+- **Precision** — of what Gemini reported, what fraction was real
+- **Recall** — of what really happened, what fraction did Gemini catch
+- **Per-event matched pairs**, false negatives (missed by Gemini), false positives (Gemini reported but not real)
+- **Action accuracy** for matched saves (did Gemini classify the gk_action correctly?)
+
+### Step 1 — tag the ground truth while watching the match
+
+Copy the template:
+
+```
+cp scripts/ground-truth/_template.json scripts/ground-truth/<match-name>.json
+```
+
+Open the file, fill in the metadata + `events.goals` + `events.saves` while watching the recording. Use MM:SS format for timestamps. Notes are optional but helpful for diagnosing prompt failures.
+
+This is the time-consuming part — but it only needs to happen once per match, and the resulting ground-truth files become a permanent test set that survives every future prompt change.
+
+### Step 2 — upload the same match through the normal pipeline
+
+Use `/upload` as you normally would. Note the `video_job_id` (visible in the URL or in Supabase's `video_jobs` table).
+
+### Step 3 — run the eval
+
+```
+node scripts/eval-match.js \
+  --truth scripts/ground-truth/<match-name>.json \
+  --job <video_job_id> \
+  --tolerance 10 \
+  --save-report
+```
+
+The `--tolerance 10` means events within ±10 seconds match each other. `--save-report` writes a dated report to `scripts/eval-reports/` so you can track accuracy over time.
+
+### Step 4 — compare prompt versions
+
+After tweaking a prompt, upload the same match again (cheap with caching), get a new `video_job_id`, and run:
+
+```
+node scripts/eval-match.js --job <new-id> --vs-job <old-id>
+```
+
+This compares two Gemini runs without needing ground truth — useful for "did this prompt change shift the output, and how?"
+
+### Building the eval set over time
+
+Aim for 5–10 ground-truth-tagged matches across different conditions:
+
+- High-action match with many saves
+- Low-action match (one team dominated)
+- Match with a clear scoreboard / on-screen clock
+- Match without any scoreboard
+- Match with cross-heavy attacks
+- Match with distance-shooting
+
+Once the set has 5+ matches, you can run all of them after a prompt change and see the aggregate effect. Per-match accuracy varies; the aggregate is the signal.
