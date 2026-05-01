@@ -207,7 +207,7 @@ def _build_calibration_preamble(sb, coach_id: str, limit: int = 30) -> str:
     return "\n".join(lines)
 
 
-@app.function(image=IMAGE, secrets=[secret], timeout=1800)
+@app.function(image=IMAGE, secrets=[secret], timeout=3600)
 def process(job_id: str) -> dict:
     from datetime import datetime, timezone
     from pathlib import Path
@@ -260,19 +260,39 @@ def process(job_id: str) -> dict:
         spatial_calibration = _build_spatial_calibration(meta)
 
         # === Download the source video to /tmp ===
+        download_start = time.time()
+        print(f"[download] fetching video from storage...", flush=True)
         with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
             r = requests.get(job["video_url"], stream=True, timeout=600)
             r.raise_for_status()
             for chunk in r.iter_content(chunk_size=1024 * 1024):
                 f.write(chunk)
             video_path = f.name
+        size_mb = os.path.getsize(video_path) / (1024 * 1024)
+        print(f"[download] {size_mb:.1f} MB in {time.time() - download_start:.0f}s", flush=True)
 
         # === Upload to Gemini Files API ===
+        upload_start = time.time()
+        print(f"[gemini] uploading file...", flush=True)
         genai.configure(api_key=os.environ["GEMINI_API_KEY"])
         uploaded = genai.upload_file(path=video_path, mime_type="video/mp4")
+        print(f"[gemini] uploaded in {time.time() - upload_start:.0f}s, waiting for indexing...", flush=True)
+
+        # Hard ceiling on Gemini's PROCESSING wait. Without this, a stalled
+        # Gemini file processor would hang the worker until Modal kills it
+        # — which leaves the DB in 'analyzing' until the janitor sweeps it.
+        process_start = time.time()
+        PROCESS_TIMEOUT_SECS = 20 * 60  # 20 min hard cap on Gemini indexing
+        last_log = time.time()
         while uploaded.state.name == "PROCESSING":
+            if time.time() - process_start > PROCESS_TIMEOUT_SECS:
+                raise RuntimeError(f"Gemini file processing exceeded {PROCESS_TIMEOUT_SECS}s — aborting")
+            if time.time() - last_log > 60:
+                print(f"[gemini] still indexing after {(time.time() - process_start):.0f}s...", flush=True)
+                last_log = time.time()
             time.sleep(5)
             uploaded = genai.get_file(uploaded.name)
+        print(f"[gemini] indexing done in {time.time() - process_start:.0f}s, state={uploaded.state.name}", flush=True)
         if uploaded.state.name != "ACTIVE":
             raise RuntimeError(f"Gemini file ended in state {uploaded.state.name}")
 
@@ -461,6 +481,35 @@ def _build_spatial_calibration(meta: dict) -> str:
         "absolute heights or precise corner positions — single-camera 2D footage cannot "
         "support that precision honestly.\n"
     )
+
+
+@app.function(image=IMAGE, secrets=[secret], schedule=modal.Period(minutes=10))
+def janitor() -> dict:
+    """Run every 10 min. Marks any job stuck in 'analyzing' for >65 min as
+    failed — covers Modal timeouts, crashes, OOM kills, etc. that prevent the
+    main `process` function's exception handler from running.
+
+    The 65-min ceiling = 60-min main timeout + 5-min buffer for clock skew.
+    """
+    import os as _os
+    from datetime import datetime, timezone, timedelta
+    from supabase import create_client as _create_client
+
+    sb = _create_client(
+        _os.environ["NEXT_PUBLIC_SUPABASE_URL"],
+        _os.environ["SUPABASE_SERVICE_ROLE_KEY"],
+    )
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=65)).isoformat()
+    res = sb.table("video_jobs").select("id, started_at").eq("status", "analyzing").lt("started_at", cutoff).execute()
+    rescued = []
+    for row in (res.data or []):
+        sb.table("video_jobs").update({
+            "status": "failed",
+            "error_message": "Worker died without writing status (timeout / crash / OOM). Auto-recovered by janitor. Retry from the upload page.",
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+        }).eq("id", row["id"]).execute()
+        rescued.append(row["id"])
+    return {"rescued": rescued, "count": len(rescued)}
 
 
 from fastapi import Header, HTTPException
