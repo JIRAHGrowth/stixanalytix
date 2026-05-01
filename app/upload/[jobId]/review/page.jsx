@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Fragment } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
@@ -271,9 +271,11 @@ export default function ReviewPage() {
       })),
     };
 
-    // Phase 2.1 — saves payload. Only kept rows go to shot_events.
+    // Phase 2.1 — saves payload. Only kept rows go to shot_events. Coach-added
+    // rows convert their MM:SS string into seconds; Gemini-detected rows already
+    // have timestamp_seconds.
     const savesPayload = saveRows.filter(r => r.keep).map(r => ({
-      timestamp_seconds: r.timestamp_seconds,
+      timestamp_seconds: r.coach_added ? tsStrToSeconds(r.timestamp_str) : r.timestamp_seconds,
       shot_origin: r.shot_origin || null,
       shot_type: r.shot_type || null,
       on_target: r.on_target || null,
@@ -283,6 +285,10 @@ export default function ReviewPage() {
       body_distance_zone: r.body_distance_zone || null,
       goal_placement_height: r.goal_placement_height || null,
       goal_placement_side: r.goal_placement_side || null,
+      coach_added: !!r.coach_added,
+      shot_description: r.shot_description || null,
+      gk_observations: r.gk_observations || null,
+      notes: r.notes || null,
     }));
 
     setPublishing(true);
@@ -297,7 +303,7 @@ export default function ReviewPage() {
           team_scored: teamScored,
           saves: savesPayload,
           review_diff: reviewDiff,
-          notes: notesFromGemini(job, candidates, extraGoals),
+          notes: notesFromGemini(job, candidates, extraGoals, saveRows),
         }),
       });
       const json = await res.json();
@@ -515,18 +521,47 @@ function ConcessionField({ label, value, options, optionLabels, onChange }) {
 }
 
 function SavesTable({ rows, onChange, t, font }) {
+  const [expanded, setExpanded] = useState({});
+  const toggleExpanded = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+  const update = (id, patch) => onChange(rows.map(r => r._id === id ? { ...r, ...patch } : r));
+  const removeRow = (id) => {
+    onChange(rows.filter(r => r._id !== id));
+    setExpanded(prev => { const next = { ...prev }; delete next[id]; return next; });
+  };
+  const addMissedSave = () => {
+    const newRow = {
+      _id: `coach_${Date.now()}`,
+      coach_added: true,
+      keep: true,
+      timestamp_str: "",
+      shot_origin: "",
+      shot_type: "Foot",
+      on_target: "yes",
+      gk_action: "Catch",
+      gk_visible: "yes",
+      outcome: "held",
+      body_distance_zone: "",
+      goal_placement_height: "",
+      goal_placement_side: "",
+      shot_description: "",
+      gk_observations: "",
+      notes: "",
+      gemini: { confidence: "—" },
+    };
+    onChange([...(rows || []), newRow]);
+  };
+
   if (!rows || rows.length === 0) {
     return (
       <>
         <h3 style={{ fontSize: 13, fontWeight: 700, color: t.bright, letterSpacing: 0.4, margin: "20px 0 10px" }}>SAVES</h3>
-        <div style={{ background: t.card, border: `1px dashed ${t.border}`, borderRadius: 12, padding: 24, textAlign: "center", color: t.dim, fontSize: 13, marginBottom: 24 }}>
-          Gemini didn't tag any save events for this match. (This is normal if the analysis only ran the goals prompt — the saves prompt was added in Phase 2.1 and only runs on jobs uploaded after the worker redeploy.)
+        <div style={{ background: t.card, border: `1px dashed ${t.border}`, borderRadius: 12, padding: 24, textAlign: "center", color: t.dim, fontSize: 13, marginBottom: 12 }}>
+          Gemini didn't tag any save events for this match. Add saves manually below.
         </div>
+        <button type="button" onClick={addMissedSave} style={{ padding: "8px 14px", borderRadius: 8, border: `1px dashed ${t.accent}66`, background: "transparent", color: t.accent, fontSize: 12, fontFamily: font, cursor: "pointer", marginBottom: 24 }}>+ Add a save Gemini missed</button>
       </>
     );
   }
-
-  const update = (id, patch) => onChange(rows.map(r => r._id === id ? { ...r, ...patch } : r));
 
   // Compact dropdown styling
   const sel = {
@@ -544,19 +579,23 @@ function SavesTable({ rows, onChange, t, font }) {
     return `${m}:${String(r).padStart(2, '0')}`;
   };
 
-  // Bulk-accept high-confidence rows
+  // Coach-added rows store time as MM:SS string; convert for display
+  const displayTime = (r) => r.coach_added ? (r.timestamp_str || "—") : fmtTs(r.timestamp_seconds);
+
+  // Bulk actions only apply to Gemini-tagged rows (coach-added rows shouldn't be bulk-rejected)
   const acceptHighConfidence = () => {
-    onChange(rows.map(r => ({ ...r, keep: r.gemini?.confidence === "high" ? true : r.keep })));
+    onChange(rows.map(r => ({ ...r, keep: !r.coach_added && r.gemini?.confidence === "high" ? true : r.keep })));
   };
   const rejectLowConfidence = () => {
-    onChange(rows.map(r => ({ ...r, keep: r.gemini?.confidence === "low" ? false : r.keep })));
+    onChange(rows.map(r => ({ ...r, keep: !r.coach_added && r.gemini?.confidence === "low" ? false : r.keep })));
   };
   const acceptAll = () => onChange(rows.map(r => ({ ...r, keep: true })));
-  const rejectAll = () => onChange(rows.map(r => ({ ...r, keep: false })));
+  const rejectAll = () => onChange(rows.map(r => r.coach_added ? r : { ...r, keep: false }));
 
-  const counts = { high: 0, medium: 0, low: 0, kept: 0 };
+  const counts = { high: 0, medium: 0, low: 0, kept: 0, coach: 0 };
   for (const r of rows) {
-    counts[r.gemini?.confidence || "medium"]++;
+    if (r.coach_added) counts.coach++;
+    else counts[r.gemini?.confidence || "medium"]++;
     if (r.keep) counts.kept++;
   }
 
@@ -572,12 +611,13 @@ function SavesTable({ rows, onChange, t, font }) {
           <button type="button" onClick={rejectAll} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 11, fontFamily: font, cursor: "pointer" }}>Reject all</button>
         </span>
       </div>
-      <div style={{ background: t.card, border: `1px solid ${t.border}`, borderRadius: 12, padding: 8, marginBottom: 24, overflowX: "auto" }}>
+      <div style={{ background: t.card, border: `1px solid ${t.border}`, borderRadius: 12, padding: 8, marginBottom: 12, overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, color: t.text }}>
           <thead>
             <tr>
+              <th style={{ ...headStyle, width: 28 }}></th>
               <th style={{ ...headStyle, width: 40 }}>Keep</th>
-              <th style={{ ...headStyle, width: 60 }}>Time</th>
+              <th style={{ ...headStyle, width: 80 }}>Time</th>
               <th style={headStyle}>Origin</th>
               <th style={headStyle}>Type</th>
               <th style={headStyle}>On Tgt</th>
@@ -588,90 +628,155 @@ function SavesTable({ rows, onChange, t, font }) {
               <th style={headStyle}>Height</th>
               <th style={headStyle}>Side</th>
               <th style={headStyle}>Conf</th>
+              <th style={{ ...headStyle, width: 30 }}></th>
             </tr>
           </thead>
           <tbody>
             {rows.map(r => {
               const dim = !r.keep;
-              const confColor = r.gemini?.confidence === "high" ? t.green : r.gemini?.confidence === "low" ? t.red : t.yellow;
+              const isExpanded = !!expanded[r._id];
+              const confColor = r.coach_added ? t.accent
+                : r.gemini?.confidence === "high" ? t.green
+                : r.gemini?.confidence === "low" ? t.red
+                : t.yellow;
               return (
-                <tr key={r._id} style={{ opacity: dim ? 0.4 : 1 }}>
-                  <td style={cellStyle}><input type="checkbox" checked={r.keep} onChange={e => update(r._id, { keep: e.target.checked })} /></td>
-                  <td style={{ ...cellStyle, fontWeight: 600, color: t.bright, whiteSpace: "nowrap" }}>{fmtTs(r.timestamp_seconds)}</td>
-                  <td style={cellStyle}>
-                    <select value={r.shot_origin} onChange={e => update(r._id, { shot_origin: e.target.value })} style={sel}>
-                      <option value="">—</option>
-                      <option value="6yard">6yd</option>
-                      <option value="boxL">box L</option>
-                      <option value="boxC">box C</option>
-                      <option value="boxR">box R</option>
-                      <option value="outL">out L</option>
-                      <option value="outC">out C</option>
-                      <option value="outR">out R</option>
-                      <option value="cornerL">corner L</option>
-                      <option value="cornerR">corner R</option>
-                      <option value="unclear">unclear</option>
-                    </select>
-                  </td>
-                  <td style={cellStyle}>
-                    <select value={r.shot_type} onChange={e => update(r._id, { shot_type: e.target.value })} style={sel}>
-                      {["Foot", "Header", "Deflection"].map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                  </td>
-                  <td style={cellStyle}>
-                    <select value={r.on_target} onChange={e => update(r._id, { on_target: e.target.value })} style={sel}>
-                      {["yes", "no", "unclear"].map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                  </td>
-                  <td style={cellStyle}>
-                    <select value={r.gk_action} onChange={e => update(r._id, { gk_action: e.target.value })} style={sel}>
-                      {["Catch", "Block", "Parry", "Deflect", "Punch", "Missed", "Goal", "unclear"].map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                  </td>
-                  <td style={cellStyle}>
-                    <select value={r.gk_visible} onChange={e => update(r._id, { gk_visible: e.target.value })} style={sel}>
-                      {["yes", "partial", "no"].map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                  </td>
-                  <td style={cellStyle}>
-                    <select value={r.outcome} onChange={e => update(r._id, { outcome: e.target.value })} style={sel}>
-                      <option value="">—</option>
-                      {["held", "rebound_safe", "rebound_dangerous", "corner", "out_of_play", "goal"].map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                  </td>
-                  <td style={cellStyle}>
-                    <select value={r.body_distance_zone} onChange={e => update(r._id, { body_distance_zone: e.target.value })} style={sel} title="A = near body, B = within 2yd, C = full extension">
-                      <option value="">—</option>
-                      {["A", "B", "C", "unclear"].map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                  </td>
-                  <td style={cellStyle}>
-                    <select value={r.goal_placement_height} onChange={e => update(r._id, { goal_placement_height: e.target.value })} style={sel}>
-                      <option value="">—</option>
-                      {["top", "mid", "low", "unclear"].map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                  </td>
-                  <td style={cellStyle}>
-                    <select value={r.goal_placement_side} onChange={e => update(r._id, { goal_placement_side: e.target.value })} style={sel}>
-                      <option value="">—</option>
-                      <option value="left_third">L</option>
-                      <option value="centre">C</option>
-                      <option value="right_third">R</option>
-                      <option value="unclear">?</option>
-                    </select>
-                  </td>
-                  <td style={{ ...cellStyle, color: confColor, fontWeight: 600, fontSize: 10, textTransform: "uppercase" }}>{r.gemini?.confidence || "—"}</td>
-                </tr>
+                <Fragment key={r._id}>
+                  <tr style={{ opacity: dim ? 0.45 : 1, background: r.coach_added ? t.accent + "08" : "transparent" }}>
+                    <td style={{ ...cellStyle, textAlign: "center" }}>
+                      <button type="button" onClick={() => toggleExpanded(r._id)} style={{ background: "none", border: "none", color: t.dim, cursor: "pointer", fontSize: 12 }} title={isExpanded ? "Collapse" : "Expand"}>
+                        {isExpanded ? "▼" : "▶"}
+                      </button>
+                    </td>
+                    <td style={cellStyle}><input type="checkbox" checked={r.keep} onChange={e => update(r._id, { keep: e.target.checked })} /></td>
+                    <td style={{ ...cellStyle, fontWeight: 600, color: t.bright, whiteSpace: "nowrap" }}>
+                      {r.coach_added ? (
+                        <input type="text" value={r.timestamp_str} onChange={e => update(r._id, { timestamp_str: e.target.value })} placeholder="MM:SS" style={{ ...sel, fontWeight: 700, color: t.bright, width: 64 }} />
+                      ) : (
+                        displayTime(r)
+                      )}
+                    </td>
+                    <td style={cellStyle}>
+                      <select value={r.shot_origin} onChange={e => update(r._id, { shot_origin: e.target.value })} style={sel}>
+                        <option value="">—</option>
+                        <option value="6yard">6yd</option>
+                        <option value="boxL">box L</option>
+                        <option value="boxC">box C</option>
+                        <option value="boxR">box R</option>
+                        <option value="outL">out L</option>
+                        <option value="outC">out C</option>
+                        <option value="outR">out R</option>
+                        <option value="cornerL">corner L</option>
+                        <option value="cornerR">corner R</option>
+                        <option value="unclear">unclear</option>
+                      </select>
+                    </td>
+                    <td style={cellStyle}>
+                      <select value={r.shot_type} onChange={e => update(r._id, { shot_type: e.target.value })} style={sel}>
+                        {["Foot", "Header", "Deflection"].map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </td>
+                    <td style={cellStyle}>
+                      <select value={r.on_target} onChange={e => update(r._id, { on_target: e.target.value })} style={sel}>
+                        {["yes", "no", "unclear"].map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </td>
+                    <td style={cellStyle}>
+                      <select value={r.gk_action} onChange={e => update(r._id, { gk_action: e.target.value })} style={sel}>
+                        {["Catch", "Block", "Parry", "Deflect", "Punch", "Missed", "Goal", "unclear"].map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </td>
+                    <td style={cellStyle}>
+                      <select value={r.gk_visible} onChange={e => update(r._id, { gk_visible: e.target.value })} style={sel}>
+                        {["yes", "partial", "no"].map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </td>
+                    <td style={cellStyle}>
+                      <select value={r.outcome} onChange={e => update(r._id, { outcome: e.target.value })} style={sel}>
+                        <option value="">—</option>
+                        {["held", "rebound_safe", "rebound_dangerous", "corner", "out_of_play", "goal"].map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </td>
+                    <td style={cellStyle}>
+                      <select value={r.body_distance_zone} onChange={e => update(r._id, { body_distance_zone: e.target.value })} style={sel} title="A = near body, B = within 2yd, C = full extension">
+                        <option value="">—</option>
+                        {["A", "B", "C", "unclear"].map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </td>
+                    <td style={cellStyle}>
+                      <select value={r.goal_placement_height} onChange={e => update(r._id, { goal_placement_height: e.target.value })} style={sel}>
+                        <option value="">—</option>
+                        {["top", "mid", "low", "unclear"].map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </td>
+                    <td style={cellStyle}>
+                      <select value={r.goal_placement_side} onChange={e => update(r._id, { goal_placement_side: e.target.value })} style={sel}>
+                        <option value="">—</option>
+                        <option value="left_third">L</option>
+                        <option value="centre">C</option>
+                        <option value="right_third">R</option>
+                        <option value="unclear">?</option>
+                      </select>
+                    </td>
+                    <td style={{ ...cellStyle, color: confColor, fontWeight: 600, fontSize: 10, textTransform: "uppercase" }}>
+                      {r.coach_added ? "added" : (r.gemini?.confidence || "—")}
+                    </td>
+                    <td style={{ ...cellStyle, textAlign: "center" }}>
+                      {r.coach_added && (
+                        <button type="button" onClick={() => removeRow(r._id)} style={{ background: "none", border: "none", color: t.dim, cursor: "pointer", fontSize: 12 }} title="Remove">✕</button>
+                      )}
+                    </td>
+                  </tr>
+                  {isExpanded && (
+                    <tr style={{ background: t.cardAlt }}>
+                      <td colSpan={14} style={{ padding: "10px 16px", borderTop: `1px solid ${t.border}` }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                          {/* Gemini's narrative — read-only context */}
+                          {!r.coach_added && (
+                            <div>
+                              <div style={{ fontSize: 10, color: t.dim, letterSpacing: 0.4, fontWeight: 600, marginBottom: 4, textTransform: "uppercase" }}>What Gemini saw</div>
+                              {r.gemini?.shot_description && (
+                                <div style={{ fontSize: 12, color: t.text, marginBottom: 6, lineHeight: 1.4 }}><strong style={{ color: t.dim }}>Play:</strong> {r.gemini.shot_description}</div>
+                              )}
+                              {r.gemini?.gk_observations && (
+                                <div style={{ fontSize: 12, color: t.text, lineHeight: 1.4 }}><strong style={{ color: t.dim }}>GK:</strong> {r.gemini.gk_observations}</div>
+                              )}
+                              {!r.gemini?.shot_description && !r.gemini?.gk_observations && (
+                                <div style={{ fontSize: 11, color: t.dim, fontStyle: "italic" }}>(no narrative captured)</div>
+                              )}
+                            </div>
+                          )}
+                          {r.coach_added && (
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                              <div>
+                                <div style={{ fontSize: 10, color: t.dim, letterSpacing: 0.4, fontWeight: 600, marginBottom: 4, textTransform: "uppercase" }}>Play description</div>
+                                <textarea value={r.shot_description || ""} onChange={e => update(r._id, { shot_description: e.target.value })} rows={2} placeholder="What was the shot? (origin, type, channel)" style={{ width: "100%", padding: "6px 8px", fontSize: 12, borderRadius: 6, background: t.bg, border: `1px solid ${t.border}`, color: t.bright, fontFamily: font, resize: "vertical" }} />
+                              </div>
+                              <div>
+                                <div style={{ fontSize: 10, color: t.dim, letterSpacing: 0.4, fontWeight: 600, marginBottom: 4, textTransform: "uppercase" }}>GK observations</div>
+                                <textarea value={r.gk_observations || ""} onChange={e => update(r._id, { gk_observations: e.target.value })} rows={2} placeholder="What did the keeper do? (positioning, technique, result)" style={{ width: "100%", padding: "6px 8px", fontSize: 12, borderRadius: 6, background: t.bg, border: `1px solid ${t.border}`, color: t.bright, fontFamily: font, resize: "vertical" }} />
+                              </div>
+                            </div>
+                          )}
+                          <div>
+                            <div style={{ fontSize: 10, color: t.dim, letterSpacing: 0.4, fontWeight: 600, marginBottom: 4, textTransform: "uppercase" }}>Your notes (flow into match notes)</div>
+                            <textarea value={r.notes || ""} onChange={e => update(r._id, { notes: e.target.value })} rows={3} placeholder="Anything you'd add — context Gemini missed, coaching point for the keeper, comparison to previous saves..." style={{ width: "100%", padding: "6px 8px", fontSize: 12, borderRadius: 6, background: t.bg, border: `1px solid ${t.border}`, color: t.bright, fontFamily: font, resize: "vertical" }} />
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               );
             })}
           </tbody>
         </table>
       </div>
+      <button type="button" onClick={addMissedSave} style={{ padding: "8px 14px", borderRadius: 8, border: `1px dashed ${t.accent}66`, background: "transparent", color: t.accent, fontSize: 12, fontFamily: font, cursor: "pointer", marginBottom: 24 }}>+ Add a save Gemini missed</button>
     </>
   );
 }
 
-function notesFromGemini(job, candidates, extraGoals) {
+function notesFromGemini(job, candidates, extraGoals, saveRows) {
   const out = job?.gemini_output;
   const lines = [];
 
@@ -679,12 +784,16 @@ function notesFromGemini(job, candidates, extraGoals) {
   const coachLines = [];
   (candidates || []).filter(c => c.keep && c.notes).forEach(c => {
     const team = c.scored_by_us ? "us" : "opponent";
-    coachLines.push(`[${fmtTs(c.gemini.timestamp_seconds)}] ${team}: ${c.notes}`);
+    coachLines.push(`Goal [${fmtTs(c.gemini.timestamp_seconds)}] ${team}: ${c.notes}`);
   });
   (extraGoals || []).filter(g => g.notes).forEach(g => {
     const team = g.scored_by_us ? "us" : "opponent";
     const ts = g.timestamp_str || "?";
-    coachLines.push(`[${ts}] ${team}: ${g.notes}`);
+    coachLines.push(`Goal [${ts}] ${team}: ${g.notes}`);
+  });
+  (saveRows || []).filter(s => s.keep && s.notes).forEach(s => {
+    const ts = s.coach_added ? (s.timestamp_str || "?") : fmtTs(s.timestamp_seconds);
+    coachLines.push(`Save [${ts}] ${s.gk_action || "?"}: ${s.notes}`);
   });
 
   if (coachLines.length) {
