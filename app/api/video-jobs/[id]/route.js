@@ -57,8 +57,24 @@ export async function POST(_req, { params }) {
     return NextResponse.json({ error: `Cannot retry a job in status '${r.job.status}'` }, { status: 400 });
   }
   const admin = createAdminClient();
+
+  // If the original upload was to Supabase Storage, the signed URL has likely
+  // expired (we mint them at 2-hour TTL). Regenerate before retry.
+  let videoUrl = r.job.video_url;
+  if (r.job.storage_path) {
+    const { data: signed, error: signErr } = await admin.storage
+      .from('match-videos').createSignedUrl(r.job.storage_path, 7200);
+    if (signErr || !signed?.signedUrl) {
+      return NextResponse.json({
+        error: `Could not regenerate signed URL: ${signErr?.message || 'unknown'}. The uploaded file may have been deleted — re-upload from the form.`,
+      }, { status: 400 });
+    }
+    videoUrl = signed.signedUrl;
+  }
+
   await admin.from('video_jobs').update({
     status: 'queued',
+    video_url: videoUrl,
     error_message: null,
     started_at: null,
     finished_at: null,
