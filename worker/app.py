@@ -304,6 +304,7 @@ def process(job_id: str) -> dict:
         cached = None
         try:
             from google.generativeai import caching as gcaching
+            from datetime import timedelta
             shared_system = (
                 (calibration + "\n\n---\n\n" if calibration else "") +
                 (spatial_calibration + "\n\n---\n\n" if spatial_calibration else "") +
@@ -315,11 +316,11 @@ def process(job_id: str) -> dict:
                 model="models/" + model_name,
                 contents=[uploaded],
                 system_instruction=shared_system,
-                ttl="30m",
+                ttl=timedelta(minutes=30),
             )
-            print(f"[cache] created {cached.name} (model={model_name}, ttl=30m)")
+            print(f"[cache] created {cached.name} (model={model_name}, ttl=30m)", flush=True)
         except Exception as cache_err:
-            print(f"[cache] could not create cache, falling back to direct calls: {cache_err}")
+            print(f"[cache] could not create cache, falling back to direct calls: {cache_err}", flush=True)
 
         def run_prompt(prompt_path: str, schema: dict, vars: dict) -> dict:
             template = Path(prompt_path).read_text(encoding="utf-8")
