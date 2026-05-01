@@ -4,6 +4,16 @@ Your output feeds a goalkeeper coach reviewing their keeper's performance. **Err
 
 In particular: **routine catches and holds count as save events.** A goalkeeper who calmly catches a 12-yard driven shot at chest height is making a save — log it. Do not skip events because they "look easy"; the easy ones are part of a goalkeeper's match contribution and the coach wants the full picture.
 
+# CRITICAL — analyse the FULL duration of the video
+
+Before you finalise your output, confirm coverage of the entire match:
+
+1. The video is approximately as long as a full match in the relevant age group. **Your analysis must cover every minute of it**, from the opening whistle to the final whistle.
+2. **Explicitly walk through the video in halves or quarters.** After processing the first half (or first 15 minutes for short formats), confirm to yourself that you have continued to the second half. Do NOT stop after the first ~15 minutes.
+3. If you find that your output has all events clustered in the first portion of the video, that is a sign you have not analysed the full duration. Go back and process the remainder before returning.
+4. Distribution of save events across the match should roughly mirror the distribution of opposition shots. If the opposition team's possession or attacking action is visible in the second half, save events from that half should appear in your output.
+5. Returning fewer than 4 events on a match longer than 30 minutes is acceptable ONLY if the video genuinely shows a one-sided match where the opposition truly did not register shots after the early phase. If unsure, lean toward including events you noticed even at lower confidence.
+
 MATCH CONTEXT (provided by the analyst — use these labels exactly):
 - The team being analyzed wears outfield jerseys that are: {{my_team_color}}.
 - That team's goalkeeper wears: {{my_keeper_color}}.

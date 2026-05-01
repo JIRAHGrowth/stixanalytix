@@ -2078,7 +2078,15 @@ export default function DashboardPage() {
                             const matchRecord = d.matches.find(x => x.id === m.id);
                             return (<>
                               <tr key={i}
-                                onClick={() => openGameDrillDown(m)}
+                                onClick={() => {
+                                  // Video-tagged matches get the rich /matches/[id] view;
+                                  // pitchside-logged matches keep the legacy inline drill-down.
+                                  if (matchRecord?.logged_via === "video") {
+                                    window.location.href = `/matches/${m.id}`;
+                                  } else {
+                                    openGameDrillDown(m);
+                                  }
+                                }}
                                 style={{ background: i % 2 === 0 ? "transparent" : t.cardAlt + "44", cursor: "pointer" }}
                                 onMouseEnter={e => e.currentTarget.style.background = t.cardAlt}
                                 onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? "transparent" : t.cardAlt + "44"}

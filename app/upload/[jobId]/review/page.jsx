@@ -624,13 +624,18 @@ function SavesTable({ rows, onChange, t, font }) {
     <>
       <h3 style={{ fontSize: 13, fontWeight: 700, color: t.bright, letterSpacing: 0.4, margin: "20px 0 10px" }}>SAVES — {rows.length} candidate{rows.length === 1 ? "" : "s"}</h3>
       <div style={{ display: "flex", gap: 6, marginBottom: 10, alignItems: "center", flexWrap: "wrap", fontSize: 11, color: t.dim }}>
-        <span>Confidence: {counts.high} high / {counts.medium} medium / {counts.low} low · Keeping {counts.kept}</span>
+        <span>{counts.high} high / {counts.medium} medium / {counts.low} low · {counts.coach > 0 ? `${counts.coach} coach-added · ` : ""}Keeping {counts.kept}</span>
         <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
           <button type="button" onClick={acceptHighConfidence} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 11, fontFamily: font, cursor: "pointer" }}>Accept high</button>
           <button type="button" onClick={rejectLowConfidence} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 11, fontFamily: font, cursor: "pointer" }}>Reject low</button>
           <button type="button" onClick={acceptAll} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 11, fontFamily: font, cursor: "pointer" }}>Accept all</button>
           <button type="button" onClick={rejectAll} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 11, fontFamily: font, cursor: "pointer" }}>Reject all</button>
+          <button type="button" onClick={() => setExpanded(Object.fromEntries(rows.map(r => [r._id, true])))} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 11, fontFamily: font, cursor: "pointer" }}>Expand notes for all</button>
+          <button type="button" onClick={() => setExpanded({})} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 11, fontFamily: font, cursor: "pointer" }}>Collapse all</button>
         </span>
+      </div>
+      <div style={{ fontSize: 11, color: t.dim, marginBottom: 10, lineHeight: 1.5 }}>
+        Each row shows Gemini's read of the play and the GK action immediately below it. Click <span style={{ color: t.accent }}>✎</span> on any row to add your own coaching notes — they flow into the match record.
       </div>
       <div style={{ background: t.card, border: `1px solid ${t.border}`, borderRadius: 12, padding: 8, marginBottom: 12, overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, color: t.text }}>
@@ -664,8 +669,8 @@ function SavesTable({ rows, onChange, t, font }) {
                 <Fragment key={r._id}>
                   <tr style={{ opacity: dim ? 0.45 : 1, background: r.coach_added ? t.accent + "08" : "transparent" }}>
                     <td style={{ ...cellStyle, textAlign: "center" }}>
-                      <button type="button" onClick={() => toggleExpanded(r._id)} style={{ background: "none", border: "none", color: t.dim, cursor: "pointer", fontSize: 12 }} title={isExpanded ? "Collapse" : "Expand"}>
-                        {isExpanded ? "▼" : "▶"}
+                      <button type="button" onClick={() => toggleExpanded(r._id)} style={{ background: "none", border: "none", color: r.notes ? t.accent : t.dim, cursor: "pointer", fontSize: 12 }} title={isExpanded ? "Collapse notes" : "Add coach notes"}>
+                        {isExpanded ? "▼" : (r.notes ? "✎" : "✎")}
                       </button>
                     </td>
                     <td style={cellStyle}><input type="checkbox" checked={r.keep} onChange={e => update(r._id, { keep: e.target.checked })} /></td>
@@ -747,39 +752,44 @@ function SavesTable({ rows, onChange, t, font }) {
                       )}
                     </td>
                   </tr>
+                  {/* Always-visible narrative row — Gemini's description + observations
+                      so the coach can read context without clicking expand */}
+                  {!r.coach_added && (r.gemini?.shot_description || r.gemini?.gk_observations) && (
+                    <tr style={{ background: t.bg, opacity: dim ? 0.4 : 1 }}>
+                      <td colSpan={2}></td>
+                      <td colSpan={12} style={{ padding: "0 8px 10px", borderTop: "none" }}>
+                        {r.gemini?.shot_description && (
+                          <div style={{ fontSize: 11, color: t.dim, lineHeight: 1.4, marginBottom: 3 }}>
+                            <span style={{ color: t.dim + "cc", fontWeight: 600 }}>Play:</span> {r.gemini.shot_description}
+                          </div>
+                        )}
+                        {r.gemini?.gk_observations && (
+                          <div style={{ fontSize: 11, color: t.text, lineHeight: 1.4 }}>
+                            <span style={{ color: t.dim + "cc", fontWeight: 600 }}>GK:</span> {r.gemini.gk_observations}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                  {/* Expand row — coach editable fields and notes */}
                   {isExpanded && (
                     <tr style={{ background: t.cardAlt }}>
                       <td colSpan={14} style={{ padding: "10px 16px", borderTop: `1px solid ${t.border}` }}>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-                          {/* Gemini's narrative — read-only context */}
-                          {!r.coach_added && (
-                            <div>
-                              <div style={{ fontSize: 10, color: t.dim, letterSpacing: 0.4, fontWeight: 600, marginBottom: 4, textTransform: "uppercase" }}>What Gemini saw</div>
-                              {r.gemini?.shot_description && (
-                                <div style={{ fontSize: 12, color: t.text, marginBottom: 6, lineHeight: 1.4 }}><strong style={{ color: t.dim }}>Play:</strong> {r.gemini.shot_description}</div>
-                              )}
-                              {r.gemini?.gk_observations && (
-                                <div style={{ fontSize: 12, color: t.text, lineHeight: 1.4 }}><strong style={{ color: t.dim }}>GK:</strong> {r.gemini.gk_observations}</div>
-                              )}
-                              {!r.gemini?.shot_description && !r.gemini?.gk_observations && (
-                                <div style={{ fontSize: 11, color: t.dim, fontStyle: "italic" }}>(no narrative captured)</div>
-                              )}
-                            </div>
-                          )}
+                        <div style={{ display: "grid", gridTemplateColumns: r.coach_added ? "1fr 1fr 1fr" : "1fr", gap: 14 }}>
                           {r.coach_added && (
-                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                            <>
                               <div>
                                 <div style={{ fontSize: 10, color: t.dim, letterSpacing: 0.4, fontWeight: 600, marginBottom: 4, textTransform: "uppercase" }}>Play description</div>
-                                <textarea value={r.shot_description || ""} onChange={e => update(r._id, { shot_description: e.target.value })} rows={2} placeholder="What was the shot? (origin, type, channel)" style={{ width: "100%", padding: "6px 8px", fontSize: 12, borderRadius: 6, background: t.bg, border: `1px solid ${t.border}`, color: t.bright, fontFamily: font, resize: "vertical" }} />
+                                <textarea value={r.shot_description || ""} onChange={e => update(r._id, { shot_description: e.target.value })} rows={3} placeholder="What was the shot? (origin, type, channel)" style={{ width: "100%", padding: "6px 8px", fontSize: 12, borderRadius: 6, background: t.bg, border: `1px solid ${t.border}`, color: t.bright, fontFamily: font, resize: "vertical" }} />
                               </div>
                               <div>
                                 <div style={{ fontSize: 10, color: t.dim, letterSpacing: 0.4, fontWeight: 600, marginBottom: 4, textTransform: "uppercase" }}>GK observations</div>
-                                <textarea value={r.gk_observations || ""} onChange={e => update(r._id, { gk_observations: e.target.value })} rows={2} placeholder="What did the keeper do? (positioning, technique, result)" style={{ width: "100%", padding: "6px 8px", fontSize: 12, borderRadius: 6, background: t.bg, border: `1px solid ${t.border}`, color: t.bright, fontFamily: font, resize: "vertical" }} />
+                                <textarea value={r.gk_observations || ""} onChange={e => update(r._id, { gk_observations: e.target.value })} rows={3} placeholder="What did the keeper do? (positioning, technique, result)" style={{ width: "100%", padding: "6px 8px", fontSize: 12, borderRadius: 6, background: t.bg, border: `1px solid ${t.border}`, color: t.bright, fontFamily: font, resize: "vertical" }} />
                               </div>
-                            </div>
+                            </>
                           )}
                           <div>
-                            <div style={{ fontSize: 10, color: t.dim, letterSpacing: 0.4, fontWeight: 600, marginBottom: 4, textTransform: "uppercase" }}>Your notes (flow into match notes)</div>
+                            <div style={{ fontSize: 10, color: t.dim, letterSpacing: 0.4, fontWeight: 600, marginBottom: 4, textTransform: "uppercase" }}>Your notes (flow into match record)</div>
                             <textarea value={r.notes || ""} onChange={e => update(r._id, { notes: e.target.value })} rows={3} placeholder="Anything you'd add — context Gemini missed, coaching point for the keeper, comparison to previous saves..." style={{ width: "100%", padding: "6px 8px", fontSize: 12, borderRadius: 6, background: t.bg, border: `1px solid ${t.border}`, color: t.bright, fontFamily: font, resize: "vertical" }} />
                           </div>
                         </div>
