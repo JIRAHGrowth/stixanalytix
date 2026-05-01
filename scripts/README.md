@@ -9,7 +9,9 @@ Local utilities supporting the video pipeline. The live production flow runs thr
 - `build-gk-encyclopedia.js` — extract GK technique knowledge from coaching videos (T1TAN academy, etc.) into per-video JSONs. See [GK Encyclopedia workflow](#gk-encyclopedia-workflow) below.
 - `aggregate-gk-encyclopedia.js` — merge per-video JSONs into a single `prompts/gk_techniques.md` reference doc.
 - `setup-vercel-env.js` — push `.env.local` Modal vars to Vercel via API. One-shot.
-- `eval-match.js` — eval harness: compares Gemini's output for a match to coach-tagged ground truth, prints precision/recall per event type. See [Eval workflow](#eval-workflow) below.
+- `eval-match.js` — eval harness: compares Gemini's output for a match to coach-tagged ground truth, prints precision/recall per event type. Handles all 5 event types (goals, saves, distribution, crosses, sweeper). See [Eval workflow](#eval-workflow) below.
+- `generate-ground-truth-template.js` — programmatically builds the Excel ground-truth template with proper data-validation dropdowns. Run once if the schema changes; output committed at `scripts/ground-truth/_template.xlsx`.
+- `excel-to-ground-truth.js` — converts a filled-in Excel ground-truth file to the JSON format the eval harness consumes. See [Ground-truth tagging workflow](#ground-truth-tagging-workflow) below.
 
 ---
 
@@ -137,6 +139,63 @@ The aggregator is conservative — if two videos use slightly different names fo
 Dozens of videos at Flash: well under $20 total. One-time cost.
 
 ---
+
+## Ground-truth tagging workflow
+
+For each match you want to use as ground truth (and as a regression item in the eval set):
+
+### 1. Copy the template
+
+```
+cp scripts/ground-truth/_template.xlsx scripts/ground-truth/<match-name>.xlsx
+```
+
+Open the new file in Excel.
+
+### 2. Fill the Metadata sheet first
+
+Match name, date, opponent, venue, kit colours, age group, video duration, final score. Fill `video_job_id` once you've uploaded the video to the live pipeline (it's in the URL of `/upload/[id]/review` or in the `video_jobs` table).
+
+### 3. While watching the recording, log events on the relevant sheet
+
+| Sheet | What goes here |
+|---|---|
+| Goals | Every goal, either team. Columns: time, half, scoring team, attack type, shot type, shot location, placement (height/side from GK perspective), play description, GK observations, notes |
+| Saves | Every shot the analyzed GK faced — on or off target. Columns include `gk_action` (Catch/Block/Parry/Deflect/Punch/Smother/Starfish/K-Barrier/Missed/Goal/Unclear), body distance zone (A/B/C per Mike Salmon framing), outcome |
+| Distribution | Every GK distribution. **Trigger** column distinguishes goal kicks from backpass/build-up. **Pass selection** captures the coaching intent (short to defender / switch wide / drilled into channel / clearance under pressure). If you don't want to log every routine punt, use the QUICK TOTALS at the top of the sheet instead |
+| Crosses | Every cross the GK was responsible for handling. Tag side, cross type, destination, GK action, starting position, outcome |
+| Sweeper | Outfield work — clearances, interceptions, tackles, headers. Tag distance from goal, pressure, outcome |
+| 1v1s | High-value moments — 1v1 faced, recovery save, error leading to goal, big moment. Use the Notes column generously here |
+
+The first row beneath each sheet's header is a SAMPLE — overwrite or delete it.
+
+### 4. Convert to JSON
+
+```
+node scripts/excel-to-ground-truth.js scripts/ground-truth/<match-name>.xlsx
+```
+
+Writes `<match-name>.json` next to the .xlsx with timestamps in seconds and labels mapped to canonical/DB vocab.
+
+### 5. Run the eval
+
+```
+node scripts/eval-match.js \
+  --truth scripts/ground-truth/<match-name>.json \
+  --job <video_job_id> \
+  --tolerance 10 \
+  --save-report
+```
+
+### Regenerating the template
+
+If the schema changes (new dropdown values, new columns), update the schema in [generate-ground-truth-template.js](generate-ground-truth-template.js) and re-run:
+
+```
+node scripts/generate-ground-truth-template.js
+```
+
+This regenerates `_template.xlsx` from scratch. The converter will need a corresponding update if you add/rename columns.
 
 ## Eval workflow
 

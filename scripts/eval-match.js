@@ -89,6 +89,39 @@ function extractSaves(geminiOutput) {
   }));
 }
 
+function extractDistribution(geminiOutput) {
+  const dist = geminiOutput?.distribution?.parsed?.distribution || [];
+  return dist.map(d => ({
+    timestamp_seconds: d.timestamp_seconds,
+    type: d.type,
+    trigger: d.trigger,
+    successful: d.successful,
+    under_pressure: d.under_pressure,
+    confidence: d.confidence,
+  }));
+}
+
+function extractCrosses(geminiOutput) {
+  const c = geminiOutput?.crosses?.parsed?.crosses || [];
+  return c.map(x => ({
+    timestamp_seconds: x.timestamp_seconds,
+    side: x.side,
+    gk_action: x.gk_action,
+    outcome: x.outcome,
+    confidence: x.confidence,
+  }));
+}
+
+function extractSweeper(geminiOutput) {
+  const sw = geminiOutput?.sweeper?.parsed?.sweeper || [];
+  return sw.map(s => ({
+    timestamp_seconds: s.timestamp_seconds,
+    action: s.action,
+    successful: s.successful,
+    confidence: s.confidence,
+  }));
+}
+
 function normaliseTruth(truth) {
   return {
     duration_seconds: truth.duration_seconds || null,
@@ -107,6 +140,28 @@ function normaliseTruth(truth) {
       body_distance_zone: s.body_distance_zone,
       note: s.note || null,
     })),
+    distribution: (truth.events?.distribution || []).map(d => ({
+      timestamp_seconds: tsToSeconds(d.timestamp ?? d.timestamp_seconds),
+      type: d.type,
+      trigger: d.trigger,
+      successful: d.successful,
+      under_pressure: d.under_pressure,
+      note: d.note || null,
+    })),
+    crosses: (truth.events?.crosses || []).map(c => ({
+      timestamp_seconds: tsToSeconds(c.timestamp ?? c.timestamp_seconds),
+      side: c.side,
+      gk_action: c.gk_action,
+      outcome: c.outcome,
+      note: c.note || null,
+    })),
+    sweeper: (truth.events?.sweeper || []).map(s => ({
+      timestamp_seconds: tsToSeconds(s.timestamp ?? s.timestamp_seconds),
+      action: s.action,
+      successful: s.successful,
+      note: s.note || null,
+    })),
+    distribution_summary: truth.distribution_summary || null,
   };
 }
 
@@ -152,14 +207,34 @@ function pct(num, den) {
   return ((num / den) * 100).toFixed(1) + '%';
 }
 
+// Per-event-type label functions used in the report — keep this map small and
+// easy to extend as we add Phase 2.x event types.
+const LABELERS = {
+  goals: (e) => `${e.scoring_team || '?'} ${e.shot_type || ''}`.trim(),
+  saves: (e) => `${e.gk_action || '?'}${e.on_target === 'no' ? ' (off-target)' : ''}`,
+  distribution: (e) => `${e.type || '?'}${e.trigger ? ` (${e.trigger})` : ''}${e.under_pressure ? ' [pressured]' : ''}${e.successful === false ? ' ✗' : ''}`,
+  crosses: (e) => `${e.side || '?'} → ${e.gk_action || '?'}${e.outcome ? ` (${e.outcome})` : ''}`,
+  sweeper: (e) => `${e.action || '?'}${e.successful === false ? ' ✗' : ''}`,
+};
+
+const SEMANTIC_CHECKS = {
+  goals: (tr, pr) => (tr.scoring_team && pr.scoring_team && tr.scoring_team !== pr.scoring_team) ? `  ⚠ team mismatch (${tr.scoring_team} vs ${pr.scoring_team})` : '',
+  saves: (tr, pr) => (tr.gk_action && pr.gk_action && tr.gk_action !== pr.gk_action) ? `  ⚠ action mismatch (truth ${tr.gk_action} → gemini ${pr.gk_action})` : '',
+  distribution: (tr, pr) => (tr.type && pr.type && tr.type !== pr.type) ? `  ⚠ type mismatch (${tr.type} vs ${pr.type})` : '',
+  crosses: (tr, pr) => (tr.gk_action && pr.gk_action && tr.gk_action !== pr.gk_action) ? `  ⚠ action mismatch (${tr.gk_action} vs ${pr.gk_action})` : '',
+  sweeper: (tr, pr) => (tr.action && pr.action && tr.action !== pr.action) ? `  ⚠ action mismatch (${tr.action} vs ${pr.action})` : '',
+};
+
 function reportSection(name, truth, pred, tolerance) {
   const lines = [];
   const { matched, missedTruth, extraPred } = matchByTimestamp(truth, pred, tolerance);
   const tp = matched.length;
   const fp = extraPred.length;
   const fn = missedTruth.length;
-  const precision = tp / (tp + fp);
-  const recall = tp / (tp + fn);
+  const precision = (tp + fp) > 0 ? tp / (tp + fp) : 0;
+  const recall = (tp + fn) > 0 ? tp / (tp + fn) : 0;
+  const labeler = LABELERS[name] || ((e) => JSON.stringify(e));
+  const semantic = SEMANTIC_CHECKS[name] || (() => '');
 
   lines.push(``);
   lines.push(`═══ ${name.toUpperCase()} ═══`);
@@ -177,16 +252,7 @@ function reportSection(name, truth, pred, tolerance) {
     matched.forEach(([ti, pi, delta]) => {
       const tr = truth[ti];
       const pr = pred[pi];
-      const trLabel = name === 'goals'
-        ? `${tr.scoring_team || '?'} ${tr.shot_type || ''}`.trim()
-        : `${tr.gk_action || '?'}${tr.on_target === 'no' ? ' (off-target)' : ''}`;
-      const prLabel = name === 'goals'
-        ? `${pr.scoring_team || '?'} ${pr.shot_type || ''}`.trim()
-        : `${pr.gk_action || '?'}${pr.on_target === 'no' ? ' (off-target)' : ''}`;
-      const semantic = name === 'goals'
-        ? (tr.scoring_team && pr.scoring_team && tr.scoring_team !== pr.scoring_team ? '  ⚠ team mismatch' : '')
-        : (tr.gk_action && pr.gk_action && tr.gk_action !== pr.gk_action ? `  ⚠ action mismatch (truth ${tr.gk_action} → gemini ${pr.gk_action})` : '');
-      lines.push(`  ${fmtSec(tr.timestamp_seconds).padEnd(7)} ${trLabel.padEnd(30)} → ${fmtSec(pr.timestamp_seconds).padEnd(7)} ${prLabel.padEnd(30)} Δ${delta}s${semantic}`);
+      lines.push(`  ${fmtSec(tr.timestamp_seconds).padEnd(7)} ${labeler(tr).padEnd(36)} → ${fmtSec(pr.timestamp_seconds).padEnd(7)} ${labeler(pr).padEnd(36)} Δ${delta}s${semantic(tr, pr)}`);
     });
   }
   if (missedTruth.length) {
@@ -194,10 +260,7 @@ function reportSection(name, truth, pred, tolerance) {
     lines.push(`Missed by Gemini (false negatives):`);
     missedTruth.forEach(i => {
       const tr = truth[i];
-      const label = name === 'goals'
-        ? `${tr.scoring_team || '?'} ${tr.shot_type || ''}`.trim()
-        : `${tr.gk_action || '?'}`;
-      lines.push(`  ${fmtSec(tr.timestamp_seconds).padEnd(7)} ${label}${tr.note ? ` — ${tr.note}` : ''}`);
+      lines.push(`  ${fmtSec(tr.timestamp_seconds).padEnd(7)} ${labeler(tr)}${tr.note ? ` — ${tr.note}` : ''}`);
     });
   }
   if (extraPred.length) {
@@ -205,21 +268,46 @@ function reportSection(name, truth, pred, tolerance) {
     lines.push(`Reported by Gemini but not in truth (false positives):`);
     extraPred.forEach(i => {
       const pr = pred[i];
-      const label = name === 'goals'
-        ? `${pr.scoring_team || '?'} ${pr.shot_type || ''}`.trim()
-        : `${pr.gk_action || '?'}`;
-      lines.push(`  ${fmtSec(pr.timestamp_seconds).padEnd(7)} ${label}  (${pr.confidence || '?'} confidence)`);
+      lines.push(`  ${fmtSec(pr.timestamp_seconds).padEnd(7)} ${labeler(pr)}  (${pr.confidence || '?'} confidence)`);
     });
   }
 
-  // Per-action accuracy for matched saves (was the gk_action right?)
-  if (name === 'saves' && matched.length) {
-    const actionMatches = matched.filter(([ti, pi]) => {
-      const t = truth[ti].gk_action; const p = pred[pi].gk_action;
-      return t && p && t === p;
-    }).length;
-    lines.push(``);
-    lines.push(`gk_action accuracy on matched saves: ${actionMatches}/${matched.length}  (${pct(actionMatches, matched.length)})`);
+  // Per-event-type semantic accuracy on matched events
+  if (matched.length) {
+    if (name === 'saves') {
+      const actionMatches = matched.filter(([ti, pi]) => {
+        const t = truth[ti].gk_action; const p = pred[pi].gk_action;
+        return t && p && t === p;
+      }).length;
+      lines.push(``);
+      lines.push(`gk_action accuracy on matched saves: ${actionMatches}/${matched.length}  (${pct(actionMatches, matched.length)})`);
+    } else if (name === 'distribution') {
+      const typeMatches = matched.filter(([ti, pi]) => {
+        const t = truth[ti].type; const p = pred[pi].type;
+        return t && p && t === p;
+      }).length;
+      const triggerMatches = matched.filter(([ti, pi]) => {
+        const t = truth[ti].trigger; const p = pred[pi].trigger;
+        return t && p && t === p;
+      }).length;
+      lines.push(``);
+      lines.push(`type accuracy on matched distributions: ${typeMatches}/${matched.length}  (${pct(typeMatches, matched.length)})`);
+      lines.push(`trigger accuracy on matched distributions: ${triggerMatches}/${matched.length}  (${pct(triggerMatches, matched.length)})`);
+    } else if (name === 'crosses') {
+      const actionMatches = matched.filter(([ti, pi]) => {
+        const t = truth[ti].gk_action; const p = pred[pi].gk_action;
+        return t && p && t === p;
+      }).length;
+      lines.push(``);
+      lines.push(`gk_action accuracy on matched crosses: ${actionMatches}/${matched.length}  (${pct(actionMatches, matched.length)})`);
+    } else if (name === 'sweeper') {
+      const actionMatches = matched.filter(([ti, pi]) => {
+        const t = truth[ti].action; const p = pred[pi].action;
+        return t && p && t === p;
+      }).length;
+      lines.push(``);
+      lines.push(`action accuracy on matched sweeper events: ${actionMatches}/${matched.length}  (${pct(actionMatches, matched.length)})`);
+    }
   }
 
   return { lines, precision, recall, tp, fp, fn };
@@ -238,27 +326,51 @@ async function main() {
   }
   const geminiGoals = extractGoals(jobRow.gemini_output);
   const geminiSaves = extractSaves(jobRow.gemini_output);
-  console.log(`  Gemini: ${geminiGoals.length} goals, ${geminiSaves.length} saves`);
+  const geminiDist = extractDistribution(jobRow.gemini_output);
+  const geminiCrosses = extractCrosses(jobRow.gemini_output);
+  const geminiSweeper = extractSweeper(jobRow.gemini_output);
+  console.log(`  Gemini: ${geminiGoals.length} goals · ${geminiSaves.length} saves · ${geminiDist.length} dist · ${geminiCrosses.length} crosses · ${geminiSweeper.length} sweeper`);
 
   let allLines = [];
   let summary = {};
 
   if (args.truth) {
     const truth = normaliseTruth(JSON.parse(fs.readFileSync(path.resolve(args.truth), 'utf8')));
-    console.log(`Loaded truth: ${truth.goals.length} goals, ${truth.saves.length} saves (duration: ${truth.duration_seconds || '?'}s)`);
+    console.log(`Loaded truth: ${truth.goals.length} goals · ${truth.saves.length} saves · ${truth.distribution.length} dist · ${truth.crosses.length} crosses · ${truth.sweeper.length} sweeper`);
+    if (truth.duration_seconds) console.log(`  duration: ${truth.duration_seconds}s`);
 
-    const goalsRpt = reportSection('goals', truth.goals, geminiGoals, tolerance);
-    const savesRpt = reportSection('saves', truth.saves, geminiSaves, tolerance);
-    allLines = [...goalsRpt.lines, ...savesRpt.lines];
-    summary = { goals: goalsRpt, saves: savesRpt };
+    const goalsRpt   = reportSection('goals',        truth.goals,        geminiGoals,   tolerance);
+    const savesRpt   = reportSection('saves',        truth.saves,        geminiSaves,   tolerance);
+    const distRpt    = truth.distribution.length || geminiDist.length    ? reportSection('distribution', truth.distribution, geminiDist,    tolerance) : null;
+    const crossesRpt = truth.crosses.length      || geminiCrosses.length ? reportSection('crosses',      truth.crosses,      geminiCrosses, tolerance) : null;
+    const sweeperRpt = truth.sweeper.length      || geminiSweeper.length ? reportSection('sweeper',      truth.sweeper,      geminiSweeper, tolerance) : null;
+
+    allLines = [
+      ...goalsRpt.lines, ...savesRpt.lines,
+      ...(distRpt    ? distRpt.lines    : []),
+      ...(crossesRpt ? crossesRpt.lines : []),
+      ...(sweeperRpt ? sweeperRpt.lines : []),
+    ];
+    summary = { goals: goalsRpt, saves: savesRpt, distribution: distRpt, crosses: crossesRpt, sweeper: sweeperRpt };
   } else if (args['vs-job']) {
     const otherRow = await fetchJob(args['vs-job']);
-    const otherGoals = extractGoals(otherRow.gemini_output);
-    const otherSaves = extractSaves(otherRow.gemini_output);
-    console.log(`Compared against job ${otherRow.id}: ${otherGoals.length} goals, ${otherSaves.length} saves`);
-    const goalsRpt = reportSection('goals', otherGoals, geminiGoals, tolerance);
-    const savesRpt = reportSection('saves', otherSaves, geminiSaves, tolerance);
-    allLines = [...goalsRpt.lines, ...savesRpt.lines];
+    const oG  = extractGoals(otherRow.gemini_output);
+    const oS  = extractSaves(otherRow.gemini_output);
+    const oD  = extractDistribution(otherRow.gemini_output);
+    const oC  = extractCrosses(otherRow.gemini_output);
+    const oSw = extractSweeper(otherRow.gemini_output);
+    console.log(`Compared against job ${otherRow.id}: ${oG.length} goals · ${oS.length} saves · ${oD.length} dist · ${oC.length} crosses · ${oSw.length} sweeper`);
+    const goalsRpt   = reportSection('goals',        oG,  geminiGoals,   tolerance);
+    const savesRpt   = reportSection('saves',        oS,  geminiSaves,   tolerance);
+    const distRpt    = oD.length  || geminiDist.length    ? reportSection('distribution', oD, geminiDist,    tolerance) : null;
+    const crossesRpt = oC.length  || geminiCrosses.length ? reportSection('crosses',      oC, geminiCrosses, tolerance) : null;
+    const sweeperRpt = oSw.length || geminiSweeper.length ? reportSection('sweeper',      oSw, geminiSweeper, tolerance) : null;
+    allLines = [
+      ...goalsRpt.lines, ...savesRpt.lines,
+      ...(distRpt    ? distRpt.lines    : []),
+      ...(crossesRpt ? crossesRpt.lines : []),
+      ...(sweeperRpt ? sweeperRpt.lines : []),
+    ];
   } else {
     die('Must provide --truth <file> OR --vs-job <id>');
   }

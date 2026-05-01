@@ -12,6 +12,7 @@ Referenced from:
 |---|---|---|
 | [goals.md](goals.md) | Goal detection + rich GK-relevant context (attack type, buildup, shot, GK action) | `test-gemini-match.js`, `worker/app.py` |
 | [saves.md](saves.md) | Phase 2.1 — every shot the analyzed team's keeper faces, with GK action classification (catch/block/parry/deflect/punch/missed) and Mike Salmon A/B/C body-distance zones | `worker/app.py` |
+| [distribution.md](distribution.md) | Phase 2.3 (ready, not yet wired) — every distribution event by the analyzed GK, classified by trigger (goal kick/backpass/after save/etc.) and pass selection (short to defender/long to forward/switch wide/etc.) | `worker/app.py` (when Phase 2.3 lands) |
 | [gk_techniques.md](gk_techniques.md) | STIX GK Technique Encyclopedia — canonical vocabulary, imported from .docx (139 KB / ~35K tokens) | `worker/app.py` (cached, included in every analysis) |
 | [gk_techniques_extraction.md](gk_techniques_extraction.md) | Extraction prompt for pulling structured technique entries from coaching videos (T1TAN etc.) | `scripts/build-gk-encyclopedia.js` |
 
