@@ -99,6 +99,7 @@ export default function ReviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [publishing, setPublishing] = useState(false);
+  const [publishedMatchId, setPublishedMatchId] = useState(null);
 
   // For each Gemini candidate: keep + scored_by_us toggle + editable fields if concession
   const [candidates, setCandidates] = useState([]);
@@ -308,7 +309,12 @@ export default function ReviewPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Publish failed");
-      router.push("/dashboard");
+      // Stay on this page — show the published summary so coach can revisit.
+      setPublishedMatchId(json.match_id);
+      // Refetch the job so the page re-renders with status='published' state
+      const refreshed = await fetch(`/api/video-jobs/${jobId}`);
+      const fresh = await refreshed.json();
+      if (refreshed.ok) setJob(fresh.job);
     } catch (e) {
       setError(e.message || String(e));
     } finally {
@@ -345,6 +351,19 @@ export default function ReviewPage() {
       </div>
 
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "20px 16px" }}>
+        {/* PUBLISHED BANNER (if applicable) */}
+        {(publishedMatchId || job?.status === "published") && (
+          <div style={{ background: t.accent + "15", border: `1px solid ${t.accent}66`, borderRadius: 12, padding: "14px 18px", marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: t.accent }}>✓ Published to dashboard</div>
+              <div style={{ fontSize: 12, color: t.text, marginTop: 2 }}>
+                Your decisions and notes are saved. The match is now visible on the dashboard. You can keep this page open as a reference for what you tagged.
+              </div>
+            </div>
+            <Link href="/dashboard" style={{ padding: "10px 18px", borderRadius: 8, background: t.accent, color: "#fff", border: "none", fontWeight: 700, fontSize: 13, fontFamily: font, textDecoration: "none", whiteSpace: "nowrap" }}>View on dashboard →</Link>
+          </div>
+        )}
+
         {/* MATCH SUMMARY */}
         <div style={{ background: t.card, border: `1px solid ${t.border}`, borderRadius: 12, padding: 16, marginBottom: 16 }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 16, fontSize: 13 }}>
@@ -488,10 +507,12 @@ export default function ReviewPage() {
         {/* PUBLISH */}
         {error && <div style={{ color: t.red, fontSize: 12, marginBottom: 12 }}>{error}</div>}
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", padding: "16px 0", borderTop: `1px solid ${t.border}` }}>
-          <Link href="/upload" style={{ padding: "10px 18px", borderRadius: 8, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontFamily: font, textDecoration: "none", fontSize: 13 }}>Back without saving</Link>
-          <button onClick={publish} disabled={publishing} style={{ padding: "10px 22px", borderRadius: 8, background: t.accent, color: "#fff", border: "none", fontWeight: 700, fontSize: 13, fontFamily: font, cursor: publishing ? "default" : "pointer", opacity: publishing ? 0.6 : 1 }}>
-            {publishing ? "Publishing…" : `Save & Publish (${finalScore.goals_for}–${finalScore.goals_against})`}
-          </button>
+          <Link href="/upload" style={{ padding: "10px 18px", borderRadius: 8, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontFamily: font, textDecoration: "none", fontSize: 13 }}>Back to uploads</Link>
+          {job?.status !== "published" && !publishedMatchId && (
+            <button onClick={publish} disabled={publishing} style={{ padding: "10px 22px", borderRadius: 8, background: t.accent, color: "#fff", border: "none", fontWeight: 700, fontSize: 13, fontFamily: font, cursor: publishing ? "default" : "pointer", opacity: publishing ? 0.6 : 1 }}>
+              {publishing ? "Publishing…" : `Save & Publish (${finalScore.goals_for}–${finalScore.goals_against})`}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -777,45 +798,58 @@ function SavesTable({ rows, onChange, t, font }) {
 }
 
 function notesFromGemini(job, candidates, extraGoals, saveRows) {
-  const out = job?.gemini_output;
+  // Per-event narrative is now stored as STRUCTURED data on goals_conceded /
+  // goals_scored / shot_events. This summary is a compact human-readable
+  // index — not a wall of text. The dashboard will render the structured
+  // data directly; this is a fallback for places that show match.notes.
   const lines = [];
+  const out = job?.gemini_output;
 
-  // Coach's own observations come first — they're the most important.
-  const coachLines = [];
-  (candidates || []).filter(c => c.keep && c.notes).forEach(c => {
-    const team = c.scored_by_us ? "us" : "opponent";
-    coachLines.push(`Goal [${fmtTs(c.gemini.timestamp_seconds)}] ${team}: ${c.notes}`);
-  });
-  (extraGoals || []).filter(g => g.notes).forEach(g => {
-    const team = g.scored_by_us ? "us" : "opponent";
-    const ts = g.timestamp_str || "?";
-    coachLines.push(`Goal [${ts}] ${team}: ${g.notes}`);
-  });
-  (saveRows || []).filter(s => s.keep && s.notes).forEach(s => {
-    const ts = s.coach_added ? (s.timestamp_str || "?") : fmtTs(s.timestamp_seconds);
-    coachLines.push(`Save [${ts}] ${s.gk_action || "?"}: ${s.notes}`);
-  });
+  const keptGoalsAgainst = [
+    ...(candidates || []).filter(c => c.keep && c.scored_by_us === false).map(c => ({
+      ts: fmtTs(c.gemini.timestamp_seconds),
+      note: c.notes,
+    })),
+    ...(extraGoals || []).filter(g => g.scored_by_us === false).map(g => ({
+      ts: g.timestamp_str || "?",
+      note: g.notes,
+    })),
+  ];
+  const keptGoalsFor = [
+    ...(candidates || []).filter(c => c.keep && c.scored_by_us === true).map(c => ({
+      ts: fmtTs(c.gemini.timestamp_seconds),
+      note: c.notes,
+    })),
+    ...(extraGoals || []).filter(g => g.scored_by_us === true).map(g => ({
+      ts: g.timestamp_str || "?",
+      note: g.notes,
+    })),
+  ];
+  const keptSaves = (saveRows || []).filter(s => s.keep).map(s => ({
+    ts: s.coach_added ? (s.timestamp_str || "?") : fmtTs(s.timestamp_seconds),
+    action: s.gk_action,
+    note: s.notes,
+  }));
 
-  if (coachLines.length) {
-    lines.push("Coach observations:");
-    coachLines.forEach(l => lines.push("  " + l));
+  if (keptGoalsFor.length) {
+    lines.push(`GOALS SCORED (${keptGoalsFor.length})`);
+    keptGoalsFor.forEach(g => lines.push(`  [${g.ts}]${g.note ? ` — ${g.note}` : ""}`));
+    lines.push("");
+  }
+  if (keptGoalsAgainst.length) {
+    lines.push(`GOALS CONCEDED (${keptGoalsAgainst.length})`);
+    keptGoalsAgainst.forEach(g => lines.push(`  [${g.ts}]${g.note ? ` — ${g.note}` : ""}`));
+    lines.push("");
+  }
+  if (keptSaves.length) {
+    lines.push(`SAVES (${keptSaves.length})`);
+    keptSaves.forEach(s => lines.push(`  [${s.ts}] ${s.action || "?"}${s.note ? ` — ${s.note}` : ""}`));
     lines.push("");
   }
 
+  // Provenance footer — thin, no Gemini reference dump.
   if (out) {
-    lines.push(`Auto-tagged from Gemini (${out.model || "unknown model"}).`);
-    lines.push(`Source video: ${job.video_url}`);
-    lines.push("");
-    lines.push("Original Gemini analysis (for reference — coach review applied above):");
-    lines.push("");
-    (out.parsed?.goals || []).forEach((g, i) => {
-      lines.push(`Candidate ${i + 1} · video ${fmtTs(g.timestamp_seconds)} · clock ${g.match_clock} · confidence ${g.confidence}`);
-      lines.push(`  ${g.scoring_team} vs ${g.conceding_team} · ${g.attack_type}`);
-      lines.push(`  Shot: ${g.shot_type} from ${g.shot_location} · placement ${g.goal_placement_height}/${g.goal_placement_side}`);
-      lines.push(`  Buildup: ${g.buildup}`);
-      lines.push(`  GK: ${g.gk_observations}`);
-      lines.push("");
-    });
+    lines.push(`— Auto-tagged from video (${out.model || "gemini"}). Per-event detail is in the structured records on this match.`);
   }
-  return lines.join("\n");
+  return lines.join("\n").trim();
 }

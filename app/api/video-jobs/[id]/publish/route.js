@@ -140,9 +140,11 @@ export async function POST(request, { params }) {
         shot_type: c.shot_type || null,
         gk_positioning: c.gk_positioning || null,
         half: c.half || null,
-        // Convert timestamp_seconds (from video clock or coach input) into a
-        // game-clock minute for reporting. Approximate — coach can edit later.
+        timestamp_seconds: Number.isFinite(c.timestamp_seconds) ? c.timestamp_seconds : null,
         minute: Number.isFinite(c.timestamp_seconds) ? Math.floor(c.timestamp_seconds / 60) : null,
+        shot_description: c.shot_description || null,
+        gk_observations: c.gk_observations || null,
+        coach_notes: c.notes || null,
       }));
       const { error: gErr } = await admin.from('goals_conceded').insert(goalRows);
       if (gErr) {
@@ -150,6 +152,24 @@ export async function POST(request, { params }) {
         await admin.from('matches').delete().eq('id', matchId);
         return NextResponse.json({ error: 'Insert concessions failed: ' + gErr.message }, { status: 500 });
       }
+    }
+
+    // Phase 2.x — write goals_scored rows for our-team goals so per-event
+    // narrative is queryable, not stuck in a text blob.
+    if (teamScored.length) {
+      const scoredRows = teamScored.map(g => ({
+        match_id: matchId,
+        coach_id: user.id,
+        keeper_id: job.keeper_id,
+        timestamp_seconds: Number.isFinite(g.timestamp_seconds) ? g.timestamp_seconds : null,
+        minute: Number.isFinite(g.timestamp_seconds) ? Math.floor(g.timestamp_seconds / 60) : null,
+        shot_description: g.shot_description || null,
+        coach_notes: g.notes || null,
+        attack_type: g.attack_type || null,
+        half: g.half || null,
+      }));
+      const { error: sErr } = await admin.from('goals_scored').insert(scoredRows);
+      if (sErr) console.error('goals_scored insert failed (non-fatal):', sErr);
     }
 
     // Phase 2.1 — write a shot_events row per kept save event.
@@ -183,6 +203,17 @@ export async function POST(request, { params }) {
           shot_type: s.shot_type || null,
           event_type: 'Shot',
           half: null, // pitchside uses 'H1'/'H2'; we don't capture that today
+          timestamp_seconds: Number.isFinite(s.timestamp_seconds) ? s.timestamp_seconds : null,
+          on_target: s.on_target || null,
+          outcome: s.outcome || null,
+          body_distance_zone: s.body_distance_zone || null,
+          goal_placement_height: s.goal_placement_height || null,
+          goal_placement_side: s.goal_placement_side || null,
+          gk_visible: s.gk_visible || null,
+          coach_added: !!s.coach_added,
+          shot_description: s.shot_description || null,
+          gk_observations: s.gk_observations || null,
+          coach_notes: s.notes || null,
         };
       });
       const { error: seErr } = await admin.from('shot_events').insert(shotRows);
@@ -195,7 +226,15 @@ export async function POST(request, { params }) {
     const { error: updErr } = await admin.from('video_jobs').update({
       status: 'published',
       published_match_id: matchId,
-      reviewed_output: { goals_for: goalsFor, goals_against: goalsAgainst, concessions, saves_count: saves.length },
+      reviewed_output: {
+        goals_for: goalsFor,
+        goals_against: goalsAgainst,
+        concessions,
+        team_scored: teamScored,
+        saves,
+        review_diff: body.review_diff || null,
+        notes: body.notes || null,
+      },
     }).eq('id', id);
     if (updErr) {
       // Match landed but we couldn't flag the job — non-fatal but log it.
