@@ -78,6 +78,10 @@ export default function MatchDetailPage() {
 
   const onTargetCount = useMemo(() => saves.filter(s => s.on_target === "yes").length, [saves]);
   const fullSavesCount = useMemo(() => saves.filter(s => ["Catch", "Block", "Parry", "Deflect", "Punch"].includes(s.gk_action)).length, [saves]);
+  const goalsAgainstCount = useMemo(() => goalsConceded.length, [goalsConceded]);
+  const shotsFaced = useMemo(() => saves.length + goalsAgainstCount, [saves, goalsAgainstCount]);
+  const shotsOnTarget = useMemo(() => onTargetCount + goalsAgainstCount, [onTargetCount, goalsAgainstCount]);
+  const savePctOnTarget = shotsOnTarget > 0 ? fullSavesCount / shotsOnTarget : null;
 
   if (authLoading || loading) {
     return (
@@ -132,9 +136,10 @@ export default function MatchDetailPage() {
 
           {/* Top stats strip */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 12, marginTop: 24, paddingTop: 20, borderTop: `1px solid ${t.border}` }}>
-            <Stat label="Shots faced" value={match.shots_on_target ?? saves.length} />
-            <Stat label="Saves" value={match.saves ?? fullSavesCount} />
-            <Stat label="Save %" value={match.save_percentage != null ? `${(match.save_percentage * 100).toFixed(0)}%` : "—"} />
+            <Stat label="Shots faced" value={match.shots_faced ?? shotsFaced} sub={`${saves.length} saves + ${goalsAgainstCount} goals`} />
+            <Stat label="On target" value={match.shots_on_target ?? shotsOnTarget} sub={`${onTargetCount} on-target saves + ${goalsAgainstCount} goals`} />
+            <Stat label="Saves" value={match.saves ?? fullSavesCount} sub="Catch / Parry / Block / Deflect / Punch" />
+            <Stat label="Save %" value={match.save_percentage != null ? `${(match.save_percentage * 100).toFixed(0)}%` : (savePctOnTarget != null ? `${(savePctOnTarget * 100).toFixed(0)}%` : "—")} sub="of shots on target" />
             <Stat label="Clean sheet" value={(match.goals_against ?? 0) === 0 ? "✓" : "—"} />
           </div>
         </div>
@@ -222,11 +227,12 @@ export default function MatchDetailPage() {
 
 // — small primitives —
 
-function Stat({ label, value }) {
+function Stat({ label, value, sub }) {
   return (
     <div>
       <div style={{ fontSize: 10, color: t.dim, letterSpacing: 0.4, marginBottom: 4, textTransform: "uppercase" }}>{label}</div>
       <div style={{ fontSize: 20, fontWeight: 700, color: t.bright }}>{value}</div>
+      {sub && <div style={{ fontSize: 10, color: t.dim, marginTop: 2, lineHeight: 1.3 }}>{sub}</div>}
     </div>
   );
 }

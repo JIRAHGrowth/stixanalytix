@@ -78,7 +78,15 @@ export async function POST(request, { params }) {
     const validationErrs = concessions.flatMap((c, i) => validateConcession(c, i));
     if (validationErrs.length) return NextResponse.json({ error: validationErrs.join('; ') }, { status: 400 });
 
-    // Compute saves_* counters and shots-on-target from the kept save events
+    // Compute counts from the kept save events.
+    //
+    //   shots_faced       = every save event (on, off, or unclear target) + goals against.
+    //                       This is the "how many times did the GK have to react" number.
+    //   shots_on_target   = saves where on_target='yes' + goals against.
+    //                       Strict "saveable shots" — what save% is traditionally calculated against.
+    //   saves             = save events with a definite save action (Catch / Parry / Block / Deflect / Punch).
+    //                       Excludes Missed, Goal, unclear.
+    //   save_percentage   = saves / shots_on_target (matches existing dashboard convention).
     const saveCounts = { saves_catch: 0, saves_parry: 0, saves_block: 0, saves_tip: 0, saves_punch: 0, saves_dive: 0 };
     let shotsOnTarget = 0, savesTotal = 0;
     for (const s of saves) {
@@ -89,8 +97,8 @@ export async function POST(request, { params }) {
         savesTotal++;
       }
     }
-    // Goals against also count as shots on target (the shot beat the keeper)
     shotsOnTarget += goalsAgainst;
+    const shotsFaced = saves.length + goalsAgainst;
     const savePct = shotsOnTarget > 0 ? savesTotal / shotsOnTarget : 0;
 
     const meta = job.match_metadata || {};
@@ -114,6 +122,7 @@ export async function POST(request, { params }) {
       goals_against: goalsAgainst,
       result,
       goals_conceded: goalsAgainst,
+      shots_faced: shotsFaced,
       shots_on_target: shotsOnTarget,
       saves: savesTotal,
       save_percentage: savePct,
