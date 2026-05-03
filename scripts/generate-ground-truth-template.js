@@ -318,9 +318,17 @@ function buildEventSheet(workbook, name, def) {
   // Apply dropdown validation to the sample row + ~200 empty rows beneath
   const lastRow = sampleRowNum + 200;
   def.columns.forEach((col, i) => {
+    const letter = colLetter(i);
     if (col.type === 'dropdown') {
-      const letter = colLetter(i);
       applyDataValidation(sheet, letter, col.options, sampleRowNum, lastRow);
+    }
+    // Force time columns to TEXT format so Excel doesn't auto-convert MM:SS
+    // input into time-of-day Date values. Caused timestamps to round-trip
+    // as 1899 dates and required ugly fallback parsing in the converter.
+    if (col.key === 'time' || col.key === 'timestamp') {
+      for (let r = sampleRowNum; r <= lastRow; r++) {
+        sheet.getCell(`${letter}${r}`).numFmt = '@';
+      }
     }
   });
 }

@@ -86,10 +86,21 @@ const DIST_PASS_SELECTION = {
 function tsToSeconds(s) {
   if (s == null) return null;
   if (typeof s === 'number') return Math.round(s);
+  if (s instanceof Date) {
+    // Excel formatted this as a time-of-day Date but the user typed MM:SS.
+    // We tried to catch this in readCell via cell.text — if we got here the
+    // formatter wasn't applied. Best-effort: read displayed local time and
+    // treat hours-of-day as MM, minutes-of-day as SS.
+    return s.getHours() * 60 + s.getMinutes();
+  }
   const str = String(s).trim();
   if (!str) return null;
-  const m = /^(\d+):(\d{1,2})$/.exec(str);
-  if (m) return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+  // Accept "MM:SS" or "H:MM:SS" (treats first segment as minutes if 2 parts,
+  // hours+minutes+seconds if 3 parts which Excel sometimes formats time as)
+  const m3 = /^(\d+):(\d{1,2}):(\d{1,2})$/.exec(str);
+  if (m3) return parseInt(m3[1], 10) * 60 + parseInt(m3[2], 10);  // H:MM:SS where H = MM, MM = SS, ignore SS-of-cell
+  const m2 = /^(\d+):(\d{1,2})$/.exec(str);
+  if (m2) return parseInt(m2[1], 10) * 60 + parseInt(m2[2], 10);
   const n = parseFloat(str);
   return Number.isFinite(n) ? Math.round(n) : null;
 }
@@ -98,6 +109,18 @@ function readCell(cell) {
   if (cell == null) return null;
   let v = cell.value;
   if (v == null) return null;
+  // Excel may auto-convert MM:SS strings to time-of-day Date objects. The
+  // safest extraction is the cell's DISPLAYED TEXT — exceljs's cell.text
+  // honours the cell's number format and gives us the same string the user
+  // sees in Excel ("16:44"). Use that for time/date cells; preserve the Date
+  // as a fallback for explicit date columns (Metadata.Date).
+  if (v instanceof Date) {
+    const displayed = (cell.text || '').trim();
+    // If the displayed text looks like MM:SS or HH:MM, return it as a string
+    // for downstream parsing. Otherwise return the Date for date-column logic.
+    if (/^\d+:\d{1,2}(:\d{1,2})?$/.test(displayed)) return displayed;
+    return v;
+  }
   // ExcelJS gives objects for rich text / formulas — try to flatten
   if (typeof v === 'object') {
     if (v.text) v = v.text;
@@ -107,6 +130,17 @@ function readCell(cell) {
   }
   if (typeof v === 'string') v = v.trim();
   return v === '' ? null : v;
+}
+
+function dateToISO(d) {
+  if (!(d instanceof Date)) return d == null ? null : String(d);
+  // Use UTC components so timezone-shifted Excel dates round-trip cleanly.
+  // Excel stores dates as midnight, which can show as "previous day 16:00" in
+  // PST. We strip time and emit YYYY-MM-DD using UTC.
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 function lc(v) { return v == null ? null : String(v).toLowerCase().trim(); }
@@ -147,7 +181,7 @@ function readMetadata(sheet) {
   // Normalise expected keys
   return {
     match_name:       out['match name'] || null,
-    match_date:       out['date'] || null,
+    match_date:       dateToISO(out['date']),
     opponent:         out['opponent'] || null,
     venue:            lc(out['venue']) || null,
     session_type:     lc(out['session type']) || null,
