@@ -109,6 +109,10 @@ export default function ReviewPage() {
   // Phase 2.1 — saves review state
   const [saveRows, setSaveRows] = useState([]);
 
+  // Auto-save status indicator
+  const [savedAt, setSavedAt] = useState(null);
+  const draftKey = `stix-review-draft-${jobId}`;
+
   useEffect(() => {
     if (!user) return;
     let mounted = true;
@@ -145,8 +149,6 @@ export default function ReviewPage() {
           gemini: g,
         };
       });
-      setCandidates(cands);
-
       // Phase 2.1 — load save events from gemini_output.saves.parsed.saves
       const savesParsed = json.job?.gemini_output?.saves?.parsed || null;
       const initialSaves = (savesParsed?.saves || []).map((s, i) => ({
@@ -167,12 +169,62 @@ export default function ReviewPage() {
         // raw Gemini context preserved for review-diff and reference
         gemini: s,
       }));
-      setSaveRows(initialSaves);
+
+      // Restore from localStorage if a draft exists for this job. Drafts are
+      // tied to the job_id and the gemini_output count so we don't restore an
+      // out-of-date draft against a re-analyzed job.
+      let restoredFromDraft = false;
+      try {
+        const raw = typeof window !== "undefined" ? window.localStorage.getItem(draftKey) : null;
+        if (raw) {
+          const draft = JSON.parse(raw);
+          // Sanity check the draft matches the current job (same candidate / save counts).
+          if (
+            draft.candidates?.length === cands.length &&
+            draft.saveRows?.length === initialSaves.length &&
+            draft._jobId === jobId
+          ) {
+            setCandidates(draft.candidates);
+            setSaveRows(draft.saveRows);
+            setExtraGoals(draft.extraGoals || []);
+            setScoreOverride(draft.scoreOverride || null);
+            setSavedAt(draft._savedAt || null);
+            restoredFromDraft = true;
+          }
+        }
+      } catch (e) {
+        // ignore parse errors — proceed with fresh state
+      }
+      if (!restoredFromDraft) {
+        setCandidates(cands);
+        setSaveRows(initialSaves);
+      }
 
       setLoading(false);
     })();
     return () => { mounted = false; };
-  }, [user, jobId]);
+  }, [user, jobId, draftKey]);
+
+  // Auto-save: any state change writes to localStorage, debounced 400ms.
+  useEffect(() => {
+    if (loading || !job) return;
+    if (typeof window === "undefined") return;
+    const handle = setTimeout(() => {
+      try {
+        const now = new Date().toISOString();
+        const draft = {
+          _jobId: jobId,
+          _savedAt: now,
+          candidates, extraGoals, scoreOverride, saveRows,
+        };
+        window.localStorage.setItem(draftKey, JSON.stringify(draft));
+        setSavedAt(now);
+      } catch (e) {
+        // localStorage quota or disabled — silent fail; we tried
+      }
+    }, 400);
+    return () => clearTimeout(handle);
+  }, [loading, job, jobId, draftKey, candidates, extraGoals, scoreOverride, saveRows]);
 
   const counts = useMemo(() => {
     let kept = 0, gf = 0, ga = 0;
@@ -309,6 +361,8 @@ export default function ReviewPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Publish failed");
+      // Published successfully — clear the draft so it doesn't override on next load.
+      try { if (typeof window !== "undefined") window.localStorage.removeItem(draftKey); } catch {}
       // Stay on this page — show the published summary so coach can revisit.
       setPublishedMatchId(json.match_id);
       // Refetch the job so the page re-renders with status='published' state
@@ -506,13 +560,20 @@ export default function ReviewPage() {
 
         {/* PUBLISH */}
         {error && <div style={{ color: t.red, fontSize: 12, marginBottom: 12 }}>{error}</div>}
-        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", padding: "16px 0", borderTop: `1px solid ${t.border}` }}>
-          <Link href="/upload" style={{ padding: "10px 18px", borderRadius: 8, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontFamily: font, textDecoration: "none", fontSize: 13 }}>Back to uploads</Link>
-          {job?.status !== "published" && !publishedMatchId && (
-            <button onClick={publish} disabled={publishing} style={{ padding: "10px 22px", borderRadius: 8, background: t.accent, color: "#fff", border: "none", fontWeight: 700, fontSize: 13, fontFamily: font, cursor: publishing ? "default" : "pointer", opacity: publishing ? 0.6 : 1 }}>
-              {publishing ? "Publishing…" : `Save & Publish (${finalScore.goals_for}–${finalScore.goals_against})`}
-            </button>
-          )}
+        <div style={{ display: "flex", gap: 10, justifyContent: "space-between", alignItems: "center", padding: "16px 0", borderTop: `1px solid ${t.border}` }}>
+          <div style={{ fontSize: 11, color: t.dim, fontFamily: font }}>
+            {savedAt && job?.status !== "published" && !publishedMatchId ? (
+              <>💾 Auto-saved locally at {new Date(savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })} — your work survives a page reload.</>
+            ) : null}
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <Link href="/upload" style={{ padding: "10px 18px", borderRadius: 8, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontFamily: font, textDecoration: "none", fontSize: 13 }}>Back to uploads</Link>
+            {job?.status !== "published" && !publishedMatchId && (
+              <button onClick={publish} disabled={publishing} style={{ padding: "10px 22px", borderRadius: 8, background: t.accent, color: "#fff", border: "none", fontWeight: 700, fontSize: 13, fontFamily: font, cursor: publishing ? "default" : "pointer", opacity: publishing ? 0.6 : 1 }}>
+                {publishing ? "Publishing…" : `Save & Publish (${finalScore.goals_for}–${finalScore.goals_against})`}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
