@@ -123,25 +123,29 @@ function extractSweeper(geminiOutput) {
 }
 
 function normaliseTruth(truth) {
+  // The Excel converter already writes timestamp_seconds as the canonical
+  // numeric value. Prefer that — fall back to parsing the raw `timestamp`
+  // string only if the numeric is missing.
+  const ts = (e) => Number.isFinite(e.timestamp_seconds) ? e.timestamp_seconds : tsToSeconds(e.timestamp);
   return {
     duration_seconds: truth.duration_seconds || null,
     my_team_color: String(truth.my_team_color || '').toLowerCase(),
     opponent_color: String(truth.opponent_color || '').toLowerCase(),
     goals: (truth.events?.goals || []).map(g => ({
-      timestamp_seconds: tsToSeconds(g.timestamp ?? g.timestamp_seconds),
+      timestamp_seconds: ts(g),
       scoring_team: String(g.scoring_team || '').toLowerCase(),
       shot_type: g.shot_type,
       note: g.note || null,
     })),
     saves: (truth.events?.saves || []).map(s => ({
-      timestamp_seconds: tsToSeconds(s.timestamp ?? s.timestamp_seconds),
+      timestamp_seconds: ts(s),
       gk_action: s.gk_action,
       on_target: s.on_target,
       body_distance_zone: s.body_distance_zone,
       note: s.note || null,
     })),
     distribution: (truth.events?.distribution || []).map(d => ({
-      timestamp_seconds: tsToSeconds(d.timestamp ?? d.timestamp_seconds),
+      timestamp_seconds: ts(d),
       type: d.type,
       trigger: d.trigger,
       successful: d.successful,
@@ -149,14 +153,14 @@ function normaliseTruth(truth) {
       note: d.note || null,
     })),
     crosses: (truth.events?.crosses || []).map(c => ({
-      timestamp_seconds: tsToSeconds(c.timestamp ?? c.timestamp_seconds),
+      timestamp_seconds: ts(c),
       side: c.side,
       gk_action: c.gk_action,
       outcome: c.outcome,
       note: c.note || null,
     })),
     sweeper: (truth.events?.sweeper || []).map(s => ({
-      timestamp_seconds: tsToSeconds(s.timestamp ?? s.timestamp_seconds),
+      timestamp_seconds: ts(s),
       action: s.action,
       successful: s.successful,
       note: s.note || null,
