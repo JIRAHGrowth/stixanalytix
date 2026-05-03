@@ -25,6 +25,7 @@ IMAGE = (
         "requests>=2.32.0",
         "fastapi[standard]>=0.115.0",
     )
+    .add_local_file("worker/chunking.py", remote_path="/root/chunking.py")
     .add_local_dir("prompts", remote_path="/root/prompts")
 )
 
@@ -271,7 +272,123 @@ def process(job_id: str) -> dict:
         size_mb = os.path.getsize(video_path) / (1024 * 1024)
         print(f"[download] {size_mb:.1f} MB in {time.time() - download_start:.0f}s", flush=True)
 
-        # === Upload to Gemini Files API ===
+        # === Optional chunking path ===
+        # Set match_metadata.use_chunking = true to slice the video into ~10-min
+        # segments and analyse each independently. Standard pattern for long-
+        # video understanding; trades ~2× cost for materially better timestamp
+        # accuracy and event coverage on 30+ min matches. See worker/chunking.py.
+        use_chunking = bool(meta.get("use_chunking"))
+        chunk_duration = int(meta.get("chunk_duration_sec") or 600)
+
+        if use_chunking:
+            import sys
+            sys.path.insert(0, "/root")
+            import chunking as chunk_mod
+            print(f"[chunk] splitting video into ~{chunk_duration}s segments...", flush=True)
+            chunks = chunk_mod.split_video(video_path, chunk_duration_sec=chunk_duration, overlap_sec=15)
+            print(f"[chunk] produced {len(chunks)} chunk(s)", flush=True)
+            for c in chunks:
+                print(f"  chunk {c.index}: start={c.start_seconds}s dur={c.duration_seconds}s ({c.path})", flush=True)
+
+            genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+            model_name = os.environ.get("GEMINI_MODEL", "gemini-2.5-pro")
+
+            all_goals = []
+            all_saves = []
+            chunk_usages = []
+            goals_template = Path("/root/prompts/goals.md").read_text(encoding="utf-8")
+            saves_template = Path("/root/prompts/saves.md").read_text(encoding="utf-8")
+            shared_suffix = (
+                ("\n\n---\n\n" + spatial_calibration if spatial_calibration else "") +
+                ("\n\n---\n\n" + calibration if calibration else "") +
+                encyclopedia_text
+            )
+
+            for c in chunks:
+                print(f"[chunk {c.index}] uploading...", flush=True)
+                upl = genai.upload_file(path=c.path, mime_type="video/mp4")
+                wait_start = time.time()
+                while upl.state.name == "PROCESSING":
+                    if time.time() - wait_start > 10 * 60:
+                        raise RuntimeError(f"Gemini chunk {c.index} indexing exceeded 10 min")
+                    time.sleep(5)
+                    upl = genai.get_file(upl.name)
+                if upl.state.name != "ACTIVE":
+                    raise RuntimeError(f"Chunk {c.index} ended in state {upl.state.name}")
+
+                # Inject the chunk's offset into the prompt so Gemini knows the
+                # segment is part of a longer match and how to interpret times.
+                offset_note = (
+                    f"\n\nIMPORTANT: This video is a {c.duration_seconds}-second segment "
+                    f"of a longer match, starting at {c.start_seconds // 60}:{c.start_seconds % 60:02d} "
+                    f"of the full match. Report `timestamp_seconds` from 0 (the start of THIS segment), "
+                    f"not the full-match clock — the consumer will offset.\n"
+                )
+
+                for prompt_kind, template, schema, sink in [
+                    ("goals", goals_template, GOALS_RESPONSE_SCHEMA, all_goals),
+                    ("saves", saves_template, SAVES_RESPONSE_SCHEMA, all_saves),
+                ]:
+                    rendered = _render_prompt(template, {
+                        "my_team_color": meta.get("my_team_color"),
+                        "my_keeper_color": meta.get("my_keeper_color"),
+                        "opponent_color": meta.get("opponent_color"),
+                    }) + offset_note + shared_suffix
+
+                    model = genai.GenerativeModel(
+                        model_name,
+                        generation_config={
+                            "response_mime_type": "application/json",
+                            "response_schema": schema,
+                        },
+                    )
+                    print(f"[chunk {c.index}/{prompt_kind}] generating...", flush=True)
+                    resp = model.generate_content([upl, rendered])
+                    try:
+                        parsed = json.loads(resp.text)
+                    except json.JSONDecodeError:
+                        parsed = None
+                    events = (parsed or {}).get(prompt_kind, []) if parsed else []
+                    chunk_mod.offset_timestamps(events, c.start_seconds)
+                    sink.extend(events)
+                    usage = getattr(resp, "usage_metadata", None)
+                    if usage is not None:
+                        chunk_usages.append({
+                            "chunk": c.index, "kind": prompt_kind,
+                            "total_token_count": getattr(usage, "total_token_count", None),
+                            "prompt_token_count": getattr(usage, "prompt_token_count", None),
+                            "candidates_token_count": getattr(usage, "candidates_token_count", None),
+                        })
+
+            # Dedupe overlap-zone duplicates
+            all_goals = chunk_mod.dedupe_events(all_goals, tolerance_sec=15, key_fields=["scoring_team", "shot_type"])
+            all_saves = chunk_mod.dedupe_events(all_saves, tolerance_sec=5, key_fields=["gk_action", "shot_origin"])
+
+            # Persist as if this had been one merged Gemini call
+            sb.table("video_jobs").update({
+                "status": "review_needed",
+                "gemini_output": {
+                    "model": model_name,
+                    "chunked": True,
+                    "n_chunks": len(chunks),
+                    "chunk_duration_sec": chunk_duration,
+                    "parsed": {"goals": all_goals},
+                    "saves": {"parsed": {"saves": all_saves}, "usage": None},
+                    "raw": None,
+                    "usage": {"chunks": chunk_usages},
+                },
+                "finished_at": now(),
+            }).eq("id", job_id).execute()
+
+            chunk_mod.cleanup_chunks(chunks)
+            print(f"[chunk] done. goals={len(all_goals)} saves={len(all_saves)}", flush=True)
+            return {
+                "job_id": job_id, "status": "review_needed",
+                "chunked": True, "n_chunks": len(chunks),
+                "goals_detected": len(all_goals), "saves_detected": len(all_saves),
+            }
+
+        # === Upload to Gemini Files API (single-pass path — current default) ===
         upload_start = time.time()
         print(f"[gemini] uploading file...", flush=True)
         genai.configure(api_key=os.environ["GEMINI_API_KEY"])

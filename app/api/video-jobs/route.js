@@ -48,6 +48,10 @@ export async function POST(request) {
       was_subbed: !!body.was_subbed,
       sub_minute: body.sub_minute || null,
       sub_reason: body.sub_reason || null,
+      // Experimental chunked-analysis path. Set to true on the upload form
+      // for matches >30 min where attention decay is hurting accuracy.
+      use_chunking: !!body.use_chunking,
+      chunk_duration_sec: body.chunk_duration_sec ? parseInt(body.chunk_duration_sec, 10) : null,
     };
 
     const { data: job, error: insertErr } = await admin

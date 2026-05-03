@@ -86,6 +86,7 @@ function UploadPage() {
     sub_minute: "",
     sub_reason: "",
     video_url: "",
+    use_chunking: false,
   });
   const setF = (patch) => setForm(s => ({ ...s, ...patch }));
 
@@ -249,6 +250,7 @@ function UploadPage() {
         sub_reason: form.was_subbed ? form.sub_reason : null,
         video_url: videoUrl,
         storage_path: storagePath,
+        use_chunking: form.use_chunking,
       };
       const res = await fetch("/api/video-jobs", {
         method: "POST",
@@ -442,8 +444,15 @@ function UploadPage() {
               )}
             </Field>
 
+            <Field label="Experimental: chunked analysis" hint="Splits the video into ~10-min segments and analyses each separately. Materially better timestamp accuracy on 30+ min matches but ~2× cost. Off by default while we A/B test.">
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, padding: "8px 12px", background: t.cardAlt, borderRadius: 8, border: `1px solid ${t.border}` }}>
+                <input type="checkbox" checked={form.use_chunking} onChange={e => setF({ use_chunking: e.target.checked })} />
+                Use chunked analysis for this match
+              </label>
+            </Field>
+
             <div style={{ background: t.cardAlt, padding: "10px 12px", borderRadius: 8, fontSize: 11, color: t.dim, marginTop: 8, marginBottom: 16 }}>
-              Estimated cost: ~$5–15 per analysis (Gemini Pro). Processing usually takes 15–30 minutes.
+              Estimated cost: ~$5–15 per analysis (Gemini Pro). Processing usually takes 15–30 minutes.{form.use_chunking ? " Chunked mode roughly doubles both." : ""}
             </div>
 
             {submitError && <div style={{ color: t.red, fontSize: 12, marginBottom: 12 }}>{submitError}</div>}
