@@ -80,26 +80,34 @@ export async function POST(request, { params }) {
 
     // Compute counts from the kept save events.
     //
-    //   shots_faced       = every save event (on, off, or unclear target) + goals against.
-    //                       This is the "how many times did the GK have to react" number.
-    //   shots_on_target   = saves where on_target='yes' + goals against.
-    //                       Strict "saveable shots" — what save% is traditionally calculated against.
-    //   saves             = save events with a definite save action (Catch / Parry / Block / Deflect / Punch).
-    //                       Excludes Missed, Goal, unclear.
-    //   save_percentage   = saves / shots_on_target (matches existing dashboard convention).
+    //   shots_faced       = every save event + goals against. The "how many times
+    //                       did the GK have to react" number a coach intuits.
+    //   shots_on_target   = on-target saves + goals against. The "saveable shots"
+    //                       count — what save% is traditionally calculated against.
+    //   saves             = total save actions (Catch/Parry/Block/Deflect/Punch),
+    //                       regardless of on_target. This is the coach's intuitive
+    //                       "16 saves" number; counts every successful handle.
+    //   saves_*           = per-action breakdowns of `saves` (also include all
+    //                       save actions, on-target or not).
+    //   save_percentage   = (on-target saves) / shots_on_target. Capped at 1.0.
+    //                       Off-target saves don't count toward save% because the
+    //                       shot wouldn't have been a goal anyway. This avoids the
+    //                       >100% bug while keeping `saves` intuitive.
     const saveCounts = { saves_catch: 0, saves_parry: 0, saves_block: 0, saves_tip: 0, saves_punch: 0, saves_dive: 0 };
-    let shotsOnTarget = 0, savesTotal = 0;
+    let shotsOnTarget = 0, savesTotal = 0, savesOnTarget = 0;
     for (const s of saves) {
-      if (s.on_target === 'yes') shotsOnTarget++;
+      const isOnTarget = s.on_target === 'yes';
+      if (isOnTarget) shotsOnTarget++;
       const col = GK_ACTION_TO_COL[s.gk_action];
       if (col) {
         saveCounts[col] = (saveCounts[col] || 0) + 1;
         savesTotal++;
+        if (isOnTarget) savesOnTarget++;
       }
     }
     shotsOnTarget += goalsAgainst;
     const shotsFaced = saves.length + goalsAgainst;
-    const savePct = shotsOnTarget > 0 ? savesTotal / shotsOnTarget : 0;
+    const savePct = shotsOnTarget > 0 ? Math.min(1, savesOnTarget / shotsOnTarget) : 0;
 
     const meta = job.match_metadata || {};
     const result = goalsFor > goalsAgainst ? 'Win' : goalsFor < goalsAgainst ? 'Loss' : 'Draw';
@@ -163,10 +171,29 @@ export async function POST(request, { params }) {
       }
     }
 
-    // Phase 2.x — write goals_scored rows for our-team goals so per-event
-    // narrative is queryable, not stuck in a text blob.
-    if (teamScored.length) {
-      const scoredRows = teamScored.map(g => ({
+    // Write goals_scored rows for ALL our-team goals: kept Gemini candidates
+    // flagged scored_by_us=true AND coach-added extras. Previously only extras
+    // were written, leaving Gemini-detected our-team goals as a number-only
+    // record on matches.goals_for with no per-event narrative.
+    const ourTeamCandidateGoals = (body.review_diff?.candidates || [])
+      .filter(c => c.keep && c.scored_by_us === true)
+      .map(c => {
+        const gem = (job.gemini_output?.parsed?.goals || [])[c.gemini_index] || {};
+        return {
+          match_id: matchId,
+          coach_id: user.id,
+          keeper_id: job.keeper_id,
+          timestamp_seconds: Number.isFinite(gem.timestamp_seconds) ? gem.timestamp_seconds : null,
+          minute: Number.isFinite(gem.timestamp_seconds) ? Math.floor(gem.timestamp_seconds / 60) : null,
+          shot_description: gem.buildup || null,
+          coach_notes: c.notes || null,
+          attack_type: gem.attack_type || null,
+          half: null,
+        };
+      });
+    const allScoredRows = [
+      ...ourTeamCandidateGoals,
+      ...teamScored.map(g => ({
         match_id: matchId,
         coach_id: user.id,
         keeper_id: job.keeper_id,
@@ -176,8 +203,10 @@ export async function POST(request, { params }) {
         coach_notes: g.notes || null,
         attack_type: g.attack_type || null,
         half: g.half || null,
-      }));
-      const { error: sErr } = await admin.from('goals_scored').insert(scoredRows);
+      })),
+    ];
+    if (allScoredRows.length) {
+      const { error: sErr } = await admin.from('goals_scored').insert(allScoredRows);
       if (sErr) console.error('goals_scored insert failed (non-fatal):', sErr);
     }
 
