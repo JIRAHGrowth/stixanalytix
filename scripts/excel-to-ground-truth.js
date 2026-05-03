@@ -87,18 +87,27 @@ function tsToSeconds(s) {
   if (s == null) return null;
   if (typeof s === 'number') return Math.round(s);
   if (s instanceof Date) {
-    // Excel formatted this as a time-of-day Date but the user typed MM:SS.
-    // We tried to catch this in readCell via cell.text — if we got here the
-    // formatter wasn't applied. Best-effort: read displayed local time and
-    // treat hours-of-day as MM, minutes-of-day as SS.
+    // Excel may store MM:SS as either:
+    //   (a) a time-of-day fraction → ExcelJS Date displayed in local time
+    //       matches the user's "MM:SS" input ("16:44" → Date.getHours()=16,
+    //       .getMinutes()=44).
+    //   (b) a datetime if the value overflowed 24h ("55:28" → Excel rolls
+    //       into next day; ExcelJS gives a Date whose UTC math from Excel
+    //       epoch equals the user's intent).
+    //
+    // Heuristic: try UTC math first. If the result is >= 1440 minutes (24h)
+    // it's an overflow datetime — trust it. Otherwise the value is a time-
+    // of-day where local-time getters match user intent.
+    const utcMs = s.getTime() - Date.UTC(1899, 11, 30);
+    const utcMin = Math.round(utcMs / 60000);
+    if (utcMin >= 1440) return utcMin;
     return s.getHours() * 60 + s.getMinutes();
   }
   const str = String(s).trim();
   if (!str) return null;
-  // Accept "MM:SS" or "H:MM:SS" (treats first segment as minutes if 2 parts,
-  // hours+minutes+seconds if 3 parts which Excel sometimes formats time as)
+  // Accept "MM:SS" or "H:MM:SS"
   const m3 = /^(\d+):(\d{1,2}):(\d{1,2})$/.exec(str);
-  if (m3) return parseInt(m3[1], 10) * 60 + parseInt(m3[2], 10);  // H:MM:SS where H = MM, MM = SS, ignore SS-of-cell
+  if (m3) return parseInt(m3[1], 10) * 60 + parseInt(m3[2], 10);
   const m2 = /^(\d+):(\d{1,2})$/.exec(str);
   if (m2) return parseInt(m2[1], 10) * 60 + parseInt(m2[2], 10);
   const n = parseFloat(str);

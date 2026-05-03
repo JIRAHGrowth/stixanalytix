@@ -268,6 +268,12 @@ function buildMetadataSheet(workbook) {
         formulae: dropdownFormula(f.options), showErrorMessage: false,
       };
     }
+    // Force time-format fields to TEXT so Excel doesn't auto-convert MM:SS
+    // entries to overflow Date values (e.g. "55:28" stored as datetime
+    // straddling two days).
+    if (f.key === 'duration') {
+      sheet.getCell(`B${row}`).numFmt = '@';
+    }
   });
 
   sheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 1 }];
@@ -306,27 +312,24 @@ function buildEventSheet(workbook, name, def) {
   });
   sheet.views = [{ state: 'frozen', xSplit: 1, ySplit: headerRow }];
 
-  // Sample row
-  const sampleRowNum = headerRow + 1;
-  def.columns.forEach((col, i) => {
-    const letter = colLetter(i);
-    const cell = sheet.getCell(`${letter}${sampleRowNum}`);
-    if (def.sampleRow && def.sampleRow[col.key] !== undefined) cell.value = def.sampleRow[col.key];
-    styleSampleCell(cell);
-  });
+  // NO sample row in the data area. Pre-filling a sample with realistic data
+  // (e.g. "4:05 / Us / Open play / Rebound") looked like a real event to
+  // coaches who didn't know to delete it; the converter then double-counted.
+  // Examples live on the README sheet only.
+  const firstDataRow = headerRow + 1;
 
-  // Apply dropdown validation to the sample row + ~200 empty rows beneath
-  const lastRow = sampleRowNum + 200;
+  // Apply dropdown validation to ~200 empty rows beneath the header
+  const lastRow = firstDataRow + 200;
   def.columns.forEach((col, i) => {
     const letter = colLetter(i);
     if (col.type === 'dropdown') {
-      applyDataValidation(sheet, letter, col.options, sampleRowNum, lastRow);
+      applyDataValidation(sheet, letter, col.options, firstDataRow, lastRow);
     }
     // Force time columns to TEXT format so Excel doesn't auto-convert MM:SS
-    // input into time-of-day Date values. Caused timestamps to round-trip
-    // as 1899 dates and required ugly fallback parsing in the converter.
+    // input into time-of-day Date values. (The converter handles the auto-
+    // convert case as a safety net but text format avoids it entirely.)
     if (col.key === 'time' || col.key === 'timestamp') {
-      for (let r = sampleRowNum; r <= lastRow; r++) {
+      for (let r = firstDataRow; r <= lastRow; r++) {
         sheet.getCell(`${letter}${r}`).numFmt = '@';
       }
     }
@@ -354,7 +357,7 @@ async function main() {
     '     • Crosses — every cross the GK was responsible for handling',
     '     • Sweeper — keeper outfield work (clearances, interceptions, tackles, headers)',
     '     • 1v1s — high-value moments worth a dedicated row',
-    '4. The first row beneath the header on each sheet is a SAMPLE — overwrite or delete it.',
+    '4. The data sheets are EMPTY — start typing on row 2 (the row directly below the headers). Format examples are below if you need them.',
     '5. Save the file. Run:  node scripts/excel-to-ground-truth.js scripts/ground-truth/<match-name>.xlsx',
     '6. The converter writes a JSON file alongside that the eval harness can read.',
     '',
@@ -365,6 +368,15 @@ async function main() {
     ' • Notes are always optional but valuable — they become part of the match record on publish.',
     '',
     'Tab colours: red=Goals, green=Saves, blue=Distribution, orange=Crosses, purple=Sweeper, gold=1v1s, grey=metadata/this README.',
+    '',
+    'FORMAT EXAMPLES (copy the IDEA, not the literal row, into the relevant sheet):',
+    '',
+    '  Goals: 4:05 | 1 | Us | Open play | Rebound | 6-Yard Box | Low | Centre | Right-side initial shot saved, follow-up tap-in central. | Opp GK was on ground from initial save. | (notes)',
+    '  Saves: 24:47 | 1 | Central Distance | Foot | Yes | Parry | Yes | Corner | C | Low | GK Right | Driven shot from outside the box, central. | Strong parry — full extension dive to the right. | (notes)',
+    '  Distribution: 14:32 | 1 | Backpass | Pass | Yes | Yes | Switch wide | Left | Defender | Clean | Recycled possession to LCB under high press.',
+    '  Crosses: 36:18 | 2 | Corner Right | Whipped | Near post | Punch | Edge of 6yd | Punched away | Two-fisted punch under pressure from two attackers.',
+    '  Sweeper: 28:15 | 1 | Clearance | 5–15 yards out | Yes | 1 attacker | Cleared safely | Read the through ball early.',
+    '  1v1s: 52:17 | 2 | 1v1 faced | Conceded | Through ball over the top, GK rushed off line, attacker rounded him.',
   ];
   readmeLines.forEach((line, i) => {
     const cell = readme.getCell(`A${i + 1}`);
