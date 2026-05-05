@@ -32,13 +32,31 @@ This is the key axis for distinguishing build-up from set-piece distribution.
 - **throw_in_to_gk** — a throw-in from a teammate played to the GK.
 - **free_kick_to_gk** — a free kick taken by a teammate played to the GK.
 
-# Distribution types — how the GK released it
+# Distribution types — classify by RELEASE MOTION, not by destination distance
 
-- **gk_short** — short foot kick (<25 yards), typically to a defender close by, often under no pressure.
-- **gk_long** — long foot kick (>25 yards), aimed downfield at midfielders or forwards.
-- **throw** — overarm throw or roll-out to a teammate, usually within 25 yards.
-- **pass** — ground-ball foot pass, typically <20 yards, often part of build-up play. Distinct from a kick in that the ball stays low and is rolled / passed rather than struck for distance.
-- **drop_kick** — half-volley off the ground, used for medium-distance distribution often when pressed.
+The single most common error here is conflating types that look similar. Classify by HOW the ball leaves the GK, not by where it ends up.
+
+**Decision flowchart — ask in this order:**
+
+1. **Did the ball leave the GK's HANDS?** (no foot involvement at the moment of release)
+   → `throw` (overarm throw or underarm roll-out)
+
+2. **Was the ball ON THE GROUND when the GK's foot struck it?** (not dropped or tossed first)
+   → `pass` (ground-ball foot pass — typically a backpass returned, or the GK passes from a planted ball)
+
+3. **Did the GK DROP the ball from their hands and then strike it BEFORE it touched the ground?**
+   → `gk_short` (foot strike on volley, ball travels less than ~25 yards) or `gk_long` (foot strike on volley, ball travels more than ~25 yards). The motion is identical; distance decides which.
+
+4. **Did the GK drop the ball, let it BOUNCE on the ground, then strike it on the half-volley?**
+   → `drop_kick` (half-volley — ball strikes ground first, then foot strikes the rising ball)
+
+If you cannot see the motion clearly (e.g. GK is off-camera at the moment of release), use the type that best matches the trajectory + best-guess motion, but lower `confidence` to "low".
+
+**Quick disambiguation:**
+- **Goal kicks are `pass`.** The ball is placed on the ground and struck — the motion fits rule 2 (ball on ground at moment of strike). Do NOT label goal kicks as `gk_short` or `gk_long`. The `gk_short`/`gk_long` types apply only to volleyed kicks where the GK held the ball in their hands first, then released it to strike on the volley.
+- **A "long throw" is impossible** — throws don't go more than ~25 yards. If the ball travelled 40+ yards, it was either `gk_long` (volley from hands) or `drop_kick` (half-volley), not `throw`.
+- **Backpasses returned by foot are `pass`.** A teammate plays the ball to the GK on the ground, the GK plays it back along the ground without picking it up — that fits rule 2 (ball on ground), so type is `pass`.
+- **`gk_short` and `gk_long` are the volleyed-kick types** (rule 3). If you cannot see the GK lift the ball from their hands before kicking, do NOT use `gk_short`/`gk_long`. Default to `pass` (ball on ground) or `drop_kick` (half-volley) which require less hand-motion visibility.
 
 # Pass selection — the COACHING signal
 
@@ -69,7 +87,12 @@ For each distribution event, report these fields:
 - `trigger`: one of the trigger labels above.
 - `type`: one of `gk_short`, `gk_long`, `throw`, `pass`, `drop_kick`.
 - `successful`: `true` if the ball reached the intended target (a teammate retains possession), `false` if the opposition got it or it went out of play. If you cannot tell, use `unclear`.
-- `under_pressure`: `true` if an opposition player was within 2-3 yards of the GK at the moment of release, `false` otherwise.
+- `press_state`: select EXACTLY one of these three values. This field replaces the older `under_pressure` boolean — answer the new field, not the old one.
+  - `unpressed` — At the moment of release, the GK had clear space (no opposition player within 3 yards). This is the default for goal kicks (set piece, opposition is in their own half), most after-save throws (play has stopped), and most calm in-play returns.
+  - `pressed` — At the moment of release, an opposition player was within 2 yards of the GK and visibly pressing. To select this value, you MUST describe the specific player in `notes` — jersey number or position ("{{opponent_color}} #9 within 2 yards, applying press from the GK's left"). If you cannot identify the specific pressing player, do not select `pressed`.
+  - `unclear` — GK is off-camera or partially obscured at the moment of release; cannot judge spacing.
+
+  **Calibration: in any youth or amateur match, most distributions are `unpressed`.** A typical match has 70-90% unpressed events. If your output for this field is more than 50% `pressed`, you are over-flagging — re-do the analysis with the strict definition above. Do not allow the field name "press" to bias you into selecting `pressed` by default; the model has a known training bias on this field, and we are using a renamed enum specifically to make you pick rather than default.
 - `pass_selection`: one of the pass-selection labels above (most useful for `pass`/`gk_short`/`gk_long`; can be omitted for `throw`/`drop_kick` if not clear).
 - `direction`: `left` / `centre` / `right` / `backwards`.
 - `receiver`: `defender` / `midfielder` / `forward` / `out_of_play` / `opponent`. Best-judgement based on which player picked up the ball.

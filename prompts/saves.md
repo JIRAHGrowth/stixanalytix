@@ -17,13 +17,19 @@ Do NOT jump straight to listing saves. Long video has known attention-decay; clu
 
 **Step 1 — Determine match duration.** Note approximately how long the video is. A typical match recording is 30 to 90 minutes. Your save events MUST be distributed across this entire duration unless the match was so one-sided that the opposition genuinely had no shots in a portion.
 
-**Step 2 — Walk the video in halves.** Process the first half thoroughly, then EXPLICITLY confirm to yourself that you are continuing into the second half. After completing the second half, ask yourself: "Are my events distributed across both halves, or are they all in the first 15 minutes?" If they are clustered, you have not finished the analysis. Re-process.
+**Step 2 — Sweep for every defensive-third entry by the {{opponent_color}} team.** Before listing saves, mentally enumerate every moment the {{opponent_color}} team had the ball inside the {{my_team_color}} team's defensive third (the third closest to the {{my_keeper_color}} GK's goal). For each such entry, ask: "Did this entry produce (a) a shot at the goal, (b) a cross/cutback that the GK dealt with, (c) a clearance, or (d) the opposition lost the ball without shooting?" Only (a) and (b) are save events. Use this sweep as the index for your output — **every shot you find should map to one of these defensive-third entries**.
 
-**Step 3 — For each shot you find toward the {{my_team_color}} goal:** identify the moment of contact (when the shooter's foot meets the ball, not the moment the GK touches it). Record the timestamp at the strike, not the save.
+**Step 3 — Walk the video in halves.** Process the first half thoroughly, then EXPLICITLY confirm to yourself that you are continuing into the second half. After completing the second half, ask yourself: "Are my events distributed across both halves, or are they all in the first 15 minutes?" If they are clustered, you have not finished the analysis. Re-process.
 
-**Step 4 — Apply the recognition cues below to classify `gk_action`.** Be precise; if you cannot tell, use "unclear" — that is a valid and useful answer.
+**Step 4 — For each shot you find toward the {{my_team_color}} goal:** identify the moment of contact (when the shooter's foot meets the ball, not the moment the GK touches it). Record the timestamp at the strike, not the save.
 
-**Step 5 — Self-check before returning.** Verify event distribution across the match, no duplicate timestamps, and `gk_action` matches what is visible.
+**Step 5 — Apply the recognition cues below to classify `gk_action`.** Be precise; if you cannot tell, use "unclear" — that is a valid and useful answer.
+
+**Step 6 — Self-check before returning.** Verify event distribution across the match, no duplicate timestamps, and `gk_action` matches what is visible.
+
+**CALIBRATION — plausible counts.** In a typical 10-minute video segment, a goalkeeper faces between 1 and 5 save events (shots-on-target plus off-target shots that required a reaction). The full match average for youth football is 8-15 save events. **If your output has 0 save events on a 10-minute chunk, you have almost certainly missed shots — go back and re-watch the defensive-third entries from Step 2.** If you have more than 10 in a single 10-minute chunk, you are likely double-counting near-events; re-apply the rebound rule (rebounds = separate events with timestamps 1-3s apart, NOT 0.5s apart).
+
+**The single biggest failure mode is under-detection of routine catches.** A bouncing ball collected in the GK's hands at chest height IS a save event. A driven shot caught cleanly with no diving IS a save event. A header from a corner that lands in the GK's arms IS a save event. The coach wants the FULL picture, not just the dramatic moments.
 
 # What counts as a save event
 

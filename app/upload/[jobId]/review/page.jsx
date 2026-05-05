@@ -108,6 +108,8 @@ export default function ReviewPage() {
 
   // Phase 2.1 — saves review state
   const [saveRows, setSaveRows] = useState([]);
+  // Phase 2.2 — distribution review state
+  const [distRows, setDistRows] = useState([]);
 
   // Auto-save status indicator
   const [savedAt, setSavedAt] = useState(null);
@@ -149,6 +151,39 @@ export default function ReviewPage() {
           gemini: g,
         };
       });
+      // Phase 2.2 — load distribution events from gemini_output.distribution.parsed.distribution
+      const distParsed = json.job?.gemini_output?.distribution?.parsed || null;
+      const initialDist = (distParsed?.distribution || []).map((d, i) => {
+        // Phase 2.4 — accept new `press_state` enum or legacy `under_pressure`
+        // boolean. UI normalizes both to a single press_state field for editing.
+        let pressState = "";
+        if (d.press_state) {
+          pressState = String(d.press_state).trim().toLowerCase();
+        } else if (d.under_pressure === true || String(d.under_pressure).toLowerCase() === "true") {
+          pressState = "pressed";
+        } else if (d.under_pressure === false || String(d.under_pressure).toLowerCase() === "false") {
+          pressState = "unpressed";
+        } else if (d.under_pressure != null) {
+          pressState = "unclear";
+        }
+        return {
+          _id: `d${i}`,
+          keep: true,
+          timestamp_seconds: d.timestamp_seconds,
+          match_clock: d.match_clock,
+          trigger: d.trigger || "",
+          type: d.type || "",
+          successful: d.successful ?? "",
+          press_state: pressState,
+          pass_selection: d.pass_selection || "",
+          direction: d.direction || "",
+          receiver: d.receiver || "",
+          first_touch: d.first_touch || "",
+          notes: d.notes || "",
+          gemini: d,
+        };
+      });
+
       // Phase 2.1 — load save events from gemini_output.saves.parsed.saves
       const savesParsed = json.job?.gemini_output?.saves?.parsed || null;
       const initialSaves = (savesParsed?.saves || []).map((s, i) => ({
@@ -178,14 +213,16 @@ export default function ReviewPage() {
         const raw = typeof window !== "undefined" ? window.localStorage.getItem(draftKey) : null;
         if (raw) {
           const draft = JSON.parse(raw);
-          // Sanity check the draft matches the current job (same candidate / save counts).
+          // Sanity check the draft matches the current job (same candidate / save / dist counts).
           if (
             draft.candidates?.length === cands.length &&
             draft.saveRows?.length === initialSaves.length &&
+            (draft.distRows?.length ?? 0) === initialDist.length &&
             draft._jobId === jobId
           ) {
             setCandidates(draft.candidates);
             setSaveRows(draft.saveRows);
+            setDistRows(draft.distRows || initialDist);
             setExtraGoals(draft.extraGoals || []);
             setScoreOverride(draft.scoreOverride || null);
             setSavedAt(draft._savedAt || null);
@@ -198,6 +235,7 @@ export default function ReviewPage() {
       if (!restoredFromDraft) {
         setCandidates(cands);
         setSaveRows(initialSaves);
+        setDistRows(initialDist);
       }
 
       setLoading(false);
@@ -215,7 +253,7 @@ export default function ReviewPage() {
         const draft = {
           _jobId: jobId,
           _savedAt: now,
-          candidates, extraGoals, scoreOverride, saveRows,
+          candidates, extraGoals, scoreOverride, saveRows, distRows,
         };
         window.localStorage.setItem(draftKey, JSON.stringify(draft));
         setSavedAt(now);
@@ -224,7 +262,7 @@ export default function ReviewPage() {
       }
     }, 400);
     return () => clearTimeout(handle);
-  }, [loading, job, jobId, draftKey, candidates, extraGoals, scoreOverride, saveRows]);
+  }, [loading, job, jobId, draftKey, candidates, extraGoals, scoreOverride, saveRows, distRows]);
 
   const counts = useMemo(() => {
     let kept = 0, gf = 0, ga = 0;
@@ -344,6 +382,24 @@ export default function ReviewPage() {
       notes: r.notes || null,
     }));
 
+    // Phase 2.2 — distribution payload. Only kept rows persist to distribution_events.
+    // Phase 2.4 — emit press_state (enum) so server's coercePressState resolves it
+    // to the legacy under_pressure boolean. Older clients may still send under_pressure.
+    const distPayload = distRows.filter(r => r.keep).map(r => ({
+      timestamp_seconds: r.coach_added ? tsStrToSeconds(r.timestamp_str) : r.timestamp_seconds,
+      match_clock: r.match_clock || null,
+      trigger: r.trigger || null,
+      type: r.type || null,
+      successful: r.successful || null,         // server coerces "true"/"false"/"unclear" → bool|null
+      press_state: r.press_state || null,
+      pass_selection: r.pass_selection || null,
+      direction: r.direction || null,
+      receiver: r.receiver || null,
+      first_touch: r.first_touch || null,
+      notes: r.notes || null,
+      confidence: r.gemini?.confidence || null,
+    }));
+
     setPublishing(true);
     try {
       const res = await fetch(`/api/video-jobs/${jobId}/publish`, {
@@ -355,6 +411,7 @@ export default function ReviewPage() {
           concessions,
           team_scored: teamScored,
           saves: savesPayload,
+          distribution: distPayload,
           review_diff: reviewDiff,
           notes: notesFromGemini(job, candidates, extraGoals, saveRows),
         }),
@@ -558,6 +615,9 @@ export default function ReviewPage() {
         {/* SAVES TABLE — Phase 2.1 */}
         <SavesTable rows={saveRows} onChange={setSaveRows} t={t} font={font} />
 
+        {/* DISTRIBUTION TABLE — Phase 2.2 */}
+        <DistributionTable rows={distRows} onChange={setDistRows} t={t} font={font} />
+
         {/* PUBLISH */}
         {error && <div style={{ color: t.red, fontSize: 12, marginBottom: 12 }}>{error}</div>}
         <div style={{ display: "flex", gap: 10, justifyContent: "space-between", alignItems: "center", padding: "16px 0", borderTop: `1px solid ${t.border}` }}>
@@ -570,7 +630,7 @@ export default function ReviewPage() {
             <Link href="/upload" style={{ padding: "10px 18px", borderRadius: 8, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontFamily: font, textDecoration: "none", fontSize: 13 }}>Back to uploads</Link>
             {job?.status !== "published" && !publishedMatchId && (
               <button onClick={publish} disabled={publishing} style={{ padding: "10px 22px", borderRadius: 8, background: t.accent, color: "#fff", border: "none", fontWeight: 700, fontSize: 13, fontFamily: font, cursor: publishing ? "default" : "pointer", opacity: publishing ? 0.6 : 1 }}>
-                {publishing ? "Publishing…" : `Save & Publish (${finalScore.goals_for}–${finalScore.goals_against})`}
+                {publishing ? "Publishing…" : `Publish to dashboard (${finalScore.goals_for}–${finalScore.goals_against})`}
               </button>
             )}
           </div>
@@ -864,6 +924,224 @@ function SavesTable({ rows, onChange, t, font }) {
         </table>
       </div>
       <button type="button" onClick={addMissedSave} style={{ padding: "8px 14px", borderRadius: 8, border: `1px dashed ${t.accent}66`, background: "transparent", color: t.accent, fontSize: 12, fontFamily: font, cursor: "pointer", marginBottom: 24 }}>+ Add a save Gemini missed</button>
+    </>
+  );
+}
+
+// Phase 2.2 — distribution candidates review. Mirrors the SavesTable pattern:
+// Gemini-tagged rows are accepted by default, coach can reject false positives,
+// add missed events, and edit fields inline. Only kept rows persist.
+function DistributionTable({ rows, onChange, t, font }) {
+  const [expanded, setExpanded] = useState({});
+  const toggleExpanded = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+  const update = (id, patch) => onChange(rows.map(r => r._id === id ? { ...r, ...patch } : r));
+  const removeRow = (id) => {
+    onChange(rows.filter(r => r._id !== id));
+    setExpanded(prev => { const next = { ...prev }; delete next[id]; return next; });
+  };
+  const addMissedDist = () => {
+    onChange([...(rows || []), {
+      _id: `dcoach_${Date.now()}`,
+      coach_added: true,
+      keep: true,
+      timestamp_str: "",
+      trigger: "goal_kick",
+      type: "pass",
+      successful: "true",
+      press_state: "unpressed",
+      pass_selection: "",
+      direction: "",
+      receiver: "defender",
+      first_touch: "",
+      notes: "",
+      gemini: { confidence: "—" },
+    }]);
+  };
+
+  const TRIGGERS = ["goal_kick", "after_save", "backpass", "loose_ball", "throw_in_to_gk", "free_kick_to_gk"];
+  const TYPES = ["gk_short", "gk_long", "throw", "pass", "drop_kick"];
+  const TRIBOOL = ["true", "false", "unclear"];
+  const PRESS_STATES = ["unpressed", "pressed", "unclear"];
+  const PASS_SEL = [
+    "short_to_defender", "sideways_across_back", "long_to_forward",
+    "switch_wide", "backwards_under_pressure", "clearance_under_pressure", "drilled_into_channel",
+  ];
+  const DIRECTIONS = ["left", "centre", "right", "backwards"];
+  const RECEIVERS = ["defender", "midfielder", "forward", "out_of_play", "opponent"];
+  const FIRST_TOUCH = ["clean", "heavy", "two_touches", "mishit"];
+
+  const sel = {
+    width: "100%", padding: "5px 4px", fontSize: 11, borderRadius: 4,
+    background: t.cardAlt, border: `1px solid ${t.border}`, color: t.bright,
+    fontFamily: font,
+  };
+  const cellStyle = { padding: "8px 6px", borderTop: `1px solid ${t.border}`, verticalAlign: "top" };
+  const headStyle = { padding: "8px 6px", fontSize: 10, color: t.dim, textTransform: "uppercase", letterSpacing: 0.4, fontWeight: 600, textAlign: "left", borderBottom: `1px solid ${t.border}` };
+
+  const fmtTimeLocal = (s) => {
+    if (s == null) return "—";
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${m}:${String(r).padStart(2, '0')}`;
+  };
+  const displayTime = (r) => r.coach_added ? (r.timestamp_str || "—") : fmtTimeLocal(r.timestamp_seconds);
+
+  if (!rows || rows.length === 0) {
+    return (
+      <>
+        <h3 style={{ fontSize: 13, fontWeight: 700, color: t.bright, letterSpacing: 0.4, margin: "20px 0 10px" }}>DISTRIBUTION</h3>
+        <div style={{ background: t.card, border: `1px dashed ${t.border}`, borderRadius: 12, padding: 24, textAlign: "center", color: t.dim, fontSize: 13, marginBottom: 12 }}>
+          Gemini didn't tag any distribution events for this match. Add them manually below.
+        </div>
+        <button type="button" onClick={addMissedDist} style={{ padding: "8px 14px", borderRadius: 8, border: `1px dashed ${t.accent}66`, background: "transparent", color: t.accent, fontSize: 12, fontFamily: font, cursor: "pointer", marginBottom: 24 }}>+ Add a distribution Gemini missed</button>
+      </>
+    );
+  }
+
+  const acceptHighConfidence = () => onChange(rows.map(r => ({ ...r, keep: !r.coach_added && r.gemini?.confidence === "high" ? true : r.keep })));
+  const rejectLowConfidence = () => onChange(rows.map(r => ({ ...r, keep: !r.coach_added && r.gemini?.confidence === "low" ? false : r.keep })));
+  const acceptAll = () => onChange(rows.map(r => ({ ...r, keep: true })));
+  const rejectAll = () => onChange(rows.map(r => r.coach_added ? r : { ...r, keep: false }));
+
+  const counts = { high: 0, medium: 0, low: 0, kept: 0, coach: 0 };
+  for (const r of rows) {
+    if (r.coach_added) counts.coach++;
+    else counts[r.gemini?.confidence || "medium"]++;
+    if (r.keep) counts.kept++;
+  }
+
+  return (
+    <>
+      <h3 style={{ fontSize: 13, fontWeight: 700, color: t.bright, letterSpacing: 0.4, margin: "20px 0 10px" }}>DISTRIBUTION — {rows.length} candidate{rows.length === 1 ? "" : "s"}</h3>
+      <div style={{ display: "flex", gap: 6, marginBottom: 10, alignItems: "center", flexWrap: "wrap", fontSize: 11, color: t.dim }}>
+        <span>{counts.high} high / {counts.medium} medium / {counts.low} low · {counts.coach > 0 ? `${counts.coach} coach-added · ` : ""}Keeping {counts.kept}</span>
+        <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+          <button type="button" onClick={acceptHighConfidence} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 11, fontFamily: font, cursor: "pointer" }}>Accept high</button>
+          <button type="button" onClick={rejectLowConfidence} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 11, fontFamily: font, cursor: "pointer" }}>Reject low</button>
+          <button type="button" onClick={acceptAll} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 11, fontFamily: font, cursor: "pointer" }}>Accept all</button>
+          <button type="button" onClick={rejectAll} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 11, fontFamily: font, cursor: "pointer" }}>Reject all</button>
+          <button type="button" onClick={() => setExpanded(Object.fromEntries(rows.map(r => [r._id, true])))} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 11, fontFamily: font, cursor: "pointer" }}>Expand all</button>
+          <button type="button" onClick={() => setExpanded({})} style={{ padding: "4px 10px", borderRadius: 6, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 11, fontFamily: font, cursor: "pointer" }}>Collapse all</button>
+        </span>
+      </div>
+      <div style={{ fontSize: 11, color: t.dim, marginBottom: 10, lineHeight: 1.5 }}>
+        Each row = one moment the GK released the ball. Click <span style={{ color: t.accent }}>✎</span> to add notes or use the Pass-selection / First-touch fields.
+      </div>
+      <div style={{ background: t.card, border: `1px solid ${t.border}`, borderRadius: 12, padding: 8, marginBottom: 12, overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, color: t.text }}>
+          <thead>
+            <tr>
+              <th style={{ ...headStyle, width: 28 }}></th>
+              <th style={{ ...headStyle, width: 40 }}>Keep</th>
+              <th style={{ ...headStyle, width: 80 }}>Time</th>
+              <th style={headStyle}>Trigger</th>
+              <th style={headStyle}>Type</th>
+              <th style={headStyle}>OK?</th>
+              <th style={headStyle}>Pressed</th>
+              <th style={headStyle}>Direction</th>
+              <th style={headStyle}>Receiver</th>
+              <th style={headStyle}>Conf</th>
+              <th style={{ ...headStyle, width: 30 }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => {
+              const dim = !r.keep;
+              const isExpanded = !!expanded[r._id];
+              const confColor = r.coach_added ? t.accent
+                : r.gemini?.confidence === "high" ? t.green
+                : r.gemini?.confidence === "low" ? t.red
+                : t.yellow;
+              return (
+                <Fragment key={r._id}>
+                  <tr style={{ opacity: dim ? 0.45 : 1, background: r.coach_added ? t.accent + "08" : "transparent" }}>
+                    <td style={{ ...cellStyle, textAlign: "center" }}>
+                      <button type="button" onClick={() => toggleExpanded(r._id)} style={{ background: "none", border: "none", color: r.notes ? t.accent : t.dim, cursor: "pointer", fontSize: 12 }} title={isExpanded ? "Collapse details" : "Edit details"}>
+                        {isExpanded ? "▼" : "✎"}
+                      </button>
+                    </td>
+                    <td style={cellStyle}><input type="checkbox" checked={r.keep} onChange={e => update(r._id, { keep: e.target.checked })} /></td>
+                    <td style={{ ...cellStyle, fontWeight: 600, color: t.bright, whiteSpace: "nowrap" }}>
+                      {r.coach_added ? (
+                        <input type="text" value={r.timestamp_str || ""} onChange={e => update(r._id, { timestamp_str: e.target.value })} placeholder="MM:SS" style={{ ...sel, fontWeight: 700, color: t.bright, width: 64 }} />
+                      ) : (
+                        displayTime(r)
+                      )}
+                    </td>
+                    <td style={cellStyle}>
+                      <select value={r.trigger || ""} onChange={e => update(r._id, { trigger: e.target.value })} style={sel}>
+                        <option value="">—</option>
+                        {TRIGGERS.map(o => <option key={o} value={o}>{o.replace(/_/g, ' ')}</option>)}
+                      </select>
+                    </td>
+                    <td style={cellStyle}>
+                      <select value={r.type || ""} onChange={e => update(r._id, { type: e.target.value })} style={sel}>
+                        <option value="">—</option>
+                        {TYPES.map(o => <option key={o} value={o}>{o.replace(/_/g, ' ')}</option>)}
+                      </select>
+                    </td>
+                    <td style={cellStyle}>
+                      <select value={r.successful || ""} onChange={e => update(r._id, { successful: e.target.value })} style={sel}>
+                        <option value="">—</option>
+                        {TRIBOOL.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </td>
+                    <td style={cellStyle}>
+                      <select value={r.press_state || ""} onChange={e => update(r._id, { press_state: e.target.value })} style={sel}>
+                        <option value="">—</option>
+                        {PRESS_STATES.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </td>
+                    <td style={cellStyle}>
+                      <select value={r.direction || ""} onChange={e => update(r._id, { direction: e.target.value })} style={sel}>
+                        <option value="">—</option>
+                        {DIRECTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </td>
+                    <td style={cellStyle}>
+                      <select value={r.receiver || ""} onChange={e => update(r._id, { receiver: e.target.value })} style={sel}>
+                        <option value="">—</option>
+                        {RECEIVERS.map(o => <option key={o} value={o}>{o.replace(/_/g, ' ')}</option>)}
+                      </select>
+                    </td>
+                    <td style={{ ...cellStyle, color: confColor, fontWeight: 600, textTransform: "lowercase" }}>{r.coach_added ? "—" : (r.gemini?.confidence || "—")}</td>
+                    <td style={{ ...cellStyle, textAlign: "center" }}>
+                      <button type="button" onClick={() => removeRow(r._id)} title="Remove row" style={{ background: "none", border: "none", color: t.dim, cursor: "pointer", fontSize: 12 }}>✕</button>
+                    </td>
+                  </tr>
+                  {isExpanded && (
+                    <tr style={{ background: t.cardAlt }}>
+                      <td colSpan={11} style={{ padding: "10px 16px", borderTop: `1px solid ${t.border}` }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
+                          <div>
+                            <div style={{ fontSize: 10, color: t.dim, letterSpacing: 0.4, fontWeight: 600, marginBottom: 4, textTransform: "uppercase" }}>Pass selection</div>
+                            <select value={r.pass_selection || ""} onChange={e => update(r._id, { pass_selection: e.target.value })} style={{ ...sel, width: "100%" }}>
+                              <option value="">—</option>
+                              {PASS_SEL.map(o => <option key={o} value={o}>{o.replace(/_/g, ' ')}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 10, color: t.dim, letterSpacing: 0.4, fontWeight: 600, marginBottom: 4, textTransform: "uppercase" }}>First touch (optional)</div>
+                            <select value={r.first_touch || ""} onChange={e => update(r._id, { first_touch: e.target.value })} style={{ ...sel, width: "100%" }}>
+                              <option value="">—</option>
+                              {FIRST_TOUCH.map(o => <option key={o} value={o}>{o.replace(/_/g, ' ')}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 10, color: t.dim, letterSpacing: 0.4, fontWeight: 600, marginBottom: 4, textTransform: "uppercase" }}>Your notes (flow into match record)</div>
+                            <textarea value={r.notes || ""} onChange={e => update(r._id, { notes: e.target.value })} rows={3} placeholder="Anything you'd add — context Gemini missed, coaching point on the choice..." style={{ width: "100%", padding: "6px 8px", fontSize: 12, borderRadius: 6, background: t.bg, border: `1px solid ${t.border}`, color: t.bright, fontFamily: font, resize: "vertical" }} />
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <button type="button" onClick={addMissedDist} style={{ padding: "8px 14px", borderRadius: 8, border: `1px dashed ${t.accent}66`, background: "transparent", color: t.accent, fontSize: 12, fontFamily: font, cursor: "pointer", marginBottom: 24 }}>+ Add a distribution Gemini missed</button>
     </>
   );
 }

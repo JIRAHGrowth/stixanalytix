@@ -91,14 +91,31 @@ function extractSaves(geminiOutput) {
 
 function extractDistribution(geminiOutput) {
   const dist = geminiOutput?.distribution?.parsed?.distribution || [];
-  return dist.map(d => ({
-    timestamp_seconds: d.timestamp_seconds,
-    type: d.type,
-    trigger: d.trigger,
-    successful: d.successful,
-    under_pressure: d.under_pressure,
-    confidence: d.confidence,
-  }));
+  return dist.map(d => {
+    // Phase 2.4 — accept new `press_state` enum or legacy `under_pressure` boolean.
+    let underPressure;
+    if (d.press_state) {
+      const ps = String(d.press_state).trim().toLowerCase();
+      if (ps === 'pressed') underPressure = true;
+      else if (ps === 'unpressed') underPressure = false;
+      else underPressure = null;
+    } else if (typeof d.under_pressure === 'boolean') {
+      underPressure = d.under_pressure;
+    } else {
+      const s = String(d.under_pressure || '').toLowerCase();
+      if (s === 'true') underPressure = true;
+      else if (s === 'false') underPressure = false;
+      else underPressure = null;
+    }
+    return {
+      timestamp_seconds: d.timestamp_seconds,
+      type: d.type,
+      trigger: d.trigger,
+      successful: d.successful,
+      under_pressure: underPressure,
+      confidence: d.confidence,
+    };
+  });
 }
 
 function extractCrosses(geminiOutput) {

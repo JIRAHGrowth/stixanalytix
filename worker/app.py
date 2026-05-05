@@ -54,6 +54,14 @@ GOALS_RESPONSE_SCHEMA = {
                     "goal_placement_height": {"type": "STRING"},
                     "goal_placement_side": {"type": "STRING"},
                     "gk_observations": {"type": "STRING"},
+                    # Phase 2.4 — structured evidence forces the model to commit
+                    # to verification per the two-of-three rule in prompts/goals.md.
+                    # Reconciliation drops goals where fewer than 2 of these are
+                    # affirmative, matching the press_state schema-rename technique
+                    # that broke Gemini's training bias on under_pressure.
+                    "evidence_kickoff_after": {"type": "STRING"},     # "kickoff at MM:SS" or "not_observed"
+                    "evidence_celebration": {"type": "STRING"},       # description of celebration or "not_observed"
+                    "evidence_scoreboard": {"type": "STRING"},        # "X-Y -> X-Y+1" or "scoreboard_not_visible" or "scoreboard_unchanged"
                     "confidence": {"type": "STRING"},
                 },
                 "required": [
@@ -61,7 +69,9 @@ GOALS_RESPONSE_SCHEMA = {
                     "conceding_team", "scoreboard_before", "scoreboard_after",
                     "attack_type", "buildup", "shot_type", "shot_location",
                     "goal_placement_height", "goal_placement_side",
-                    "gk_observations", "confidence",
+                    "gk_observations",
+                    "evidence_kickoff_after", "evidence_celebration", "evidence_scoreboard",
+                    "confidence",
                 ],
             },
         }
@@ -106,6 +116,198 @@ SAVES_RESPONSE_SCHEMA = {
     },
     "required": ["saves"],
 }
+
+# Phase 2.2 — every distribution event by the analyzed team's GK.
+# Field set mirrors prompts/distribution.md and the dashboard's distribution
+# section. STRING used everywhere even for booleans so Gemini can return
+# "unclear" when it can't tell — schema validators don't accept mixed types.
+DISTRIBUTION_RESPONSE_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "distribution": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "timestamp_seconds": {"type": "INTEGER"},
+                    "match_clock": {"type": "STRING"},
+                    "trigger": {"type": "STRING"},             # goal_kick / after_save / backpass / loose_ball / throw_in_to_gk / free_kick_to_gk
+                    "type": {"type": "STRING"},                # gk_short / gk_long / throw / pass / drop_kick
+                    "successful": {"type": "STRING"},          # true / false / unclear
+                    # Phase 2.4 — renamed from under_pressure(bool) to press_state(enum)
+                    # Gemini's boolean default-to-true bias was unbreakable via prompt;
+                    # a new field name with explicit selection forces the model to pick.
+                    "press_state": {"type": "STRING"},         # unpressed / pressed / unclear
+                    "pass_selection": {"type": "STRING"},      # see prompt
+                    "direction": {"type": "STRING"},           # left / centre / right / backwards
+                    "receiver": {"type": "STRING"},            # defender / midfielder / forward / out_of_play / opponent
+                    "first_touch": {"type": "STRING"},         # clean / heavy / two_touches / mishit
+                    "notes": {"type": "STRING"},
+                    "confidence": {"type": "STRING"},          # high / medium / low
+                },
+                "required": [
+                    "timestamp_seconds", "match_clock", "trigger", "type",
+                    "successful", "press_state", "direction", "receiver",
+                    "confidence",
+                ],
+            },
+        }
+    },
+    "required": ["distribution"],
+}
+
+
+def _filter_low_signal_saves(saves: list) -> list:
+    """Drop save events that are pure noise: an off-target shot with no GK
+    involvement (`on_target=no` AND `gk_action=unclear`). These flood the
+    review surface without offering coaching value — the GK didn't react,
+    so there's nothing to assess.
+
+    Keeps off-target shots where the GK *did* react (e.g. a parry to be safe
+    on a shot heading wide — coach still wants those logged).
+    """
+    if not saves:
+        return saves
+    kept = []
+    dropped = 0
+    for s in saves:
+        on_target = str(s.get("on_target", "")).strip().lower()
+        gk_action = str(s.get("gk_action", "")).strip().lower()
+        if on_target == "no" and gk_action == "unclear":
+            dropped += 1
+            continue
+        kept.append(s)
+    if dropped:
+        print(f"[saves-filter] dropped {dropped} low-signal events (off-target + no GK action)", flush=True)
+    return kept
+
+
+def _reconcile_events(goals: list, saves: list, distribution: list) -> tuple:
+    """Phase 2.3 cross-event reconciliation pass — applied AFTER per-type
+    dedupe + filtering, BEFORE persisting.
+
+    Borrows from the InStat human-tagging QC model: tags are validated
+    against each other before publishing. Three rules:
+
+      A) Confidence threshold on distribution. Distribution events at
+         medium/low confidence are far more likely false positives than
+         signal — coach time is better spent on high-confidence calls.
+         Goals/saves are NOT confidence-filtered here because Gemini
+         currently emits nearly every event at "high" — confidence isn't
+         a discriminative signal for those types yet.
+
+      B) Cross-event collision:
+         B1) A `saves` row with gk_action="Goal" within ±5s of a `goals`
+             candidate is duplicative — the goal record is more informative.
+             Drop the save; keep the goal.
+         B2) A `distribution` event within ±5s of any save or goal is
+             implausible — the GK was reacting (saving) or conceding,
+             not distributing. Drop the distribution.
+
+      C) Goal scoreboard delta. If `scoreboard_before` and `scoreboard_after`
+         are BOTH visible AND equal, the goal didn't actually change the
+         score = hallucination. No-op on youth video without scoreboard.
+
+    Returns (goals, saves, distribution) — same shapes, possibly trimmed.
+    Logs how many events each rule dropped.
+    """
+    def _is_visible_scoreboard(s):
+        s = (s or "")
+        if not isinstance(s, str):
+            s = str(s)
+        s_norm = s.strip().lower()
+        return bool(s_norm) and s_norm not in ("not_visible", "unclear", "n/a", "null", "none")
+
+    def _has_ts(e):
+        return isinstance(e.get("timestamp_seconds"), (int, float))
+
+    # === A: confidence threshold on distribution ===
+    # Only drop "low" confidence — empirically (eval 2026-05-04), dropping
+    # "medium" too cut recall in half because Gemini tags real but
+    # hard-to-classify distributions as medium. Medium confidence on the
+    # type field is fine; the event still happened.
+    n0 = len(distribution or [])
+    distribution = [
+        d for d in (distribution or [])
+        if str(d.get("confidence", "")).strip().lower() != "low"
+    ]
+    a_dropped = n0 - len(distribution)
+
+    # === C: goal scoreboard delta check ===
+    n0 = len(goals or [])
+    def _scoreboard_unchanged(g):
+        b = g.get("scoreboard_before")
+        a = g.get("scoreboard_after")
+        return _is_visible_scoreboard(b) and _is_visible_scoreboard(a) \
+            and str(b).strip().lower() == str(a).strip().lower()
+    goals = [g for g in (goals or []) if not _scoreboard_unchanged(g)]
+    c_dropped = n0 - len(goals)
+
+    # === B: cross-event collision (run AFTER A and C so we collide against the cleaned sets) ===
+    goal_times = sorted([g["timestamp_seconds"] for g in goals if _has_ts(g)])
+
+    def _near_any(t, times, tol):
+        # Linear scan — n is small (tens of events). No need for bisect.
+        return any(abs(t - x) <= tol for x in times)
+
+    # B1: drop saves with gk_action="Goal" near a goal candidate
+    n0 = len(saves or [])
+    saves = [
+        s for s in (saves or [])
+        if not (
+            _has_ts(s)
+            and str(s.get("gk_action", "")).strip().lower() == "goal"
+            and _near_any(s["timestamp_seconds"], goal_times, 5)
+        )
+    ]
+    b1_dropped = n0 - len(saves)
+
+    # B2: drop distribution events colliding with any save or goal.
+    # Tolerance is ±2s — empirically, a real GK distribution can happen 4-6s
+    # after a save (catch → quick throw to a defender), so a ±5s window kills
+    # legitimate sequential events. ±2s catches the actual collision case
+    # (Gemini logged the same moment as both a save and a distribution).
+    save_times = [s["timestamp_seconds"] for s in saves if _has_ts(s)]
+    busy_times = goal_times + save_times
+    n0 = len(distribution or [])
+    distribution = [
+        d for d in (distribution or [])
+        if not (_has_ts(d) and _near_any(d["timestamp_seconds"], busy_times, 2))
+    ]
+    b2_dropped = n0 - len(distribution)
+
+    # === D: goal evidence rule (Phase 2.4) ===
+    # Drop goals where fewer than 2 of {kickoff, celebration, scoreboard} are
+    # affirmatively observed. The schema requires each field be a description;
+    # a value matching the "not_observed" / "not_visible" / "unchanged" set
+    # counts as zero evidence.
+    NEGATIVE_EVIDENCE = {
+        "", "not_observed", "no_observation", "none", "null", "n/a",
+        "scoreboard_not_visible", "no_scoreboard_visible", "scoreboard_unchanged",
+        "no_kickoff_observed", "no_celebration_observed",
+    }
+    def _evidence_count(g):
+        ev_fields = ("evidence_kickoff_after", "evidence_celebration", "evidence_scoreboard")
+        count = 0
+        for f in ev_fields:
+            v = str(g.get(f) or "").strip().lower()
+            if v and v not in NEGATIVE_EVIDENCE:
+                count += 1
+        return count
+
+    n0_goals_d = len(goals or [])
+    goals = [g for g in (goals or []) if _evidence_count(g) >= 2]
+    d_dropped = n0_goals_d - len(goals)
+
+    print(
+        f"[reconcile] A:{a_dropped} dist (low/med conf) "
+        f"| C:{c_dropped} goals (scoreboard unchanged) "
+        f"| D:{d_dropped} goals (evidence count <2) "
+        f"| B1:{b1_dropped} saves (Goal-action near a goal) "
+        f"| B2:{b2_dropped} dist (near a save or goal)",
+        flush=True,
+    )
+    return goals, saves, distribution
 
 
 def _render_prompt(template: str, vars: dict) -> str:
@@ -295,14 +497,43 @@ def process(job_id: str) -> dict:
 
             all_goals = []
             all_saves = []
+            all_dist = []
             chunk_usages = []
             goals_template = Path("/root/prompts/goals.md").read_text(encoding="utf-8")
             saves_template = Path("/root/prompts/saves.md").read_text(encoding="utf-8")
+            dist_path = Path("/root/prompts/distribution.md")
+            dist_template = dist_path.read_text(encoding="utf-8") if dist_path.exists() else None
             shared_suffix = (
                 ("\n\n---\n\n" + spatial_calibration if spatial_calibration else "") +
                 ("\n\n---\n\n" + calibration if calibration else "") +
                 encyclopedia_text
             )
+
+            # Per-event-type voting passes. Saves run twice per chunk by default
+            # because Gemini run-to-run variance on detection is significant —
+            # different passes catch different events. Union+dedupe lifts recall
+            # without changing precision (the dedupe step already collapses
+            # near-duplicates across overlapping passes).
+            #
+            # Cost: each extra saves pass on a 10-min chunk = ~$0.40-0.60. For a
+            # 6-chunk match that's an additional ~$3 vs single-pass. Worth it
+            # for the recall lift on the bottleneck event type.
+            #
+            # Override via env: SAVES_VOTING_PASSES (default 2), GOALS_VOTING_PASSES
+            # (default 1), DIST_VOTING_PASSES (default 1).
+            saves_passes = int(os.environ.get("SAVES_VOTING_PASSES", "2"))
+            goals_passes = int(os.environ.get("GOALS_VOTING_PASSES", "1"))
+            dist_passes  = int(os.environ.get("DIST_VOTING_PASSES",  "1"))
+
+            # Each tuple: (response key, prompt template, response schema, sink list, n_passes)
+            prompt_passes = [
+                ("goals", goals_template, GOALS_RESPONSE_SCHEMA, all_goals, goals_passes),
+                ("saves", saves_template, SAVES_RESPONSE_SCHEMA, all_saves, saves_passes),
+            ]
+            if dist_template is not None:
+                prompt_passes.append(
+                    ("distribution", dist_template, DISTRIBUTION_RESPONSE_SCHEMA, all_dist, dist_passes)
+                )
 
             for c in chunks:
                 print(f"[chunk {c.index}] uploading...", flush=True)
@@ -325,10 +556,7 @@ def process(job_id: str) -> dict:
                     f"not the full-match clock — the consumer will offset.\n"
                 )
 
-                for prompt_kind, template, schema, sink in [
-                    ("goals", goals_template, GOALS_RESPONSE_SCHEMA, all_goals),
-                    ("saves", saves_template, SAVES_RESPONSE_SCHEMA, all_saves),
-                ]:
+                for prompt_kind, template, schema, sink, n_passes in prompt_passes:
                     rendered = _render_prompt(template, {
                         "my_team_color": meta.get("my_team_color"),
                         "my_keeper_color": meta.get("my_keeper_color"),
@@ -342,27 +570,36 @@ def process(job_id: str) -> dict:
                             "response_schema": schema,
                         },
                     )
-                    print(f"[chunk {c.index}/{prompt_kind}] generating...", flush=True)
-                    resp = model.generate_content([upl, rendered])
-                    try:
-                        parsed = json.loads(resp.text)
-                    except json.JSONDecodeError:
-                        parsed = None
-                    events = (parsed or {}).get(prompt_kind, []) if parsed else []
-                    chunk_mod.offset_timestamps(events, c.start_seconds)
-                    sink.extend(events)
-                    usage = getattr(resp, "usage_metadata", None)
-                    if usage is not None:
-                        chunk_usages.append({
-                            "chunk": c.index, "kind": prompt_kind,
-                            "total_token_count": getattr(usage, "total_token_count", None),
-                            "prompt_token_count": getattr(usage, "prompt_token_count", None),
-                            "candidates_token_count": getattr(usage, "candidates_token_count", None),
-                        })
+                    for pass_idx in range(max(1, n_passes)):
+                        pass_label = f"{prompt_kind}" if n_passes <= 1 else f"{prompt_kind}#{pass_idx + 1}"
+                        print(f"[chunk {c.index}/{pass_label}] generating...", flush=True)
+                        resp = model.generate_content([upl, rendered])
+                        try:
+                            parsed = json.loads(resp.text)
+                        except json.JSONDecodeError:
+                            parsed = None
+                        events = (parsed or {}).get(prompt_kind, []) if parsed else []
+                        chunk_mod.offset_timestamps(events, c.start_seconds)
+                        sink.extend(events)
+                        usage = getattr(resp, "usage_metadata", None)
+                        if usage is not None:
+                            chunk_usages.append({
+                                "chunk": c.index, "kind": pass_label,
+                                "total_token_count": getattr(usage, "total_token_count", None),
+                                "prompt_token_count": getattr(usage, "prompt_token_count", None),
+                                "candidates_token_count": getattr(usage, "candidates_token_count", None),
+                            })
 
             # Dedupe overlap-zone duplicates
             all_goals = chunk_mod.dedupe_events(all_goals, tolerance_sec=15, key_fields=["scoring_team", "shot_type"])
             all_saves = chunk_mod.dedupe_events(all_saves, tolerance_sec=5, key_fields=["gk_action", "shot_origin"])
+            all_dist = chunk_mod.dedupe_events(all_dist, tolerance_sec=5, key_fields=["trigger", "type"])
+
+            # Drop low-signal saves (off-target with no GK involvement) before persisting
+            all_saves = _filter_low_signal_saves(all_saves)
+
+            # Cross-event reconciliation (Phase 2.3 — A+B+C)
+            all_goals, all_saves, all_dist = _reconcile_events(all_goals, all_saves, all_dist)
 
             # Persist as if this had been one merged Gemini call
             sb.table("video_jobs").update({
@@ -374,6 +611,7 @@ def process(job_id: str) -> dict:
                     "chunk_duration_sec": chunk_duration,
                     "parsed": {"goals": all_goals},
                     "saves": {"parsed": {"saves": all_saves}, "usage": None},
+                    "distribution": {"parsed": {"distribution": all_dist}, "usage": None},
                     "raw": None,
                     "usage": {"chunks": chunk_usages},
                 },
@@ -381,11 +619,13 @@ def process(job_id: str) -> dict:
             }).eq("id", job_id).execute()
 
             chunk_mod.cleanup_chunks(chunks)
-            print(f"[chunk] done. goals={len(all_goals)} saves={len(all_saves)}", flush=True)
+            print(f"[chunk] done. goals={len(all_goals)} saves={len(all_saves)} dist={len(all_dist)}", flush=True)
             return {
                 "job_id": job_id, "status": "review_needed",
                 "chunked": True, "n_chunks": len(chunks),
-                "goals_detected": len(all_goals), "saves_detected": len(all_saves),
+                "goals_detected": len(all_goals),
+                "saves_detected": len(all_saves),
+                "distribution_detected": len(all_dist),
             }
 
         # === Upload to Gemini Files API (single-pass path — current default) ===
@@ -493,6 +733,7 @@ def process(job_id: str) -> dict:
 
         # === Run the saves prompt (Phase 2.1) ===
         saves_result = None
+        saves_count = None
         saves_path = Path("/root/prompts/saves.md")
         if saves_path.exists():
             print("[saves] running saves.md")
@@ -505,8 +746,47 @@ def process(job_id: str) -> dict:
                     "opponent_color": meta.get("opponent_color"),
                 },
             )
+            # Drop low-signal saves before reporting/persisting
+            if saves_result and saves_result.get("parsed"):
+                filtered = _filter_low_signal_saves(saves_result["parsed"].get("saves", []))
+                saves_result["parsed"]["saves"] = filtered
             saves_count = len((saves_result["parsed"] or {}).get("saves", [])) if saves_result["parsed"] else None
             print(f"[saves] detected {saves_count}")
+
+        # === Run the distribution prompt (Phase 2.2) ===
+        dist_result = None
+        dist_count = None
+        dist_path = Path("/root/prompts/distribution.md")
+        if dist_path.exists():
+            print("[dist] running distribution.md")
+            dist_result = run_prompt(
+                str(dist_path),
+                DISTRIBUTION_RESPONSE_SCHEMA,
+                {
+                    "my_team_color": meta.get("my_team_color"),
+                    "my_keeper_color": meta.get("my_keeper_color"),
+                    "opponent_color": meta.get("opponent_color"),
+                },
+            )
+            dist_count = len((dist_result["parsed"] or {}).get("distribution", [])) if dist_result["parsed"] else None
+            print(f"[dist] detected {dist_count}")
+
+        # Cross-event reconciliation (Phase 2.3 — A+B+C). Pure function over
+        # the three event lists; trims events that collide / fail QC. Applied
+        # in single-pass and chunked paths identically.
+        sp_goals = (goals_result["parsed"] or {}).get("goals", []) if goals_result and goals_result.get("parsed") else []
+        sp_saves = (saves_result["parsed"] or {}).get("saves", []) if saves_result and saves_result.get("parsed") else []
+        sp_dist = (dist_result["parsed"] or {}).get("distribution", []) if dist_result and dist_result.get("parsed") else []
+        sp_goals, sp_saves, sp_dist = _reconcile_events(sp_goals, sp_saves, sp_dist)
+        if goals_result and goals_result.get("parsed"):
+            goals_result["parsed"]["goals"] = sp_goals
+        if saves_result and saves_result.get("parsed"):
+            saves_result["parsed"]["saves"] = sp_saves
+        if dist_result and dist_result.get("parsed"):
+            dist_result["parsed"]["distribution"] = sp_dist
+        goals_count = len(sp_goals)
+        saves_count = len(sp_saves) if saves_result is not None else None
+        dist_count = len(sp_dist) if dist_result is not None else None
 
         # === Persist results ===
         gemini_output = {
@@ -521,6 +801,8 @@ def process(job_id: str) -> dict:
         }
         if saves_result is not None:
             gemini_output["saves"] = saves_result
+        if dist_result is not None:
+            gemini_output["distribution"] = dist_result
 
         sb.table("video_jobs").update({
             "status": "review_needed",
@@ -539,7 +821,8 @@ def process(job_id: str) -> dict:
             "job_id": job_id,
             "status": "review_needed",
             "goals_detected": goals_count,
-            "saves_detected": (saves_count if saves_result is not None else None),
+            "saves_detected": saves_count,
+            "distribution_detected": dist_count,
         }
 
     except Exception as e:
@@ -599,6 +882,59 @@ def _build_spatial_calibration(meta: dict) -> str:
         "absolute heights or precise corner positions — single-camera 2D footage cannot "
         "support that precision honestly.\n"
     )
+
+
+@app.function(image=IMAGE, secrets=[secret], timeout=300)
+def reconcile_existing(job_id: str) -> dict:
+    """Apply A+B+C reconciliation to a job that has already been analyzed.
+
+    Useful for back-applying reconciliation logic to jobs in 'review_needed'
+    state after a worker code change, without re-running Gemini ($$).
+
+    Reads the existing gemini_output, applies _reconcile_events to the three
+    event lists, and persists the trimmed output back. Logs before/after counts.
+
+    Invoke locally:  py -m modal run worker/app.py::reconcile_existing --job-id <uuid>
+    """
+    from datetime import datetime, timezone
+    from supabase import create_client
+
+    sb = create_client(
+        os.environ["NEXT_PUBLIC_SUPABASE_URL"],
+        os.environ["SUPABASE_SERVICE_ROLE_KEY"],
+    )
+    row = sb.table("video_jobs").select("id, status, gemini_output").eq("id", job_id).single().execute().data
+    if not row:
+        return {"job_id": job_id, "error": "not_found"}
+    out = row.get("gemini_output") or {}
+
+    goals = (out.get("parsed") or {}).get("goals", []) if out.get("parsed") else []
+    saves = ((out.get("saves") or {}).get("parsed") or {}).get("saves", []) if out.get("saves") else []
+    dist = ((out.get("distribution") or {}).get("parsed") or {}).get("distribution", []) if out.get("distribution") else []
+
+    before = {"goals": len(goals), "saves": len(saves), "distribution": len(dist)}
+    print(f"[reconcile-existing] before: {before}", flush=True)
+    goals, saves, dist = _reconcile_events(goals, saves, dist)
+    after = {"goals": len(goals), "saves": len(saves), "distribution": len(dist)}
+    print(f"[reconcile-existing] after:  {after}", flush=True)
+
+    # Write back, preserving the rest of gemini_output
+    new_out = dict(out)
+    if new_out.get("parsed") is not None:
+        new_out["parsed"] = dict(new_out["parsed"])
+        new_out["parsed"]["goals"] = goals
+    if new_out.get("saves") is not None:
+        new_out["saves"] = dict(new_out["saves"])
+        new_out["saves"]["parsed"] = dict(new_out["saves"].get("parsed") or {})
+        new_out["saves"]["parsed"]["saves"] = saves
+    if new_out.get("distribution") is not None:
+        new_out["distribution"] = dict(new_out["distribution"])
+        new_out["distribution"]["parsed"] = dict(new_out["distribution"].get("parsed") or {})
+        new_out["distribution"]["parsed"]["distribution"] = dist
+    new_out["reconciled_at"] = datetime.now(timezone.utc).isoformat()
+
+    sb.table("video_jobs").update({"gemini_output": new_out}).eq("id", job_id).execute()
+    return {"job_id": job_id, "before": before, "after": after}
 
 
 @app.function(image=IMAGE, secrets=[secret], schedule=modal.Period(minutes=10))

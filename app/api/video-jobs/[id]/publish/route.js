@@ -21,6 +21,38 @@ const GK_ACTION_TO_COL = {
   // 'unclear' → not counted (coach review needed)
 };
 
+// Coerce Gemini's stringly-typed booleans ("true"/"false"/"unclear") into a
+// nullable Postgres boolean. Anything we can't read confidently → null.
+// Used for distribution.successful on insert.
+function coerceTriBool(v) {
+  if (v === true || v === false) return v;
+  if (typeof v !== 'string') return null;
+  const s = v.trim().toLowerCase();
+  if (s === 'true' || s === 'yes') return true;
+  if (s === 'false' || s === 'no') return false;
+  return null;
+}
+
+// Phase 2.4 — `press_state` enum coercion to legacy `under_pressure` boolean.
+// New runs emit press_state ∈ {unpressed, pressed, unclear}; older runs emit
+// under_pressure boolean. This handles both, mapping to the existing
+// distribution_events.under_pressure boolean column for downstream consistency.
+function coercePressState(d) {
+  // Prefer new field if present
+  const ps = (d.press_state || '').trim().toLowerCase();
+  if (ps === 'pressed') return true;
+  if (ps === 'unpressed') return false;
+  if (ps === 'unclear') return null;
+  // Fallback to legacy boolean field
+  return coerceTriBool(d.under_pressure);
+}
+
+function emptyToNull(v) {
+  if (v == null) return null;
+  const s = String(v).trim();
+  return s ? s : null;
+}
+
 function validateConcession(c, i) {
   const errs = [];
   if (c.goal_zone && !VALID_ZONES.has(c.goal_zone)) errs.push(`#${i+1} invalid goal_zone`);
@@ -110,7 +142,49 @@ export async function POST(request, { params }) {
     const savePct = shotsOnTarget > 0 ? Math.min(1, savesOnTarget / shotsOnTarget) : 0;
 
     const meta = job.match_metadata || {};
-    const result = goalsFor > goalsAgainst ? 'Win' : goalsFor < goalsAgainst ? 'Loss' : 'Draw';
+    // Single-letter codes ('W'/'L'/'D') to match the format pitchside writes
+    // and the format dashboard W-L-D record filters expect. Earlier video-
+    // published matches stored 'Win'/'Loss'/'Draw' which silently excluded
+    // them from the W-L-D tally.
+    const result = goalsFor > goalsAgainst ? 'W' : goalsFor < goalsAgainst ? 'L' : 'D';
+
+    // Aggregate kept distribution events into matches.dist_* columns so the
+    // existing dashboard distribution panel "just works" without per-event
+    // joins. Per-event detail is preserved separately in distribution_events.
+    //
+    // Mapping Gemini's 5-bucket type vocab onto pitchside's 4-bucket schema:
+    //   gk_short  → gk_short   gk_long  → gk_long  drop_kick → gk_long
+    //   throw     → throws     pass     → passes
+    // 'under_pressure' is an overlay count (a pressed event ALSO counts in its
+    // type bucket), matching pitchside semantics.
+    // _att = total events of that type; _suc = those with successful=true.
+    // (unclear/null does not count toward _suc but does count toward _att.)
+    const distAgg = {
+      dist_gk_short_att: 0, dist_gk_short_suc: 0,
+      dist_gk_long_att: 0,  dist_gk_long_suc: 0,
+      dist_throws_att: 0,   dist_throws_suc: 0,
+      dist_passes_att: 0,   dist_passes_suc: 0,
+      dist_under_pressure_att: 0, dist_under_pressure_suc: 0,
+    };
+    const distributionForAgg = Array.isArray(body.distribution) ? body.distribution : [];
+    for (const d of distributionForAgg) {
+      const ok = coerceTriBool(d.successful) === true;
+      const pressed = coercePressState(d) === true;
+      const type = String(d.type || '').toLowerCase();
+      const bucket =
+        type === 'gk_short' ? 'gk_short' :
+        type === 'gk_long' || type === 'drop_kick' ? 'gk_long' :
+        type === 'throw' ? 'throws' :
+        type === 'pass' ? 'passes' : null;
+      if (bucket) {
+        distAgg[`dist_${bucket}_att`]++;
+        if (ok) distAgg[`dist_${bucket}_suc`]++;
+      }
+      if (pressed) {
+        distAgg.dist_under_pressure_att++;
+        if (ok) distAgg.dist_under_pressure_suc++;
+      }
+    }
     const profile = (await admin.from('profiles').select('full_name').eq('id', user.id).maybeSingle()).data;
 
     const matchId = crypto.randomUUID();
@@ -135,6 +209,7 @@ export async function POST(request, { params }) {
       saves: savesTotal,
       save_percentage: savePct,
       ...saveCounts,
+      ...distAgg,
       was_subbed: !!meta.was_subbed,
       sub_minute: meta.sub_minute || null,
       sub_reason: meta.sub_reason || null,
@@ -261,6 +336,40 @@ export async function POST(request, { params }) {
       }
     }
 
+    // Phase 2.2 — write distribution_events rows for each kept distribution
+    // candidate. Mirrors the saves → shot_events pattern: per-event records
+    // for the dashboard distribution panel + future cross-match aggregates.
+    // Non-fatal if it fails (the match still lands; coach can add manually).
+    const distribution = Array.isArray(body.distribution) ? body.distribution : [];
+    if (distribution.length) {
+      const distRows = distribution.map(d => ({
+        match_id: matchId,
+        keeper_id: job.keeper_id,
+        coach_id: user.id,
+        timestamp_seconds: Number.isFinite(d.timestamp_seconds) ? d.timestamp_seconds : null,
+        minute: Number.isFinite(d.timestamp_seconds) ? Math.floor(d.timestamp_seconds / 60) : null,
+        half: d.half || null,
+        match_clock: d.match_clock || null,
+        trigger: d.trigger || null,
+        type: d.type || null,
+        successful: coerceTriBool(d.successful),
+        under_pressure: coercePressState(d),
+        pass_selection: emptyToNull(d.pass_selection),
+        direction: emptyToNull(d.direction),
+        receiver: emptyToNull(d.receiver),
+        first_touch: emptyToNull(d.first_touch),
+        notes: d.notes || null,
+        confidence: d.confidence || null,
+        source: 'video',
+      }));
+      const { error: dErr } = await admin.from('distribution_events').insert(distRows);
+      if (dErr) {
+        console.error('distribution_events insert failed (non-fatal):', dErr);
+      } else {
+        console.log(`[publish] wrote ${distRows.length} distribution_events row(s)`);
+      }
+    }
+
     const { error: updErr } = await admin.from('video_jobs').update({
       status: 'published',
       published_match_id: matchId,
@@ -270,6 +379,7 @@ export async function POST(request, { params }) {
         concessions,
         team_scored: teamScored,
         saves,
+        distribution,
         review_diff: body.review_diff || null,
         notes: body.notes || null,
       },
@@ -301,7 +411,13 @@ export async function POST(request, { params }) {
 
     // Clean up the uploaded video file once we have the analyzed output safely
     // in matches/goals_conceded. Storage isn't free.
-    if (job.storage_path) {
+    //
+    // Gated behind DELETE_SOURCE_VIDEO_ON_PUBLISH because deleting on publish
+    // makes re-analysis impossible (the worker downloads from a signed URL
+    // pointing at this file). Until R2 cold storage is wired, coaches re-
+    // analysing or re-watching footage from the dashboard is more valuable
+    // than the storage cost. Set to "true" in env to opt back in.
+    if (process.env.DELETE_SOURCE_VIDEO_ON_PUBLISH === 'true' && job.storage_path) {
       admin.storage.from('match-videos').remove([job.storage_path]).catch(() => {});
     }
 

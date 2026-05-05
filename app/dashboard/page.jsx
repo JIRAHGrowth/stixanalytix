@@ -1754,13 +1754,39 @@ export default function DashboardPage() {
             {showScope && <ScopeToggle scope={scope} setScope={setScope} />}
             
 
-            {!selectedKeeper && <EmptyState icon="👆" title="Select a Keeper" subtitle="Choose a goalkeeper from the dropdown to view analytics." />}
+            {!selectedKeeper && keepers.length === 0 && (
+              <Card s={{ textAlign: "center", padding: 32 }}>
+                <div style={{ fontSize: 36, marginBottom: 10 }}>🧤</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: t.bright, marginBottom: 6 }}>Welcome to StixAnalytix</div>
+                <div style={{ fontSize: 13, color: t.dim, lineHeight: 1.55, maxWidth: 420, margin: "0 auto 18px" }}>
+                  Add your first goalkeeper, then log a match or upload video to see analytics here.
+                </div>
+                <button onClick={() => setView("roster")} style={{ padding: "10px 20px", borderRadius: 8, background: primaryColor, color: "#fff", border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: font }}>+ Add your first goalkeeper</button>
+              </Card>
+            )}
+            {!selectedKeeper && keepers.length > 0 && (
+              <EmptyState icon="👆" title="Select a Keeper" subtitle="Choose a goalkeeper from the dropdown to view analytics." />
+            )}
             {selectedKeeper && !hasMatches && tab !== "compare" && (
-              <EmptyState icon="📱" title="No Sessions Logged Yet" subtitle={`Head to Pitchside to log a match or training session for ${selectedKeeperObj?.name || "this keeper"}.`} />
+              <Card s={{ textAlign: "center", padding: 32 }}>
+                <div style={{ fontSize: 36, marginBottom: 10 }}>📊</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: t.bright, marginBottom: 6 }}>
+                  No matches yet for {selectedKeeperObj?.name || "this keeper"}
+                </div>
+                <div style={{ fontSize: 13, color: t.dim, lineHeight: 1.55, maxWidth: 460, margin: "0 auto 18px" }}>
+                  Log your first session in Pitchside, or upload a match video and let Gemini auto-tag it. Either path lands the data right here for analysis.
+                </div>
+                <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+                  <Link href="/pitchside" style={{ padding: "10px 18px", borderRadius: 8, background: primaryColor, color: "#fff", border: "none", fontSize: 13, fontWeight: 700, textDecoration: "none", fontFamily: font }}>📱 Log a match in Pitchside</Link>
+                  {!isDelegate && (
+                    <Link href={`/upload?keeper=${selectedKeeper}`} style={{ padding: "10px 18px", borderRadius: 8, background: "transparent", border: `1px solid ${t.border}`, color: t.text, fontSize: 13, fontWeight: 600, textDecoration: "none", fontFamily: font }}>📤 Upload match video</Link>
+                  )}
+                </div>
+              </Card>
             )}
 
 {/* OVERVIEW */}
-          {tab === "overview" && s && (
+          {tab === "overview" && s && hasMatches && (
             <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
               {/* Row 0: Key Stats */}

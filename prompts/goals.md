@@ -18,15 +18,23 @@ Definition of a goal: the ball fully crosses the goal line between the posts and
 
 Do NOT jump straight to listing goals. Work through this process explicitly before producing your output:
 
-**Step 1 — Anchor the timeline.** Scan the entire video. List the timestamps of every kickoff you can identify (centre-circle restart, ball at the centre dot, both teams in their own half). The opening kickoff is at or near the start. Every kickoff after that is preceded by a goal (or the start of a half). Use this as the spine of your analysis.
+**Step 1 — Anchor the timeline on kickoffs.** Scan the entire video. List the timestamps of every kickoff you can identify (centre-circle restart, ball at the centre dot, both teams in their own half). The opening kickoff is at or near the start. Every subsequent kickoff is preceded by a goal (or the start of a half). **Kickoffs are your ground truth — every goal in the video has a kickoff after it. If you cannot find a kickoff for a candidate goal, the candidate is wrong.**
 
-**Step 2 — For each kickoff after the first, identify the preceding goal.** Look at the 30 seconds immediately before each kickoff. Confirm: was there a celebration? Was the ball in the net? Did one team appear to gather while the other restarted? Only events meeting these criteria are goals.
+**Step 2 — Build a candidate list, then APPLY THE TWO-OF-THREE EVIDENCE RULE.** For each thing that looked like a goal, verify TWO of these three are visibly observable in the video:
 
-**Step 3 — Apply the hard rules below to filter.** Replays, rebounds within the same play, and "looked like a goal" moments without celebration + restart are NOT goals.
+  (a) A kickoff from the centre circle within 60 seconds AFTER the candidate timestamp.
+  (b) A clear celebration (arms up, players running together, dejected reaction from the opposing team) within 10 seconds AFTER the candidate.
+  (c) A persistent on-screen scoreboard whose number for the scoring team INCREASED by exactly 1 between the moments before and after the candidate.
 
-**Step 4 — For each confirmed goal, fill in the per-event fields.** Be precise on observables, honest on what you cannot see.
+**If you cannot confirm at least TWO of (a) (b) (c), DO NOT output the goal.** The candidate is a near-miss, a rebound, or a hallucination. Better to omit a real goal than to fabricate one — the coach will add missed goals manually but cannot easily debunk fabricated ones.
 
-**Step 5 — Self-check before you return.** Verify (a) every timestamp is between 0 and the actual video duration, (b) no two goals have timestamps within 5 seconds of each other (those are likely the same event double-counted, OR a rebound that should be a single goal), (c) `scoring_team` is exactly one of "{{my_team_color}}" or "{{opponent_color}}" — not a free-form description.
+**Step 3 — Apply the hard rules below to filter.** Replays, rebounds within the same play, and "looked like a goal" moments are NOT goals unless the two-of-three rule passes.
+
+**Step 4 — For each confirmed goal, fill in the per-event fields.** Be precise on observables. In `gk_observations`, you MUST cite which two of (a)/(b)/(c) you observed (e.g. "Kickoff at 9:14, celebration by {{my_team_color}} players visible at 8:43-8:55"). This is your evidence trail.
+
+**Step 5 — Self-check before you return.** Verify (a) every timestamp is between 0 and the actual video duration, (b) no two goals have timestamps within 5 seconds of each other (those are likely the same event double-counted, OR a rebound that should be a single goal), (c) `scoring_team` is exactly one of "{{my_team_color}}" or "{{opponent_color}}" — not a free-form description, (d) for every goal you have cited TWO of the three evidence items in `gk_observations`.
+
+**CALIBRATION — plausible counts.** A youth or amateur match typically ends with combined scores in the 0-12 range (e.g. 4-1, 2-3, 0-0, 7-2). If your output has more than 8 goals total, you are over-detecting — re-apply the two-of-three rule to every candidate. If your output has 0 goals on a 30+ minute video AND the scoreboard or celebrations were visible, you have likely missed events.
 
 # HARD RULES (no exceptions)
 
@@ -102,6 +110,15 @@ For each confirmed goal, report these fields:
 - `goal_placement_height`: one of "top", "middle", "low", "unclear".
 - `goal_placement_side`: one of "near_post", "centre", "far_post", "unclear". Near = post closer to shot origin.
 - `gk_observations`: ONE field, 1-2 plain sentences, describing ONLY what is visible in the frames showing the shot and the ball crossing the line. Observables ONLY — do not interpret. **Where the technique is identifiable, use the canonical names from the STIX Goalkeeper Technique Reference appended at the bottom of this prompt** (e.g. "smother", "K-barrier", "strong parry", "starfish") rather than generic descriptions ("dives at feet", "tries to save"). If you cannot clearly see the GK during the shot, say so. Do NOT guess based on shot type.
+
+**EVIDENCE FIELDS — FILL HONESTLY. The system will REJECT this goal if fewer than 2 of these are affirmative.** Do not fabricate evidence to keep a goal in the output; if your evidence count is below 2, you have not observed enough to confirm a goal.
+
+- `evidence_kickoff_after`: If you saw a kickoff from the centre circle within 60 seconds AFTER this goal's timestamp, write "kickoff at MM:SS" with the timestamp you saw. If you did not see a kickoff (camera away, end of match, video cut), write exactly "not_observed".
+- `evidence_celebration`: If you saw a clear celebration (arms up, players running together, dejected reaction from opposing team) within 10 seconds after the goal, write a brief description (e.g. "{{my_team_color}} players run toward the corner flag, opposition players walk back"). If no celebration was observable, write exactly "not_observed".
+- `evidence_scoreboard`: If a persistent on-screen scoreboard was visible AND the scoring team's number incremented by exactly 1, write the change (e.g. "0-0 -> 1-0"). If no scoreboard was visible at all, write exactly "scoreboard_not_visible". If a scoreboard was visible but did NOT change, write exactly "scoreboard_unchanged".
+
+**These three fields are the schema-level enforcement of the two-of-three rule.** Be honest. The system will reject any goal where fewer than 2 of these fields contain an affirmative observation. If you cannot honestly fill 2 of them, do not output the goal — it is a near-miss or hallucination.
+
 - `confidence`: "high", "medium", or "low".
 
 # Self-check before you return

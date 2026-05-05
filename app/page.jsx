@@ -809,7 +809,7 @@ export default function Page() {
               <li>Everything in Academy</li>
               <li>Pricing based on your program</li>
             </ul>
-            <a href="/contact" className="tier-cta tier-cta-ghost">Click for Custom Pricing</a>
+            <a href="mailto:info@jirahgrowth.com?subject=StixAnalytix%20Pro%20-%20Custom%20Pricing" className="tier-cta tier-cta-ghost">Email for Custom Pricing</a>
           </div>
 
         </div>
