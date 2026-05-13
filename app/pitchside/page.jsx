@@ -4,340 +4,24 @@ import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-// ═══ THEME ═══════════════════════════════════════════════════════════════════
-const tDark = {
-  bg: "#070b0e", card: "#0f1419", cardAlt: "#151c22", border: "#1e2a32",
-  accent: "#10b981", accentDim: "#065f46", accentGlow: "#10b98133",
-  gold: "#d4a853", goldDim: "#d4a85322",
-  red: "#ef4444", green: "#22c55e", yellow: "#eab308", orange: "#f97316",
-  teal: "#14b8a6", cyan: "#06b6d4", purple: "#a78bfa",
-  text: "#d1d9e0", dim: "#5c6b77", bright: "#f0f4f7",
-};
-const tLight = {
-  bg: "#f5f7fa", card: "#ffffff", cardAlt: "#f0f2f5", border: "#e2e8f0",
-  accent: "#10b981", accentDim: "#d1fae5", accentGlow: "#10b98122",
-  gold: "#b8860b", orange: "#ea580c",
-  red: "#dc2626", green: "#16a34a", yellow: "#ca8a04",
-  cyan: "#0891b2", purple: "#7c3aed", teal: "#0d9488", pink: "#db2777",
-  text: "#1e293b", dim: "#64748b", bright: "#0f172a",
-};
+import { tDark, tLight } from "@/lib/theme";
+import {
+  HALVES, EVENT_TYPES, GK_ACTIONS_CROSS, GK_ACTIONS_SHOT, GK_ACTION_LABELS,
+  GK_ACTIONS_PENALTY, SHOT_METHODS, OFF_TARGET_ZONES,
+  GK_POSITIONING, GOAL_RANKS, SUB_REASONS, ATTRS, SHOT_ORIGINS, FONT,
+} from "@/lib/constants";
+import Counter from "@/components/pitchside/Counter";
+import Chip from "@/components/pitchside/Chip";
+import SectionHeader from "@/components/pitchside/SectionHeader";
+import RatingRow from "@/components/pitchside/RatingRow";
+import PitchOriginMap from "@/components/pitchside/PitchOriginMapInteractive";
+import GoalZoneMap from "@/components/pitchside/GoalZoneMap";
+import HalfSummary from "@/components/pitchside/HalfSummary";
+import EventLog from "@/components/pitchside/EventLog";
+import { fetchActiveKeepers } from "@/lib/queries";
+
 let t = tDark;
-const font = "'DM Sans', -apple-system, sans-serif";
-
-// ═══ CONSTANTS ══════════════════════════════════════════════════════════════
-const HALVES = ["H1", "H2", "ET"];
-const EVENT_TYPES = ["Shot", "1v1", "Corner", "Cross", "Penalty"];
-const GK_ACTIONS_CROSS = ["Catch", "Punch", "Away", "Missed/Misjudged"];
-const GK_ACTIONS_SHOT = ["Catch", "Block", "Smother", "Parry", "Deflect", "Punch", "Goal", "Missed/Misjudged"];
-const GK_ACTION_LABELS = {"Away":"Away"};
-const GK_ACTIONS_PENALTY = ["Save – Catch", "Save – Smother", "Save – Parry", "Goal", "Missed/Misjudged"];
-const SHOT_METHODS = ["Foot", "Header", "Deflection", "Own Goal"];
-const GOAL_ZONES = ["High L","High C","High R","Mid L","Mid C","Mid R","Low L","Low C","Low R"];
-const OFF_TARGET_ZONES = ["Wide Left", "Wide Right", "Over Bar"];
-const GK_POSITIONING = ["Set", "Moving"];
-const GOAL_RANKS = ["Saveable", "Difficult", "Unsaveable"];
-const SUB_REASONS = ["Removed – Injury", "Removed – Poor Play", "Removed – Other"];
-const ATTRS = [
-  "Game Rating","Shot Stopping","Handling","Positioning",
-  "Aerial Dominance","Distribution","Decision Making","Sweeper Play",
-  "Set Piece Org.","Footwork & Agility","Reaction Speed",
-  "Communication","Command of Box","Composure","Compete Level",
-];
-const SHOT_ORIGINS = [
-  { id: "6yard", label: "6-Yard Box" },
-  { id: "boxL", label: "Left Channel" },
-  { id: "boxC", label: "Central Box" },
-  { id: "boxR", label: "Right Channel" },
-  { id: "outL", label: "Wide Left" },
-  { id: "outC", label: "Central Distance" },
-  { id: "outR", label: "Wide Right" },
-  { id: "cornerL", label: "Corner Left" },
-  { id: "cornerR", label: "Corner Right" },
-  { id: "crossL", label: "Cross Left" },
-  { id: "crossR", label: "Cross Right" }
-];
-
-// ═══ REUSABLE COMPONENTS ════════════════════════════════════════════════════
-
-function Counter({ label, value, onChange, min = 0, compact, color }) {
-  // Touch targets — buttons are 52×52 (was 44×44) per Apple HIG / Material 48px
-  // minimum, with the read-out widened to match. On a sideline phone, fat-
-  // fingering between − and + happened constantly at 44×44 and zero gutter.
-  return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: compact ? "5px 0" : "7px 0" }}>
-      <span style={{ fontSize: compact ? 13 : 14, color: t.text, fontWeight: 500 }}>{label}</span>
-      <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
-        <button onClick={() => onChange(Math.max(min, value - 1))} style={{
-          width: 52, height: 52, borderRadius: "10px 0 0 10px",
-          border: `1px solid ${t.border}`, background: t.bg, color: t.bright,
-          fontSize: 22, fontWeight: 700, cursor: "pointer",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          touchAction: "manipulation",
-        }}>−</button>
-        <div style={{
-          width: 56, height: 52, display: "flex", alignItems: "center", justifyContent: "center",
-          background: t.cardAlt, borderTop: `1px solid ${t.border}`, borderBottom: `1px solid ${t.border}`,
-          fontSize: 19, fontWeight: 700, color: color || t.bright,
-        }}>{value}</div>
-        <button onClick={() => onChange(value + 1)} style={{
-          width: 52, height: 52, borderRadius: "0 10px 10px 0",
-          border: `1px solid ${t.border}`, background: t.bg, color: t.bright,
-          fontSize: 22, fontWeight: 700, cursor: "pointer",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          touchAction: "manipulation",
-        }}>+</button>
-      </div>
-    </div>
-  );
-}
-
-function Chip({ label, selected, onClick, small, color }) {
-  const c = color || t.accent;
-  return (
-    <button onClick={onClick} style={{
-      padding: small ? "10px 10px" : "14px 12px", borderRadius: 10,
-      border: `1px solid ${selected ? c : t.border}`,
-      background: selected ? c + "25" : t.bg,
-      color: selected ? c : t.dim,
-      fontSize: small ? 12 : 13, fontWeight: selected ? 700 : 500, cursor: "pointer",
-      transition: "all 0.12s", textAlign: "center", lineHeight: 1.2, fontFamily: font,
-      minHeight: 44,
-    }}>{label}</button>
-  );
-}
-
-function SectionHeader({ title, icon, accentColor }) {
-  const ac = accentColor || t.accent;
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-      <span style={{ fontSize: 16 }}>{icon}</span>
-      <span style={{ fontSize: 14, fontWeight: 700, color: t.bright }}>{title}</span>
-    </div>
-  );
-}
-
-function RatingRow({ label, value, onChange }) {
-    return (
-      <div style={{ padding: "6px 0" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-          <span style={{ fontSize: 13, color: t.text, fontWeight: 500 }}>{label}</span>
-          <span style={{ fontSize: 14, fontWeight: 700, color: value ? (value >= 4 ? t.green : value >= 3 ? t.gold : t.red) : t.dim }}>{value || "\u2014"}</span>
-        </div>
-        <input type="range" min={1} max={5} step={0.5} value={value || 0} onChange={e => onChange(parseFloat(e.target.value))}
-          style={{ width: "100%", accentColor: t.accent, height: 6, cursor: "pointer" }} />
-      </div>
-    );
-  }
-
-// ═══ PITCH ORIGIN MAP ═══════════════════════════════════════════════════════
-function PitchOriginMap({ selected, onSelect }) {
-  const w = 320, h = 260;
-  const goalW = 80, goalH = 10, sixW = 130, sixH = 38, boxW = 240, boxH = 110;
-  const cx = w / 2;
-  const goalY = h - 14;
-  const boxTop = goalY - boxH;
-  const sixTop = goalY - sixH;
-  const boxL = cx - boxW / 2, boxR = cx + boxW / 2;
-  const sixL = cx - sixW / 2, sixR = cx + sixW / 2;
-  const cornerSize = 40;
-
-  const zones = [
-    { id: "6yard", path: `M${sixL},${sixTop} L${sixR},${sixTop} L${sixR},${goalY} L${sixL},${goalY} Z` },
-    { id: "boxL", path: `M${boxL},${boxTop} L${sixL},${boxTop} L${sixL},${goalY} L${boxL},${goalY} Z` },
-    { id: "boxC", path: `M${sixL},${boxTop} L${sixR},${boxTop} L${sixR},${sixTop} L${sixL},${sixTop} Z` },
-    { id: "boxR", path: `M${sixR},${boxTop} L${boxR},${boxTop} L${boxR},${goalY} L${sixR},${goalY} Z` },
-    { id: "outL", path: `M0,10 L${boxL},10 L${boxL},${goalY} L0,${goalY} Z` },
-    { id: "outC", path: `M${boxL},10 L${boxR},10 L${boxR},${boxTop} L${boxL},${boxTop} Z` },
-    { id: "outR", path: `M${boxR},10 L${w},10 L${w},${goalY} L${boxR},${goalY} Z` },
-    { id: "cornerL", path: `M0,${goalY} L${cornerSize},${goalY} A${cornerSize},${cornerSize} 0 0,1 0,${goalY - cornerSize} Z` },
-    { id: "cornerR", path: `M${w},${goalY} L${w - cornerSize},${goalY} A${cornerSize},${cornerSize} 0 0,0 ${w},${goalY - cornerSize} Z` },
-  ];
-
-  const labels = {
-    "6yard": { x: cx, y: goalY - sixH / 2 - 2, t: "6-Yard" },
-    "boxL": { x: (boxL + sixL) / 2, y: (boxTop + goalY) / 2, t: "Left Ch." },
-    "boxC": { x: cx, y: (boxTop + sixTop) / 2, t: "Central" },
-    "boxR": { x: (sixR + boxR) / 2, y: (boxTop + goalY) / 2, t: "Right Ch." },
-    "outL": { x: boxL / 2, y: (10 + goalY) / 2, t: "Wide L" },
-    "outC": { x: cx, y: (10 + boxTop) / 2, t: "Cntrl Dist." },
-    "outR": { x: (boxR + w) / 2, y: (10 + goalY) / 2, t: "Wide R" },
-    "cornerL": { x: 16, y: goalY - 14, t: "Corner" },
-    "cornerR": { x: w - 16, y: goalY - 14, t: "Corner" },
-  };
-
-  const zc = (id) => selected === id
-    ? { fill: t.accent + "55", stroke: t.accent, sw: 2.5 }
-    : { fill: "#ffffff08", stroke: "#ffffff12", sw: 0.5 };
-
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", maxWidth: 360, display: "block", margin: "0 auto" }}>
-      <rect x={0} y={0} width={w} height={h} rx={8} fill="#0c1a12" />
-      <rect x={boxL} y={boxTop} width={boxW} height={boxH} fill="none" stroke="#2a5a3a" strokeWidth={1.5} />
-      <rect x={sixL} y={sixTop} width={sixW} height={sixH} fill="none" stroke="#2a5a3a" strokeWidth={1.5} />
-      <circle cx={cx} cy={goalY - boxH * 0.55} r={2.5} fill="#2a5a3a" />
-      <path d={`M${cx - 48},${boxTop} A52,52 0 0,1 ${cx + 48},${boxTop}`} fill="none" stroke="#2a5a3a" strokeWidth={1.5} />
-      <line x1={0} y1={goalY} x2={w} y2={goalY} stroke="#3a7a4a" strokeWidth={1} />
-      <rect x={cx - goalW / 2} y={goalY} width={goalW} height={goalH} rx={2} fill="#1a3a22" stroke="#4a9a5a" strokeWidth={2} />
-      <text x={cx} y={goalY + goalH - 2} textAnchor="middle" fontSize={7} fill="#4a9a5a" fontWeight={700} fontFamily={font}>GOAL</text>
-      <path d={`M0,${goalY} A${cornerSize},${cornerSize} 0 0,1 ${cornerSize},${goalY}`} fill="none" stroke="#2a5a3a" strokeWidth={1} />
-      <path d={`M${w},${goalY} A${cornerSize},${cornerSize} 0 0,0 ${w - cornerSize},${goalY}`} fill="none" stroke="#2a5a3a" strokeWidth={1} />
-      <line x1={0} y1={10} x2={w} y2={10} stroke="#2a5a3a44" strokeWidth={1} strokeDasharray="4,4" />
-      {zones.map(z => {
-        const c = zc(z.id);
-        const l = labels[z.id];
-        return (
-          <g key={z.id} onClick={() => onSelect(z.id)} style={{ cursor: "pointer" }}>
-            <path d={z.path} fill={c.fill} stroke={c.stroke} strokeWidth={c.sw} style={{ transition: "all 0.15s" }} />
-            <text x={l.x} y={l.y} textAnchor="middle" dominantBaseline="middle"
-              fontSize={z.id.startsWith("corner") ? 8 : 9} fontWeight={selected === z.id ? 700 : 500}
-              fill={selected === z.id ? t.accent : "#5a8a6a"} fontFamily={font}
-              style={{ pointerEvents: "none" }}>{l.t}</text>
-          </g>
-        );
-      })}
-      <text x={cx} y={h - 1} textAnchor="middle" fontSize={7} fill="#3a6a4a88" fontFamily={font}>↓ keeper&apos;s goal ↓</text>
-    </svg>
-  );
-}
-
-// ═══ GOAL ZONE MAP (with off-target zones) ═════════════════════════════════
-function GoalZoneMap({ selected, onSelect, showOffTarget }) {
-  const zoneLabels = GOAL_ZONES;
-  const bw = 3;
-  const selOff = (z) => selected === z ? t.orange + "33" : "transparent";
-  const selOffBorder = (z) => selected === z ? t.orange : t.border;
-  const selOffColor = (z) => selected === z ? t.orange : t.dim;
-  const selOffWeight = (z) => selected === z ? 700 : 500;
-  return (
-    <div style={{ position: "relative", background: t.bg, borderRadius: 10, border: `1px solid ${t.border}`, padding: 8 }}>
-      <div style={{ position: "absolute", top: 2, left: "50%", transform: "translateX(-50%)", fontSize: 9, color: t.dim + "88", letterSpacing: 2, textTransform: "uppercase" }}>← goal face →</div>
-      {showOffTarget !== false && (
-        <div onClick={() => onSelect("Over Bar")} style={{ cursor: "pointer", width: "100%", maxWidth: 340, margin: "8px auto 0", height: 22, display: "flex", alignItems: "center", justifyContent: "center", border: `${bw}px solid ${selOffBorder("Over Bar")}`, borderBottom: "none", borderRadius: "6px 6px 0 0", background: selOff("Over Bar"), transition: "all 0.15s" }}>
-          <span style={{ fontSize: 9, fontWeight: selOffWeight("Over Bar"), color: selOffColor("Over Bar"), textTransform: "uppercase", letterSpacing: 1, fontFamily: font }}>Over Bar</span>
-        </div>
-      )}
-      <div style={{ display: "flex", width: "100%", maxWidth: 340, margin: showOffTarget === false ? "8px auto 0" : "0 auto" }}>
-        {showOffTarget !== false && (
-          <div onClick={() => onSelect("Wide Left")} style={{ cursor: "pointer", width: 28, display: "flex", alignItems: "center", justifyContent: "center", border: `${bw}px solid ${selOffBorder("Wide Left")}`, borderRight: "none", borderRadius: "6px 0 0 6px", background: selOff("Wide Left"), transition: "all 0.15s" }}>
-            <span style={{ writingMode: "vertical-rl", textOrientation: "mixed", fontSize: 9, fontWeight: selOffWeight("Wide Left"), color: selOffColor("Wide Left"), textTransform: "uppercase", letterSpacing: 1, fontFamily: font }}>Wide L</span>
-          </div>
-        )}
-        <svg viewBox="0 0 300 180" style={{ flex: 1, display: "block" }}>
-          <rect x={0} y={0} width={300} height={180} rx={0} fill="none" stroke="#4a9a5a" strokeWidth={bw} />
-          {[1, 2].map(i => (<line key={`v${i}`} x1={100 * i} y1={0} x2={100 * i} y2={180} stroke={t.border} strokeWidth={1} />))}
-          {[1, 2].map(i => (<line key={`h${i}`} x1={0} y1={60 * i} x2={300} y2={60 * i} stroke={t.border} strokeWidth={1} />))}
-          {zoneLabels.map((z, i) => {
-            const col = i % 3, row = Math.floor(i / 3);
-            const isSelected = selected === z;
-            return (<g key={z} onClick={() => onSelect(z)} style={{ cursor: "pointer" }}>
-              <rect x={col * 100 + 1} y={row * 60 + 1} width={98} height={58} fill={isSelected ? t.red + "44" : "transparent"} rx={3} stroke={isSelected ? t.red : "transparent"} strokeWidth={isSelected ? 2 : 0} style={{ transition: "all 0.15s" }} />
-              <text x={col * 100 + 50} y={row * 60 + 30} textAnchor="middle" dominantBaseline="middle" fontSize={11} fontWeight={isSelected ? 700 : 500} fill={isSelected ? t.red : t.dim} fontFamily={font} style={{ pointerEvents: "none" }}>{z}</text>
-            </g>);
-          })}
-        </svg>
-        {showOffTarget !== false && (
-          <div onClick={() => onSelect("Wide Right")} style={{ cursor: "pointer", width: 28, display: "flex", alignItems: "center", justifyContent: "center", border: `${bw}px solid ${selOffBorder("Wide Right")}`, borderLeft: "none", borderRadius: "0 6px 6px 0", background: selOff("Wide Right"), transition: "all 0.15s" }}>
-            <span style={{ writingMode: "vertical-rl", textOrientation: "mixed", fontSize: 9, fontWeight: selOffWeight("Wide Right"), color: selOffColor("Wide Right"), textTransform: "uppercase", letterSpacing: 1, fontFamily: font }}>Wide R</span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-// ═══ HALF SUMMARY MODAL ════════════════════════════════════════════════════
-function HalfSummary({ half, events, halves, goalsFor, onClose, clubName, opponent }) {
-  const hEvents = events.filter(e => e.half === half);
-  const shots = hEvents.filter(e => e.type === "Shot" || e.type === "1v1" || e.type === "Penalty");
-  const saves = hEvents.filter(e => !e.isGoal && !e.offTarget && (e.type === "Shot" || e.type === "1v1" || e.type === "Penalty") && e.gkAction && e.gkAction !== "Missed/Misjudged" && !e.gkAction.startsWith("Goal"));
-  const goals = hEvents.filter(e => e.isGoal);
-  const crosses = hEvents.filter(e => e.type === "Cross" || e.type === "Corner");
-  const claims = crosses.filter(e => e.gkAction === "Catch");
-  const sot = shots.filter(e => !e.offTarget).length;
-  const svPct = sot > 0 ? (((sot - goals.length) / sot) * 100).toFixed(1) + "%" : "—";
-
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div style={{ background: t.card, borderRadius: 16, width: "100%", maxWidth: 400, padding: 20, maxHeight: "85vh", overflow: "auto" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: t.bright }}>📋 {half} Summary</h3>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: t.dim, fontSize: 22, cursor: "pointer" }}>✕</button>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
-          {[
-            { l: "SOT", v: sot },
-            { l: "GA", v: goals.length, c: goals.length >= 2 ? t.red : t.bright },
-            { l: "Sv%", v: svPct, c: sot > 0 && saves.length / sot >= 0.85 ? t.green : t.bright },
-          ].map(m => (
-            <div key={m.l} style={{ background: t.bg, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
-              <div style={{ fontSize: 10, color: t.dim, textTransform: "uppercase", fontWeight: 600 }}>{m.l}</div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: m.c || t.bright, marginTop: 2 }}>{m.v}</div>
-            </div>
-          ))}
-        </div>
-        {goals.length > 0 && (
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 10, color: t.dim, fontWeight: 600, textTransform: "uppercase", marginBottom: 6 }}>Goals conceded</div>
-            {goals.map((gl, i) => (
-              <div key={i} style={{ fontSize: 11, color: t.text, padding: "4px 0", borderBottom: `1px solid ${t.border}11` }}>
-                {gl.method === "Own Goal" ? "🟣 OG" : "🚨"} {gl.type} • {SHOT_ORIGINS.find(o => o.id === gl.origin)?.label || gl.origin || "Penalty"}
-                {gl.goalZone ? ` • ${gl.goalZone}` : ""}{gl.rank ? ` • ${gl.rank}` : ""}
-              </div>
-            ))}
-          </div>
-        )}
-        <button onClick={onClose} style={{ width: "100%", padding: 14, borderRadius: 10, border: "none", background: t.accent, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: font, minHeight: 48 }}>Back to Match</button>
-      </div>
-    </div>
-  );
-}
-
-// ═══ EVENT LOG DISPLAY ═════════════════════════════════════════════════════
-function EventLog({ events, half, onUndo }) {
-  const halfEvents = events.filter(e => e.half === half);
-  if (halfEvents.length === 0) return null;
-
-  const describeEvent = (e) => {
-    let desc = e.type;
-    if (e.offTarget) return `${desc} → Off Target`;
-    if (e.gkAction) desc += ` → ${GK_ACTION_LABELS[e.gkAction] || e.gkAction}`;
-    if (e.isGoal) desc += " → GOAL";
-    return desc;
-  };
-
-  return (
-    <div style={{ background: t.card, borderRadius: 12, padding: "10px 14px", marginBottom: 8, border: `1px solid ${t.border}` }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: t.dim, textTransform: "uppercase", letterSpacing: 1 }}>
-          {half} Event Log ({halfEvents.length})
-        </span>
-        {events.length > 0 && (
-          <button onClick={onUndo} style={{
-            padding: "6px 14px", borderRadius: 8, border: `1px solid ${t.orange}44`,
-            background: t.orange + "11", color: t.orange, fontSize: 11,
-            fontWeight: 700, cursor: "pointer", fontFamily: font, minHeight: 36,
-          }}>↩ Undo Last</button>
-        )}
-      </div>
-      <div style={{ maxHeight: 120, overflow: "auto" }}>
-        {halfEvents.slice().reverse().map((e, i) => (
-          <div key={i} style={{
-            display: "flex", alignItems: "center", gap: 8, padding: "4px 0",
-            borderTop: i > 0 ? `1px solid ${t.border}11` : "none",
-          }}>
-            <span style={{
-              width: 8, height: 8, borderRadius: 4, flexShrink: 0,
-              background: e.isGoal ? t.red : e.offTarget ? t.dim : t.green,
-            }} />
-            <span style={{ fontSize: 11, color: e.isGoal ? t.red : t.text, fontWeight: e.isGoal ? 600 : 400 }}>
-              {describeEvent(e)}
-            </span>
-            {e.goalZone && <span style={{ fontSize: 9, color: t.dim }}>({e.goalZone})</span>}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+const font = FONT;
 
 // ═══ MAIN APP ═══════════════════════════════════════════════════════════════
 
@@ -502,26 +186,15 @@ export default function PitchsidePage() {
 
   // ─── Load keepers
   useEffect(() => {
-    const fetchKeepers = async () => {
+    const loadKeepers = async () => {
       if (!user) return;
-
-      if (isDelegate && delegateOf) {
-        // Delegate: fetch only keepers they have pitchside access to
-        const { data } = await supabase
-          .from("keepers").select("*")
-          .eq("coach_id", delegateOf.coach_id).eq("active", true)
-          .in("id", delegateOf.pitchside_keepers)
-          .order("created_at");
-        if (data) setKeepers(data);
-      } else {
-        // Coach: fetch all their keepers
-        const { data } = await supabase
-          .from("keepers").select("*").eq("coach_id", user.id).eq("active", true).order("created_at");
-        if (data) setKeepers(data);
-      }
+      const coachId = isDelegate && delegateOf ? delegateOf.coach_id : user.id;
+      const scopeToIds = isDelegate && delegateOf ? delegateOf.pitchside_keepers : null;
+      const data = await fetchActiveKeepers(supabase, coachId, { scopeToIds });
+      setKeepers(data);
       setLoadingKeepers(false);
     };
-    if (user) fetchKeepers();
+    if (user) loadKeepers();
   }, [user, isDelegate, delegateOf]);
 
   // ─── Helpers
@@ -860,8 +533,8 @@ export default function PitchsidePage() {
           <div style={{ background: t.card, borderRadius: 14, padding: 16, border: `1px solid ${t.border}`, marginBottom: 12 }}>
             <div style={{ fontSize: 11, color: t.dim, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Session Type</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              <Chip label="⚽ Match" selected={sessionType === "match"} onClick={() => setSessionType("match")} />
-              <Chip label="🔶 Training" selected={sessionType === "training"} onClick={() => setSessionType("training")} />
+              <Chip theme={t} label="⚽ Match" selected={sessionType === "match"} onClick={() => setSessionType("match")} />
+              <Chip theme={t} label="🔶 Training" selected={sessionType === "training"} onClick={() => setSessionType("training")} />
             </div>
           </div>
 
@@ -922,7 +595,7 @@ export default function PitchsidePage() {
                 <div style={{ fontSize: 11, color: t.dim, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Venue</div>
                 <div style={{ display: "flex", gap: 6 }}>
                   {["Home", "Away"].map(ha => (
-                    <Chip key={ha} label={ha} selected={homeAway === ha} onClick={() => setHomeAway(ha)} small />
+                    <Chip theme={t} key={ha} label={ha} selected={homeAway === ha} onClick={() => setHomeAway(ha)} small />
                   ))}
                 </div>
               </div>
@@ -973,7 +646,7 @@ export default function PitchsidePage() {
           <div style={{ background: t.card, borderRadius: 14, padding: 16, border: `1px solid ${t.border}` }}>
             <div style={{ fontSize: 10, color: t.dim, marginBottom: 8 }}>{ATTRS.length} attributes, rated 1–5</div>
             {ATTRS.map(a => (
-              <RatingRow key={a} label={a} value={attrs[a]} onChange={v => setAttrs({ ...attrs, [a]: v })} />
+              <RatingRow theme={t} key={a} label={a} value={attrs[a]} onChange={v => setAttrs({ ...attrs, [a]: v })} />
             ))}
           </div>
 
@@ -1169,10 +842,10 @@ export default function PitchsidePage() {
           <div style={{ background: t.card, border: `1px solid ${t.gold}44`, borderRadius: 12, padding: 16, marginBottom: 10 }}>
             <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
               <button onClick={() => { setShowPSO(false); setPsoAttempts(0); setPsoSaves(0); }} style={{ background: "none", border: "none", color: t.dim, fontSize: 18, cursor: "pointer", padding: "4px 8px", marginRight: 8 }}>← Back</button>
-              <div style={{ flex: 1 }}><SectionHeader title="Penalty Shootout" icon="🎯" accentColor={t.gold} /></div>
+              <div style={{ flex: 1 }}><SectionHeader theme={t} title="Penalty Shootout" icon="🎯" accentColor={t.gold} /></div>
             </div>
-            <Counter label="Penalties Faced" value={psoAttempts} onChange={v => { setPsoAttempts(v); setLastSave(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })); }} />
-            <Counter label="Saves" value={psoSaves} onChange={v => { setPsoSaves(v); setLastSave(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })); }} color={t.green} />
+            <Counter theme={t} label="Penalties Faced" value={psoAttempts} onChange={v => { setPsoAttempts(v); setLastSave(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })); }} />
+            <Counter theme={t} label="Saves" value={psoSaves} onChange={v => { setPsoSaves(v); setLastSave(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })); }} color={t.green} />
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", marginTop: 4, borderTop: `1px solid ${t.border}22` }}>
               <span style={{ fontSize: 13, color: t.dim }}>PK Save %</span>
               <span style={{ fontSize: 20, fontWeight: 700, color: psoAttempts > 0 ? (psoSaves / psoAttempts >= 0.4 ? t.green : t.red) : t.dim }}>
@@ -1194,7 +867,7 @@ export default function PitchsidePage() {
         ) : (
           <>
             {/* ═══ EVENT LOG ═══ */}
-            <EventLog events={events} half={half} onUndo={undoLastEvent} />
+            <EventLog theme={t} events={events} half={half} onUndo={undoLastEvent} />
 
             {/* ═══ EVENT LOGGING ═══ */}
             <div style={{ background: t.card, border: `1px solid ${(club?.primary_color || t.accent)}44`, borderRadius: 12, padding: "14px 14px", marginBottom: 10 }}>
@@ -1209,7 +882,7 @@ export default function PitchsidePage() {
               {/* Event type — 5 buttons including Penalty */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: 4, marginBottom: 10 }}>
                 {EVENT_TYPES.map(et => (
-                  <Chip key={et} label={et} selected={evtType === et} onClick={() => {
+                  <Chip theme={t} key={et} label={et} selected={evtType === et} onClick={() => {
                     resetEvt(); setEvtType(et);
                     if (et === "Penalty") setEvtOrigin("penalty");
                   }} small color={evtType === et ? (club?.primary_color || t.accent) : undefined} />
@@ -1223,14 +896,14 @@ export default function PitchsidePage() {
                     <>
                       <div style={{ fontSize: 10, color: t.dim, fontWeight: 600, textTransform: "uppercase", marginBottom: 6 }}>{evtType === "Corner" ? "Corner Side" : "Cross Side"}</div>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                        <Chip label="Left" selected={evtOrigin === (evtType === "Corner" ? "cornerL" : "crossL")} onClick={() => setEvtOrigin(evtType === "Corner" ? "cornerL" : "crossL")} />
-                        <Chip label="Right" selected={evtOrigin === (evtType === "Corner" ? "cornerR" : "crossR")} onClick={() => setEvtOrigin(evtType === "Corner" ? "cornerR" : "crossR")} />
+                        <Chip theme={t} label="Left" selected={evtOrigin === (evtType === "Corner" ? "cornerL" : "crossL")} onClick={() => setEvtOrigin(evtType === "Corner" ? "cornerL" : "crossL")} />
+                        <Chip theme={t} label="Right" selected={evtOrigin === (evtType === "Corner" ? "cornerR" : "crossR")} onClick={() => setEvtOrigin(evtType === "Corner" ? "cornerR" : "crossR")} />
                       </div>
                     </>
                   ) : (
                     <>
                       <div style={{ fontSize: 10, color: t.dim, fontWeight: 600, textTransform: "uppercase", marginBottom: 6 }}>Where did it come from?</div>
-                      <PitchOriginMap selected={evtOrigin} onSelect={setEvtOrigin} />
+                      <PitchOriginMap theme={t} selected={evtOrigin} onSelect={setEvtOrigin} />
                       {evtOrigin && <div style={{ textAlign: "center", marginTop: 6, fontSize: 11, fontWeight: 600, color: club?.primary_color || t.accent }}>✓ {SHOT_ORIGINS.find(o => o.id === evtOrigin)?.label}</div>}
                     </>
                   )}
@@ -1252,7 +925,7 @@ export default function PitchsidePage() {
                   <div style={{ fontSize: 10, color: t.dim, fontWeight: 600, textTransform: "uppercase", marginBottom: 6 }}>GK Action</div>
                   <div style={{ display: "grid", gridTemplateColumns: evtType === "Penalty" ? "repeat(3, 1fr)" : "repeat(4, 1fr)", gap: 4 }}>
                     {getAvailableActions().map(a => (
-                      <Chip key={a} label={GK_ACTION_LABELS[a] || a} selected={evtAction === a} small
+                      <Chip theme={t} key={a} label={GK_ACTION_LABELS[a] || a} selected={evtAction === a} small
                         color={a === "Missed/Misjudged" ? t.red : a === "Goal" ? t.red : (club?.primary_color || t.accent)}
                         onClick={() => {
                           setEvtAction(a);
@@ -1273,7 +946,7 @@ export default function PitchsidePage() {
                   <div style={{ fontSize: 10, color: t.dim, fontWeight: 600, textTransform: "uppercase", marginBottom: 6 }}>
                     {evtIsGoal ? "Where did the ball go in?" : "Where was the shot aimed?"}
                   </div>
-                  <GoalZoneMap selected={evtGoalZone} onSelect={(z) => {
+                  <GoalZoneMap theme={t} selected={evtGoalZone} onSelect={(z) => {
                     setEvtGoalZone(z);
                     // If off-target and not a goal, it's done after zone
                     if (isOffTarget(z) && !evtIsGoal) {
@@ -1289,7 +962,7 @@ export default function PitchsidePage() {
                   <div style={{ fontSize: 10, color: t.dim, fontWeight: 600, textTransform: "uppercase", marginBottom: 6 }}>How was it struck?</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4 }}>
                     {SHOT_METHODS.map(m => (
-                      <Chip key={m} label={m} selected={evtMethod === m} onClick={() => setEvtMethod(m)} small
+                      <Chip theme={t} key={m} label={m} selected={evtMethod === m} onClick={() => setEvtMethod(m)} small
                         color={m === "Own Goal" ? t.purple : undefined} />
                     ))}
                   </div>
@@ -1303,7 +976,7 @@ export default function PitchsidePage() {
                     <div style={{ fontSize: 10, color: t.dim, fontWeight: 600, textTransform: "uppercase", marginBottom: 6 }}>GK Position</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                       {GK_POSITIONING.map(p => (
-                        <Chip key={p} label={p} selected={evtPosition === p} onClick={() => setEvtPosition(p)} color={p === "Set" ? t.green : t.orange} />
+                        <Chip theme={t} key={p} label={p} selected={evtPosition === p} onClick={() => setEvtPosition(p)} color={p === "Set" ? t.green : t.orange} />
                       ))}
                     </div>
                   </div>
@@ -1311,7 +984,7 @@ export default function PitchsidePage() {
                     <div style={{ fontSize: 10, color: t.dim, fontWeight: 600, textTransform: "uppercase", marginBottom: 6 }}>Rank</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                       {GOAL_RANKS.map(r => (
-                        <Chip key={r} label={r} selected={evtRank === r} onClick={() => setEvtRank(r)}
+                        <Chip theme={t} key={r} label={r} selected={evtRank === r} onClick={() => setEvtRank(r)}
                           color={r === "Saveable" ? t.red : r === "Difficult" ? t.yellow : t.green} />
                       ))}
                     </div>
@@ -1333,34 +1006,34 @@ export default function PitchsidePage() {
 
             {/* ═══ REBOUNDS — ALWAYS VISIBLE ═══ */}
             <div style={{ background: t.card, border: `1px solid ${t.cyan}33`, borderRadius: 12, padding: "12px 14px", marginBottom: 8 }}>
-              <SectionHeader title="Rebounds" icon="🔄" accentColor={t.cyan} />
-              <Counter label="Controlled to Safety" value={hd.rbControlled} onChange={v => setH("rbControlled", v)} compact color={t.green} />
-              <Counter label="Dangerous (to opponent)" value={hd.rbDangerous} onChange={v => setH("rbDangerous", v)} compact color={t.red} />
+              <SectionHeader theme={t} title="Rebounds" icon="🔄" accentColor={t.cyan} />
+              <Counter theme={t} label="Controlled to Safety" value={hd.rbControlled} onChange={v => setH("rbControlled", v)} compact color={t.green} />
+              <Counter theme={t} label="Dangerous (to opponent)" value={hd.rbDangerous} onChange={v => setH("rbDangerous", v)} compact color={t.red} />
             </div>
 
             {/* ═══ DISTRIBUTION — ALWAYS VISIBLE ═══ */}
             <div style={{ background: t.card, border: `1px solid ${t.gold}33`, borderRadius: 12, padding: "12px 14px", marginBottom: 8 }}>
-              <SectionHeader title="Distribution" icon="📤" accentColor={t.gold} />
+              <SectionHeader theme={t} title="Distribution" icon="📤" accentColor={t.gold} />
               <div style={{ fontSize: 10, color: t.dim, fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>Goal Kicks</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 4, marginBottom: 8 }}>
                 <div>
-                  <Counter label="Short" value={he.dGkShort} onChange={v => setHE("dGkShort", v)} compact />
-                  <Counter label="↳ Unsuccessful" value={he.dGkShortFail} onChange={v => setHE("dGkShortFail", Math.min(v, he.dGkShort))} compact color={t.red} />
+                  <Counter theme={t} label="Short" value={he.dGkShort} onChange={v => setHE("dGkShort", v)} compact />
+                  <Counter theme={t} label="↳ Unsuccessful" value={he.dGkShortFail} onChange={v => setHE("dGkShortFail", Math.min(v, he.dGkShort))} compact color={t.red} />
                 </div>
                 <div>
-                  <Counter label="Long" value={he.dGkLong} onChange={v => setHE("dGkLong", v)} compact />
-                  <Counter label="↳ Unsuccessful" value={he.dGkLongFail} onChange={v => setHE("dGkLongFail", Math.min(v, he.dGkLong))} compact color={t.red} />
+                  <Counter theme={t} label="Long" value={he.dGkLong} onChange={v => setHE("dGkLong", v)} compact />
+                  <Counter theme={t} label="↳ Unsuccessful" value={he.dGkLongFail} onChange={v => setHE("dGkLongFail", Math.min(v, he.dGkLong))} compact color={t.red} />
                 </div>
               </div>
               <div style={{ fontSize: 10, color: t.dim, fontWeight: 600, textTransform: "uppercase", marginBottom: 4, marginTop: 4 }}>Throws</div>
-              <Counter label="Throws" value={he.dThrow} onChange={v => setHE("dThrow", v)} compact />
-              <Counter label="↳ Unsuccessful" value={he.dThrowFail} onChange={v => setHE("dThrowFail", Math.min(v, he.dThrow))} compact color={t.red} />
+              <Counter theme={t} label="Throws" value={he.dThrow} onChange={v => setHE("dThrow", v)} compact />
+              <Counter theme={t} label="↳ Unsuccessful" value={he.dThrowFail} onChange={v => setHE("dThrowFail", Math.min(v, he.dThrow))} compact color={t.red} />
               <div style={{ fontSize: 10, color: t.dim, fontWeight: 600, textTransform: "uppercase", marginBottom: 4, marginTop: 8 }}>Passes (Open Play)</div>
-              <Counter label="Passes" value={he.dPass} onChange={v => setHE("dPass", v)} compact />
-              <Counter label="↳ Unsuccessful" value={he.dPassFail} onChange={v => setHE("dPassFail", Math.min(v, he.dPass))} compact color={t.red} />
+              <Counter theme={t} label="Passes" value={he.dPass} onChange={v => setHE("dPass", v)} compact />
+              <Counter theme={t} label="↳ Unsuccessful" value={he.dPassFail} onChange={v => setHE("dPassFail", Math.min(v, he.dPass))} compact color={t.red} />
               <div style={{ marginTop: 8, paddingTop: 6, borderTop: `1px solid ${t.border}22` }}>
-                <Counter label="Under Pressure" value={he.dPressure} onChange={v => setHE("dPressure", v)} compact color={t.orange} />
-                <Counter label="↳ Unsuccessful" value={he.dPressureFail} onChange={v => setHE("dPressureFail", Math.min(v, he.dPressure))} compact color={t.red} />
+                <Counter theme={t} label="Under Pressure" value={he.dPressure} onChange={v => setHE("dPressure", v)} compact color={t.orange} />
+                <Counter theme={t} label="↳ Unsuccessful" value={he.dPressureFail} onChange={v => setHE("dPressureFail", Math.min(v, he.dPressure))} compact color={t.red} />
               </div>
               {distTotal > 0 && (
                 <div style={{ marginTop: 8, padding: "6px 10px", background: t.bg, borderRadius: 6, fontSize: 12, color: t.dim, display: "flex", justifyContent: "space-between" }}>
@@ -1374,15 +1047,15 @@ export default function PitchsidePage() {
 
             {/* ═══ SWEEPER — ALWAYS VISIBLE ═══ */}
             <div style={{ background: t.card, border: `1px solid ${t.teal}33`, borderRadius: 12, padding: "12px 14px", marginBottom: 8 }}>
-              <SectionHeader title="Sweeper-Keeper" icon="🏃" accentColor={t.teal} />
-              <Counter label="Clearances" value={he.swClear} onChange={v => setHE("swClear", v)} compact />
-              <Counter label="Interceptions" value={he.swIntercept} onChange={v => setHE("swIntercept", v)} compact />
-              <Counter label="Tackles" value={he.swTackle} onChange={v => setHE("swTackle", v)} compact />
+              <SectionHeader theme={t} title="Sweeper-Keeper" icon="🏃" accentColor={t.teal} />
+              <Counter theme={t} label="Clearances" value={he.swClear} onChange={v => setHE("swClear", v)} compact />
+              <Counter theme={t} label="Interceptions" value={he.swIntercept} onChange={v => setHE("swIntercept", v)} compact />
+              <Counter theme={t} label="Tackles" value={he.swTackle} onChange={v => setHE("swTackle", v)} compact />
             </div>
 
             {/* ═══ NOTES ═══ */}
             <div style={{ background: t.card, border: `1px solid ${t.gold}33`, borderRadius: 12, padding: "12px 14px", marginBottom: 8 }}>
-              <SectionHeader title={`${half} Notes`} icon="🗣️" accentColor={t.gold} />
+              <SectionHeader theme={t} title={`${half} Notes`} icon="🗣️" accentColor={t.gold} />
               <textarea value={hd.note} onChange={e => setH("note", e.target.value)}
                 placeholder="Tap to type or use voice-to-text…"
                 style={{ width: "100%", minHeight: 70, padding: 12, borderRadius: 8, border: `1px solid ${t.border}`, background: t.bg, color: t.text, fontSize: 14, fontFamily: font, resize: "vertical", outline: "none", boxSizing: "border-box" }} />
@@ -1411,7 +1084,7 @@ export default function PitchsidePage() {
               {sessionType === "match" && (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 5, marginBottom: 12 }}>
                   {["W", "D", "L"].map(r => (
-                    <Chip key={r} label={r === "W" ? "Win" : r === "D" ? "Draw" : "Loss"}
+                    <Chip theme={t} key={r} label={r === "W" ? "Win" : r === "D" ? "Draw" : "Loss"}
                       selected={result === r} onClick={() => setResult(r)}
                       color={r === "W" ? t.green : r === "D" ? t.yellow : t.red} />
                   ))}
@@ -1431,7 +1104,7 @@ export default function PitchsidePage() {
 
       {/* ══ MODALS ══ */}
       {showHalfSummary && (
-        <HalfSummary half={showHalfSummary} events={events} halves={halves}
+        <HalfSummary theme={t} half={showHalfSummary} events={events} halves={halves}
           goalsFor={goalsFor} clubName={club?.name} opponent={activeOpponent}
           onClose={() => setShowHalfSummary(null)} />
       )}
@@ -1444,8 +1117,8 @@ export default function PitchsidePage() {
               <div>
                 <label style={{ fontSize: 11, color: t.dim, fontWeight: 600, display: "block", marginBottom: 3 }}>Session Type</label>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                  <Chip label="Match" selected={sessionType === "match"} onClick={() => setSessionType("match")} />
-                  <Chip label="Training" selected={sessionType === "training"} onClick={() => setSessionType("training")} />
+                  <Chip theme={t} label="Match" selected={sessionType === "match"} onClick={() => setSessionType("match")} />
+                  <Chip theme={t} label="Training" selected={sessionType === "training"} onClick={() => setSessionType("training")} />
                 </div>
               </div>
               {sessionType === "match" && (<div>
@@ -1455,8 +1128,8 @@ export default function PitchsidePage() {
               {sessionType === "match" && (<div>
                 <label style={{ fontSize: 11, color: t.dim, fontWeight: 600, display: "block", marginBottom: 3 }}>Venue</label>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                  <Chip label="Home" selected={homeAway === "home"} onClick={() => setHomeAway("home")} />
-                  <Chip label="Away" selected={homeAway === "away"} onClick={() => setHomeAway("away")} />
+                  <Chip theme={t} label="Home" selected={homeAway === "home"} onClick={() => setHomeAway("home")} />
+                  <Chip theme={t} label="Away" selected={homeAway === "away"} onClick={() => setHomeAway("away")} />
                 </div>
               </div>)}
               <div>

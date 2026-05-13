@@ -5,37 +5,18 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 
-const t = {
-  bg: "#070b0e", card: "#0f1419", cardAlt: "#151c22", border: "#1e2a32",
-  accent: "#10b981", accentDim: "#065f46", red: "#ef4444",
-  green: "#22c55e", yellow: "#eab308", orange: "#f97316",
-  text: "#d1d9e0", dim: "#5c6b77", bright: "#f0f4f7",
-};
-const font = "'DM Sans', -apple-system, sans-serif";
+import { tDark } from "@/lib/theme";
+import {
+  GOAL_ZONES, SHOT_ORIGINS, SHOT_TYPES, GOAL_SOURCES, GK_POSITIONING,
+  GOAL_RANKS, GK_ACTIONS_VIDEO, ON_TARGET_OPTIONS, GK_VISIBLE_OPTIONS,
+  OUTCOMES, BODY_ZONES, GMH_OPTIONS, GMS_OPTIONS, FONT,
+} from "@/lib/constants";
 
-const GOAL_ZONES = ["High L","High C","High R","Mid L","Mid C","Mid R","Low L","Low C","Low R"];
-const SHOT_ORIGINS = [
-  { id: "6yard", label: "6-Yard Box" },
-  { id: "boxL", label: "Left Channel" },
-  { id: "boxC", label: "Central Box" },
-  { id: "boxR", label: "Right Channel" },
-  { id: "outL", label: "Wide Left" },
-  { id: "outC", label: "Central Distance" },
-  { id: "outR", label: "Wide Right" },
-  { id: "cornerL", label: "Corner Left" },
-  { id: "cornerR", label: "Corner Right" },
-];
-const SHOT_TYPES = ["Foot", "Header", "Deflection", "Own Goal"];
-const GOAL_SOURCES = ["Open Play", "Corner", "Penalty"];
-const POSITIONING = ["Set", "Moving"];
-const RANKS = ["Saveable", "Difficult", "Unsaveable"];
-const GK_ACTIONS = ["Catch", "Block", "Parry", "Deflect", "Punch", "Missed", "Goal", "unclear"];
-const ON_TARGET_OPTIONS = ["yes", "no", "unclear"];
-const GK_VISIBLE_OPTIONS = ["yes", "partial", "no"];
-const OUTCOMES = ["held", "rebound_safe", "rebound_dangerous", "corner", "out_of_play", "goal"];
-const BODY_ZONES = ["A", "B", "C", "unclear"];
-const GMH_OPTIONS = ["top", "mid", "low", "unclear"];
-const GMS_OPTIONS = ["left_third", "centre", "right_third", "unclear"];
+const t = tDark;
+const font = FONT;
+const POSITIONING = GK_POSITIONING;
+const RANKS = GOAL_RANKS;
+const GK_ACTIONS = GK_ACTIONS_VIDEO;
 
 const inputStyle = {
   width: "100%", padding: "8px 10px", fontSize: 12, borderRadius: 6,
@@ -43,52 +24,7 @@ const inputStyle = {
   fontFamily: font,
 };
 
-function fmtTs(s) {
-  if (s == null) return "—";
-  const m = Math.floor(s / 60);
-  const r = s % 60;
-  return `${m}:${String(r).padStart(2, '0')}`;
-}
-
-function tsStrToSeconds(str) {
-  if (!str) return null;
-  const m = /^(\d+):(\d{1,2})$/.exec(String(str).trim());
-  if (!m) return null;
-  return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
-}
-
-// Map Gemini's free-form fields onto the pitchside vocabulary as defaults.
-function mapHeight(h) {
-  const v = String(h || "").toLowerCase();
-  if (v.startsWith("top")) return "High";
-  if (v.startsWith("mid")) return "Mid";
-  if (v.startsWith("low")) return "Low";
-  return "";
-}
-function mapSide(s) {
-  const v = String(s || "").toLowerCase();
-  if (v === "centre" || v === "center") return "C";
-  return "";
-}
-function defaultZone(g) {
-  const h = mapHeight(g.goal_placement_height);
-  const s = mapSide(g.goal_placement_side);
-  if (!h || !s) return "";
-  return `${h} ${s}`;
-}
-function defaultSource(g) {
-  const v = String(g.attack_type || "").toLowerCase();
-  if (v === "corner") return "Corner";
-  if (v === "penalty") return "Penalty";
-  if (v === "open_play" || v === "counter_attack") return "Open Play";
-  return "";
-}
-function defaultShotType(g) {
-  const v = String(g.shot_type || "").toLowerCase();
-  if (v.includes("header")) return "Header";
-  if (v.includes("deflection")) return "Deflection";
-  return "Foot";
-}
+import { defaultZone, defaultSource, defaultShotType, fmtTs, tsStrToSeconds } from "@/lib/mappings";
 
 export default function ReviewPage() {
   const { user, loading: authLoading } = useAuth();

@@ -2,24 +2,10 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
 import { createAdminClient } from '@/lib/supabase-admin';
 
-const VALID_ZONES = new Set(['High L','High C','High R','Mid L','Mid C','Mid R','Low L','Low C','Low R']);
-const VALID_ORIGINS = new Set(['6yard','boxL','boxC','boxR','outL','outC','outR','cornerL','cornerR','crossL','crossR','unclear']);
-const VALID_SOURCES = new Set(['Open Play','Corner','Penalty']);
-const VALID_SHOT_TYPES = new Set(['Foot','Header','Deflection','Own Goal']);
-const VALID_POSITIONING = new Set(['Set','Moving']);
-const VALID_RANKS = new Set(['Saveable','Difficult','Unsaveable']);
-const VALID_GK_ACTIONS = new Set(['Catch','Block','Parry','Deflect','Punch','Missed','Goal','unclear']);
-
-const GK_ACTION_TO_COL = {
-  Catch:   'saves_catch',
-  Parry:   'saves_parry',
-  Block:   'saves_block',
-  Deflect: 'saves_tip',     // matches existing pitchside mapping (saves_tip = deflect)
-  Punch:   'saves_punch',
-  // 'Missed' → counts as goal_against, not a save
-  // 'Goal' → counts as goal_against, not a save
-  // 'unclear' → not counted (coach review needed)
-};
+import {
+  VALID_ZONES, VALID_ORIGINS, VALID_SOURCES, VALID_SHOT_TYPES,
+  VALID_POSITIONING, VALID_RANKS, VALID_GK_ACTIONS, GK_ACTION_TO_COL,
+} from '@/lib/constants';
 
 // Coerce Gemini's stringly-typed booleans ("true"/"false"/"unclear") into a
 // nullable Postgres boolean. Anything we can't read confidently → null.

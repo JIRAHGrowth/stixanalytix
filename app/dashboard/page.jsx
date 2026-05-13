@@ -9,6 +9,25 @@ import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell,
   LineChart, Line, CartesianGrid, Legend, PieChart, Pie,
 } from "recharts";
+import GoalHeatmap from "@/components/dashboard/GoalHeatmap";
+import PitchOriginMap from "@/components/dashboard/PitchOriginMap";
+import KeeperModal from "@/components/dashboard/KeeperModal";
+import EditMatchModal from "@/components/dashboard/EditMatchModal";
+import DeleteMatchConfirm from "@/components/dashboard/DeleteMatchConfirm";
+import EmptyState from "@/components/dashboard/EmptyState";
+import ShotCrossRef from "@/components/dashboard/ShotCrossRef";
+import SingleGameView from "@/components/dashboard/SingleGameView";
+import {
+  fetchActiveKeepers, fetchAnalyticsBundle, fetchReviewStatus,
+  deleteMatchCascade,
+  fetchNoteContent as fetchNoteContentQ,
+  fetchRankingContent as fetchRankingContentQ,
+} from "@/lib/queries";
+import {
+  pct, dec, computeZoneConversion,
+  aggregateMatches, aggregateGoals, aggregateAttrs,
+  aggregateQuarterly, buildMatchLog, genAlerts,
+} from "@/lib/stats";
 
 
 // Responsive breakpoints
@@ -18,282 +37,19 @@ function useBreakpoint() {
   return { isMobile: w < 768, isTablet: w >= 768 && w < 1024, isDesktop: w >= 1024, width: w };
 }
 
-// ═══ THEME ═══════════════════════════════════════════════════════════════════
-const tDark = {
-  bg: "#070b0e", card: "#0f1419", cardAlt: "#151c22", border: "#1e2a32",
-  accent: "#10b981", accentDim: "#065f46", accentGlow: "#10b98133",
-  gold: "#d4a853", orange: "#f97316",
-  red: "#ef4444", green: "#22c55e", yellow: "#eab308",
-  cyan: "#06b6d4", purple: "#a78bfa", teal: "#14b8a6", pink: "#f472b6",
-  text: "#d1d9e0", dim: "#5c6b77", bright: "#f0f4f7",
-};
-const tLight = {
-  bg: "#f5f7fa", card: "#ffffff", cardAlt: "#f0f2f5", border: "#e2e8f0",
-  accent: "#10b981", accentDim: "#d1fae5", accentGlow: "#10b98122",
-  gold: "#b8860b", orange: "#ea580c",
-  red: "#dc2626", green: "#16a34a", yellow: "#ca8a04",
-  cyan: "#0891b2", purple: "#7c3aed", teal: "#0d9488", pink: "#db2777",
-  text: "#1e293b", dim: "#64748b", bright: "#0f172a",
-};
+import { tDark, tLight } from "@/lib/theme";
+import {
+  ATTR_KEYS, ATTR_LABELS, CORE_ATTRS,
+  ZONE_LABELS, ORIGIN_LABELS, FONT,
+} from "@/lib/constants";
+
 let t = tDark;
-const font = "'DM Sans', -apple-system, sans-serif";
+const font = FONT;
 const PAL = ["#10b981","#059669","#047857","#0d9668","#34d399","#6ee7b7","#0f766e","#15803d","#065f46","#a7f3d0"];
 const ttS = { contentStyle: { background: t.card, border: `1px solid ${t.border}`, borderRadius: 8, fontSize: 10, color: t.text }, itemStyle: { color: t.text } };
 
-const ROLES = ["Starter", "Backup", "Development", "Trial"];
-const FOOTED = ["Left", "Right", "Ambidextrous"];
-const ATTR_KEYS = [
-  "game_rating","shot_stopping","handling","positioning","aerial_dominance",
-  "distribution","decision_making","sweeper_play","set_piece_org",
-  "footwork_agility","reaction_speed","communication","command_of_box",
-  "composure","compete_level",
-];
-const ATTR_LABELS = {
-  game_rating:"Game Rating", shot_stopping:"Shot Stopping", handling:"Handling",
-  positioning:"Positioning", aerial_dominance:"Aerial Dominance",
-  distribution:"Distribution", decision_making:"Decision Making",
-  sweeper_play:"Sweeper Play", set_piece_org:"Set Piece Org.",
-  footwork_agility:"Footwork & Agility", reaction_speed:"Reaction Speed",
-  communication:"Communication", command_of_box:"Command of Box",
-  composure:"Composure", compete_level:"Compete Level",
-};
-const CORE_ATTRS = ["shot_stopping","positioning","aerial_dominance","distribution","decision_making","composure","compete_level"];
-
-const ZONE_LABELS = {
-  "High L": "Top Left", "High C": "Top Center", "High R": "Top Right",
-  "Mid L": "Mid Left", "Mid C": "Mid Center", "Mid R": "Mid Right",
-  "Low L": "Low Left", "Low C": "Low Center", "Low R": "Low Right",
-};
-const ORIGIN_LABELS = {
-  "6yard": "6-Yard Box", "boxC": "Central Box", "boxL": "Left Channel",
-  "boxR": "Right Channel", "cornerL": "Corner Left", "cornerR": "Corner Right",
-  "outC": "Central Distance", "outL": "Wide Left", "outR": "Wide Right",
-  "penalty": "Penalty Spot",
-};
-// Zone conversion rate computation
-function computeZoneConversion(shotEvents) {
-  if (!shotEvents || !shotEvents.length) return [];
-  const zones = {};
-  shotEvents.forEach(function(se) {
-    var zone = se.shot_origin;
-    if (!zone) return;
-    if (!zones[zone]) zones[zone] = { shots: 0, goals: 0 };
-    zones[zone].shots++;
-    if (se.is_goal) zones[zone].goals++;
-  });
-  return Object.entries(zones)
-    .filter(function(e) { return e[1].shots > 0; })
-    .map(function(e) {
-      var name = ORIGIN_LABELS[e[0]] || e[0];
-      return { zone: e[0], name: name, shots: e[1].shots, goals: e[1].goals, rate: e[1].goals / e[1].shots };
-    })
-    .sort(function(a, b) { return b.rate - a.rate; });
-}
-
-
-// ═══ FORMATTING HELPERS ══════════════════════════════════════════════════════
-const pct = v => v != null && !isNaN(v) ? (v * 100).toFixed(1) + "%" : "—";
-const dec = (v, d = 2) => v != null && !isNaN(v) ? v.toFixed(d) : "—";
 const svC = v => v >= .800 ? t.green : v >= .700 ? t.accent : v >= .650 ? t.yellow : t.red;
 const ratC = v => v >= 4.0 ? t.green : v >= 3.5 ? t.accent : v >= 3.0 ? t.yellow : t.red;
-
-// ═══ AGGREGATION ENGINE ═════════════════════════════════════════════════════
-function aggregateMatches(matches) {
-  if (!matches.length) return null;
-  const gp = matches.length;
-  const sum = (key) => matches.reduce((s, m) => s + (m[key] || 0), 0);
-  const sot = sum("shots_on_target");
-  const sv = sum("saves");
-  const ga = sum("goals_conceded");
-  const svPct = sot > 0 ? sv / sot : 0;
-  const min = gp * 90;
-  const gaa = gp > 0 ? ga / gp : 0;
-  const wins = matches.filter(m => m.result === "W").length;
-  const draws = matches.filter(m => m.result === "D").length;
-  const losses = matches.filter(m => m.result === "L").length;
-  const cs = matches.filter(m => m.goals_conceded === 0 && m.session_type === "match").length;
-  const csPct = gp > 0 ? cs / gp : 0;
-  return {
-    gp, min, sot, saves: sv, ga, svPct, gaa, cs, csPct, w: wins, d: draws, l: losses,
-    saveTypes: {
-      Catch: sum("saves_catch"), Parry: sum("saves_parry"), Smother: sum("saves_dive"),
-      Block: sum("saves_block"), Deflect: sum("saves_tip"), Punch: sum("saves_punch"),
-    },
-    crosses: {
-      claimed: sum("crosses_claimed"), punched: sum("crosses_punched"),
-      missed: sum("crosses_missed"), total: sum("crosses_total"),
-    },
-    distribution: {
-      gkShort: { att: sum("dist_gk_short_att"), suc: sum("dist_gk_short_suc") },
-      gkLong: { att: sum("dist_gk_long_att"), suc: sum("dist_gk_long_suc") },
-      throws: { att: sum("dist_throws_att"), suc: sum("dist_throws_suc") },
-      passes: { att: sum("dist_passes_att"), suc: sum("dist_passes_suc") },
-      underPressure: { att: sum("dist_under_pressure_att"), suc: sum("dist_under_pressure_suc") },
-      total: sum("dist_gk_short_att") + sum("dist_gk_long_att") + sum("dist_throws_att") + sum("dist_passes_att") + sum("dist_under_pressure_att"),
-      accurate: sum("dist_gk_short_suc") + sum("dist_gk_long_suc") + sum("dist_throws_suc") + sum("dist_passes_suc") + sum("dist_under_pressure_suc"),
-      inaccurate: (sum("dist_gk_short_att") + sum("dist_gk_long_att") + sum("dist_throws_att") + sum("dist_passes_att") + sum("dist_under_pressure_att")) - (sum("dist_gk_short_suc") + sum("dist_gk_long_suc") + sum("dist_throws_suc") + sum("dist_passes_suc") + sum("dist_under_pressure_suc")),
-      types: { "GK Short": sum("dist_gk_short_att"), "GK Long": sum("dist_gk_long_att"), "Throws": sum("dist_throws_att"), "Passes": sum("dist_passes_att"), "Under Pressure": sum("dist_under_pressure_att") },
-    },
-    oneV1: { faced: sum("one_v_one_faced"), won: sum("one_v_one_won") },
-    handling: { errGoal: sum("errors_leading_to_goal") },
-    sweeper: {
-      clearances: sum("sweeper_clearances"), interceptions: sum("sweeper_interceptions"),
-      tackles: sum("sweeper_tackles"),
-    },
-    rebounds: { controlled: sum("rebounds_controlled"), dangerous: sum("rebounds_dangerous") },
-  };
-}
-
-function aggregateGoals(goals) {
-  const count = (key) => {
-    const map = {};
-    goals.forEach(g => { const v = g[key]; if (v) map[v] = (map[v] || 0) + 1; });
-    return map;
-  };
-  return {
-    zones: count("goal_zone"),
-    origins: count("shot_origin"),
-    sources: count("goal_source"),
-    ranks: count("goal_rank"),
-    shotTypes: count("shot_type"),
-    positioning: count("gk_positioning"),
-  };
-}
-
-function aggregateAttrs(attrRows) {
-  if (!attrRows.length) return null;
-  const result = {};
-  ATTR_KEYS.forEach(k => {
-    const vals = attrRows.map(r => r[k]).filter(v => v != null);
-    result[k] = vals.length > 0 ? vals.reduce((s, v) => s + Number(v), 0) / vals.length : null;
-  });
-  return result;
-}
-
-function getQuarter(dateStr) {
-  const m = new Date(dateStr).getMonth();
-  if (m < 3) return "Q3";
-  if (m < 6) return "Q4";
-  if (m < 9) return "Q1";
-  return "Q2";
-}
-
-function aggregateQuarterly(matches) {
-  const qs = { Q1: [], Q2: [], Q3: [], Q4: [] };
-  matches.forEach(m => { const q = getQuarter(m.match_date); qs[q].push(m); });
-  const result = {};
-  Object.entries(qs).forEach(([q, ms]) => {
-    if (!ms.length) { result[q] = { gp: 0 }; return; }
-    const agg = aggregateMatches(ms);
-    result[q] = { gp: agg.gp, svPct: agg.svPct, gaa: agg.gaa, csPct: agg.csPct, w: agg.w };
-  });
-  return result;
-}
-
-function buildMatchLog(matches) {
-  return [...matches]
-    .sort((a, b) => new Date(b.match_date) - new Date(a.match_date))
-    .map(m => ({
-      id: m.id,
-      date: new Date(m.match_date).toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
-      opp: m.opponent || "Training",
-      type: m.session_type,
-      ha: m.venue === "home" ? "H" : m.venue === "away" ? "A" : "N",
-      res: m.result || "—",
-      score: m.session_type === "match" ? `${m.goals_for || 0}-${m.goals_against || 0}` : "—",
-      sot: m.shots_on_target,
-      sv: m.saves,
-      ga: m.goals_conceded,
-      svP: m.shots_on_target > 0 ? m.saves / m.shots_on_target : null,
-      cs: m.goals_conceded === 0,
-    }));
-}
-
-// ═══ ALERT GENERATOR ════════════════════════════════════════════════════════
-function genAlerts(keeperName, seasonAgg, l5Agg, seasonGoals, l5Goals, sznAttrs, l5Attrs, seasonShotEvents, l5ShotEvents) {
-  const a = [];
-  if (!seasonAgg || !l5Agg) return a;
-  if (l5Agg.svPct < seasonAgg.svPct - 0.03)
-    a.push({ type: "warning", cat: "Performance", title: "Save % Declining",
-      detail: `Last 5: ${pct(l5Agg.svPct)} vs Season: ${pct(seasonAgg.svPct)}`,
-      action: "Review positioning in recent film" });
-  if (l5Agg.gaa > seasonAgg.gaa + 0.25)
-    a.push({ type: "warning", cat: "Performance", title: "GAA Trending Up",
-      detail: `Last 5: ${dec(l5Agg.gaa)} vs Season: ${dec(seasonAgg.gaa)}`,
-      action: "Analyze goal quality — saveable or defensive?" });
-  const sznClaimPct = seasonAgg.crosses.total > 0 ? (seasonAgg.crosses.claimed / seasonAgg.crosses.total) * 100 : 0;
-  const l5ClaimPct = l5Agg.crosses.total > 0 ? (l5Agg.crosses.claimed / l5Agg.crosses.total) * 100 : 0;
-  if (sznClaimPct > 0 && l5ClaimPct < sznClaimPct - 10)
-    a.push({ type: "warning", cat: "Technical", title: "Cross Claiming Dropping",
-      detail: `Claim rate fell ${sznClaimPct.toFixed(0)}% → ${l5ClaimPct.toFixed(0)}%`,
-      action: "Judgment of flight, starting position, CB communication" });
-  if (seasonAgg.handling.errGoal >= 2)
-    a.push({ type: "alert", cat: "Technical", title: `${seasonAgg.handling.errGoal} Errors → Goals`,
-      detail: "Direct errors leading to goals this season",
-      action: "Isolate error types: handling, distribution, or positioning" });
-  const sznRBtotal = seasonAgg.rebounds.controlled + seasonAgg.rebounds.dangerous;
-  const l5RBtotal = l5Agg.rebounds.controlled + l5Agg.rebounds.dangerous;
-  if (sznRBtotal > 0 && l5RBtotal > 0) {
-    const sznCtrl = (seasonAgg.rebounds.controlled / sznRBtotal) * 100;
-    const l5Ctrl = (l5Agg.rebounds.controlled / l5RBtotal) * 100;
-    if (l5Ctrl < sznCtrl - 10)
-      a.push({ type: "warning", cat: "Technical", title: "Rebound Control Slipping",
-        detail: `Controlled rebound % dropped from ${sznCtrl.toFixed(0)}% to ${l5Ctrl.toFixed(0)}%`,
-        action: "Focus on angle recovery and shot parrying technique" });
-  }
-  if (sznAttrs?.composure && l5Attrs?.composure && l5Attrs.composure < sznAttrs.composure - 0.3)
-    a.push({ type: "alert", cat: "Mental", title: "Composure Trending Down",
-      detail: `Season avg ${sznAttrs.composure.toFixed(1)} → Last 5 avg ${l5Attrs.composure.toFixed(1)}`,
-      action: "1-on-1 about confidence. Watch body language." });
-  if (sznAttrs?.compete_level && l5Attrs?.compete_level && l5Attrs.compete_level > sznAttrs.compete_level + 0.2)
-    a.push({ type: "positive", cat: "Mental", title: "Compete Level Rising",
-      detail: `Season ${sznAttrs.compete_level.toFixed(1)} → Last 5 ${l5Attrs.compete_level.toFixed(1)}`,
-      action: "Reinforce with positive feedback" });
-  // --- Zone vulnerability alerts (requires shot_events data) ---
-  if (seasonShotEvents && seasonShotEvents.length && l5ShotEvents && l5ShotEvents.length) {
-    var sznZones = computeZoneConversion(seasonShotEvents);
-    var l5Zones = computeZoneConversion(l5ShotEvents);
-    // Zone vulnerability spike: L5 conversion > season + 15pp
-    l5Zones.forEach(function(lz) {
-      var sz = sznZones.find(function(z) { return z.zone === lz.zone; });
-      if (sz && lz.shots >= 3 && (lz.rate - sz.rate) > 0.15) {
-        a.push({ type: "warning", cat: "Performance", title: "Vulnerability Rising: " + lz.name,
-          detail: (lz.rate * 100).toFixed(1) + "% of shots resulting in goals in last 5 vs " + (sz.rate * 100).toFixed(1) + "% season average.",
-          action: "Review positioning and angle coverage from this channel." });
-      }
-    });
-    // High-volume zone with rising conversion
-    var totalL5Shots = l5ShotEvents.length;
-    l5Zones.forEach(function(lz) {
-      var sz = sznZones.find(function(z) { return z.zone === lz.zone; });
-      if (sz && lz.shots / totalL5Shots > 0.25 && lz.rate > sz.rate) {
-        a.push({ type: "alert", cat: "Performance", title: "High Traffic Zone Leaking: " + lz.name,
-          detail: lz.shots + " shots (" + (lz.shots / totalL5Shots * 100).toFixed(0) + "% of all) with " + (lz.rate * 100).toFixed(1) + "% conversion vs " + (sz.rate * 100).toFixed(1) + "% season.",
-          action: "Zone accounts for heavy traffic and conversion is rising." });
-      }
-    });
-    // Positive: zone improvement
-    l5Zones.forEach(function(lz) {
-      var sz = sznZones.find(function(z) { return z.zone === lz.zone; });
-      if (sz && sz.rate > 0.20 && lz.rate < 0.12 && lz.shots >= 3) {
-        a.push({ type: "positive", cat: "Performance", title: "Improved: " + lz.name,
-          detail: "Conversion rate down to " + (lz.rate * 100).toFixed(1) + "% in last 5 from " + (sz.rate * 100).toFixed(1) + "% season.",
-          action: "Reinforce what is working." });
-      }
-    });
-  }
-  // 1v1 win rate declining
-  if (seasonAgg && l5Agg && seasonAgg.oneV1 && l5Agg.oneV1) {
-    var sznV1Rate = seasonAgg.oneV1.faced > 0 ? (seasonAgg.oneV1.won / seasonAgg.oneV1.faced) : null;
-    var l5V1Rate = l5Agg.oneV1.faced > 0 ? (l5Agg.oneV1.won / l5Agg.oneV1.faced) : null;
-    if (sznV1Rate !== null && l5V1Rate !== null && (sznV1Rate - l5V1Rate) > 0.20) {
-      a.push({ type: "warning", cat: "Performance", title: "1v1 Win Rate Declining",
-        detail: (l5V1Rate * 100).toFixed(0) + "% last 5 vs " + (sznV1Rate * 100).toFixed(0) + "% season.",
-        action: "Review angle play and decision-making in breakaway situations." });
-    }
-  }
-  return a;
-}
 
 // ═══ UI COMPONENTS ══════════════════════════════════════════════════════════
 function Chip({ label, selected, onClick, color }) {
@@ -381,550 +137,16 @@ function ScopeToggle({ scope, setScope }) {
   );
 }
 
-// ═══ GOAL HEATMAP ═══════════════════════════════════════════════════════════
-const ZONE_POSITIONS = {
-  "High L": { x: 5, y: 5 }, "High C": { x: 38, y: 5 }, "High R": { x: 71, y: 5 },
-  "Mid L": { x: 5, y: 35 }, "Mid C": { x: 38, y: 35 }, "Mid R": { x: 71, y: 35 },
-  "Low L": { x: 5, y: 62 }, "Low C": { x: 38, y: 62 }, "Low R": { x: 71, y: 62 },
-};
+// GoalHeatmap — extracted to @/components/dashboard/GoalHeatmap.jsx
 
-function GoalHeatmap({ zones, title }) {
-  if (!zones || Object.keys(zones).length === 0) {
-    return <div style={{ textAlign: "center", padding: 24, color: t.dim, fontSize: 12 }}>No goal data</div>;
-  }
-  const maxVal = Math.max(...Object.values(zones), 1);
-  const grid = [["High L","High C","High R"],["Mid L","Mid C","Mid R"],["Low L","Low C","Low R"]];
-  return (
-    <div>
-      {title && <div style={{ fontSize: 11, color: t.dim, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>{title}</div>}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2, border: "2px solid " + t.border, borderRadius: 6, overflow: "hidden", maxWidth: 260, margin: "0 auto" }}>
-        {grid.flat().map(z => {
-          const v = zones[z] || 0;
-          const intensity = v > 0 ? 0.25 + (v / maxVal) * 0.75 : 0;
-          const label = ZONE_LABELS[z] || z;
-          return (
-            <div key={z} style={{
-              aspectRatio: "1.2", display: "flex", flexDirection: "column",
-              alignItems: "center", justifyContent: "center",
-              background: v > 0 ? "rgba(239,68,68," + intensity + ")" : t.bg,
-              borderRight: z.includes("R") ? "none" : "1px solid " + t.border,
-              borderBottom: z.includes("Low") ? "none" : "1px solid " + t.border,
-            }}>
-              <div style={{ fontSize: 18, fontWeight: 800, color: v > 0 ? t.bright : t.dim }}>{v}{v > 0 && <div style={{ fontSize: 7, color: t.dim, marginTop: -1 }}>{(v / Math.max(1, Object.values(zones).reduce(function(a,b){return a+b},0)) * 100).toFixed(0)}%</div>}</div>
-              <div style={{ fontSize: 8, color: v > 0 ? "rgba(255,255,255,0.65)" : t.dim, marginTop: 2 }}>{label}</div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
+// PitchOriginMap — extracted to @/components/dashboard/PitchOriginMap.jsx
 
-function PitchOriginMap({ origins, title }) {
-  if (!origins || Object.keys(origins).length === 0) {
-    return <div style={{ textAlign: "center", padding: 24, color: t.dim, fontSize: 12 }}>No origin data</div>;
-  }
+// KeeperModal — extracted to @/components/dashboard/KeeperModal.jsx
+// EmptyState — extracted to @/components/dashboard/EmptyState.jsx
 
-    const maxVal = Math.max(...Object.values(origins), 1);
-    // Merge 10 DB zones into 7 visual zones matching approved mockup
-    const vizZones = [
-      {key:"wideL", x:3, y:3, w:15, h:78, label:["Wide","Left"], val:(origins.cornerL||0)+(origins.outL||0)},
-      {key:"channelL", x:18, y:3, w:14, h:48, label:["Left","Channel"], val:origins.boxL||0},
-      {key:"6yard", x:32, y:3, w:36, h:19, label:["6-Yard Box"], val:origins["6yard"]||0},
-      {key:"central", x:32, y:22, w:36, h:29, label:["Central Box"], val:(origins.boxC||0)+(origins.penalty||0)},
-      {key:"channelR", x:68, y:3, w:14, h:48, label:["Right","Channel"], val:origins.boxR||0},
-      {key:"wideR", x:82, y:3, w:15, h:78, label:["Wide","Right"], val:(origins.cornerR||0)+(origins.outR||0)},
-      {key:"outside", x:18, y:51, w:64, h:30, label:["Outside","the Box"], val:origins.outC||0},
-    ];
-    const vizMax = Math.max(...vizZones.map(z=>z.val), 1);
+// ShotCrossRef — extracted to @/components/dashboard/ShotCrossRef.jsx
+// SingleGameView — extracted to @/components/dashboard/SingleGameView.jsx
 
-    return (
-      <div style={{textTransform:"none"}}>
-        <svg viewBox="0 0 100 85" style={{width:"100%",maxWidth:300,display:"block",margin:"0 auto"}}>
-          <rect x="0" y="0" width="100" height="85" rx="3" fill={t.bg} stroke={t.border} strokeWidth="0.5"/>
-          <rect x="30" y="0" width="40" height="3" rx="1" fill={t.dim} opacity="0.3"/>
-          <text x="50" y="2" textAnchor="middle" fill={t.bright} fontSize="2.8" fontWeight="700" letterSpacing="1">GOAL</text>
-          <line x1="18" y1="3" x2="18" y2="81" stroke={t.border} strokeWidth="0.3" strokeDasharray="2"/>
-          <line x1="82" y1="3" x2="82" y2="81" stroke={t.border} strokeWidth="0.3" strokeDasharray="2"/>
-          <line x1="32" y1="3" x2="32" y2="51" stroke={t.border} strokeWidth="0.3" strokeDasharray="2"/>
-          <line x1="68" y1="3" x2="68" y2="51" stroke={t.border} strokeWidth="0.3" strokeDasharray="2"/>
-          <line x1="32" y1="22" x2="68" y2="22" stroke={t.border} strokeWidth="0.3" strokeDasharray="2"/>
-          <line x1="18" y1="51" x2="82" y2="51" stroke={t.border} strokeWidth="0.3" strokeDasharray="2"/>
-          {vizZones.map(z => {
-            const cx=z.x+z.w/2, cy=z.y+z.h/2;
-            const isNarrow=z.w<=15, isTall=z.h>=40;
-            const fontSize=isNarrow?2.5:(z.w>30?3.5:3);
-            const valSize=z.val>0?(isNarrow?5.5:7.5):(isNarrow?3.5:4.5);
-            const intensity=z.val>0?(0.15+(z.val/vizMax)*0.6):0;
-            const valY=isTall?(z.y+z.h*0.35):(cy-3);
-            const lblY=isTall?(z.y+z.h*0.55):(cy+4);
-            return (
-              <g key={z.key}>
-                {z.val > 0 && <rect x={z.x} y={z.y} width={z.w} height={z.h} rx="1.5" fill={"rgba(239,68,68,"+intensity+")"}/>}
-                <text x={cx} y={valY} textAnchor="middle" dominantBaseline="middle" fill={z.val>0?t.bright:t.dim} fontSize={valSize} fontWeight="800" opacity={z.val>0?1:0.3}>{z.val}</text>
-                <text x={cx} textAnchor="middle" fill={z.val>0?"rgba(255,255,255,0.75)":t.dim} fontSize={fontSize} fontWeight={z.val>0?"600":"500"}>
-                  {z.label.map((line,i) => <tspan key={i} x={cx} y={i===0?lblY:undefined} dy={i>0?(fontSize+0.8):undefined}>{line}</tspan>)}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
-      </div>
-  );
-}
-
-function KeeperModal({ keeper, onSave, onClose, onDeactivate, primaryColor }) {
-  const bp = useBreakpoint();
-  const [name, setName] = useState(keeper?.name || "");
-  const [number, setNumber] = useState(keeper?.number?.toString() || "");
-  const [foot, setFoot] = useState(keeper?.catch_hand || "");
-  const [dob, setDob] = useState(keeper?.date_of_birth || "");
-  const [role, setRole] = useState(keeper?.role || "");
-  const [saving, setSaving] = useState(false);
-  const isEdit = !!keeper?.id;
-  const canSave = name.trim().length > 0;
-
-  const handleSave = async () => {
-    if (!canSave) return;
-    setSaving(true);
-    await onSave({
-      name: name.trim(),
-      number: number ? parseInt(number) : null,
-      catch_hand: foot || null,
-      date_of_birth: dob || null,
-      role: role || null,
-    });
-    setSaving(false);
-  };
-
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div style={{ background: t.card, borderRadius: 16, width: "100%", maxWidth: 420, padding: 24, maxHeight: "90vh", overflow: "auto" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: t.bright }}>{isEdit ? "Edit Keeper" : "Add Goalkeeper"}</h3>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: t.dim, fontSize: 22, cursor: "pointer" }}>✕</button>
-        </div>
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ fontSize: 11, color: t.dim, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 6 }}>Name *</label>
-          <input value={name} onChange={e => setName(e.target.value)} placeholder="Full name"
-            style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: `1px solid ${t.border}`, background: t.bg, color: t.bright, fontSize: 15, fontFamily: font, outline: "none", boxSizing: "border-box" }} />
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 16 }}>
-          <div>
-            <label style={{ fontSize: 11, color: t.dim, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 6 }}>Number</label>
-            <input type="number" value={number} onChange={e => setNumber(e.target.value)} placeholder="#"
-              style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: `1px solid ${t.border}`, background: t.bg, color: t.bright, fontSize: 15, fontFamily: font, outline: "none", boxSizing: "border-box" }} />
-          </div>
-          <div>
-            <label style={{ fontSize: 11, color: t.dim, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 6 }}>Date of Birth</label>
-            <input type="date" value={dob} onChange={e => setDob(e.target.value)}
-              style={{ width: "100%", padding: "12px 14px", borderRadius: 10, border: `1px solid ${t.border}`, background: t.bg, color: t.bright, fontSize: 14, fontFamily: font, outline: "none", boxSizing: "border-box" }} />
-          </div>
-        </div>
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ fontSize: 11, color: t.dim, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 8 }}>Footed</label>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
-            {FOOTED.map(f => <Chip key={f} label={f} selected={foot === f} onClick={() => setFoot(f)} color={primaryColor} />)}
-          </div>
-        </div>
-        <div style={{ marginBottom: 24 }}>
-          <label style={{ fontSize: 11, color: t.dim, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 8 }}>Depth Chart Role</label>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 6 }}>
-            {ROLES.map(r => <Chip key={r} label={r} selected={role === r} onClick={() => setRole(r)} color={primaryColor} />)}
-          </div>
-        </div>
-        <button onClick={handleSave} disabled={!canSave || saving} style={{
-          width: "100%", padding: 16, borderRadius: 12, border: "none",
-          background: canSave ? (primaryColor || t.accent) : t.border,
-          color: canSave ? "#fff" : t.dim, fontSize: 16, fontWeight: 700,
-          cursor: canSave ? "pointer" : "not-allowed", fontFamily: font, minHeight: 52,
-        }}>{saving ? "Saving..." : isEdit ? "Save Changes" : "Add Goalkeeper"}</button>
-        {isEdit && onDeactivate && (
-          <button onClick={onDeactivate} style={{
-            width: "100%", marginTop: 10, padding: 12, borderRadius: 8,
-            background: "transparent", border: `1px solid ${t.red}33`,
-            color: t.red, fontSize: 12, cursor: "pointer", fontFamily: font, minHeight: 40,
-          }}>Remove from Active Roster</button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ═══ EMPTY STATE ════════════════════════════════════════════════════════════
-function EmptyState({ icon, title, subtitle }) {
-  return (
-    <Card s={{ textAlign: "center", padding: 40 }}>
-      <div style={{ fontSize: 36, marginBottom: 12 }}>{icon}</div>
-      <div style={{ fontSize: 15, fontWeight: 600, color: t.bright, marginBottom: 6 }}>{title}</div>
-      <div style={{ fontSize: 12, color: t.dim, lineHeight: 1.5 }}>{subtitle}</div>
-    </Card>
-  );
-}
-
-// ═══ SINGLE GAME VIEW ═══════════════════════════════════════════════════════
-// ═══ SHOT CROSS-REFERENCE ════════════════════════════════════════════════════
-const ORIGINS = ["Inside Box", "Outside Box", "Penalty Spot", "Right Channel", "Left Channel", "Central", "Header Zone"];
-const NET_ZONES = ["High L", "High C", "High R", "Mid L", "Mid C", "Mid R", "Low L", "Low C", "Low R"];
-const NET_ZONE_GRID = [
-  ["High L", "High C", "High R"],
-  ["Mid L",  "Mid C",  "Mid R"],
-  ["Low L",  "Low C",  "Low R"],
-];
-
-function ShotCrossRef({ goals }) {
-  const [activeOrigin, setActiveOrigin] = useState(null);
-
-  if (!goals || goals.length === 0) {
-    return (
-      <div style={{ textAlign: "center", padding: 32, color: t.dim, fontSize: 12 }}>
-        No goal data to cross-reference yet.
-      </div>
-    );
-  }
-
-  // Build origin → zone matrix from raw goals
-  const matrix = {};
-  const originsUsed = new Set();
-  const zonesUsed = new Set();
-
-  goals.forEach(g => {
-    const origin = g.shot_origin;
-    const zone = g.goal_zone;
-    if (!origin || !zone) return;
-    originsUsed.add(origin);
-    zonesUsed.add(zone);
-    if (!matrix[origin]) matrix[origin] = {};
-    matrix[origin][zone] = (matrix[origin][zone] || 0) + 1;
-  });
-
-  const usedOrigins = ORIGINS.filter(o => originsUsed.has(o));
-  // Also include any origins in data not in our preset list
-  originsUsed.forEach(o => { if (!ORIGINS.includes(o)) usedOrigins.push(o); });
-
-  if (usedOrigins.length === 0) {
-    return (
-      <div style={{ textAlign: "center", padding: 24, color: t.dim, fontSize: 12 }}>
-        Goal data exists but shot origin / net zone fields are not yet populated.
-      </div>
-    );
-  }
-
-  // When an origin is selected, show its net zone distribution
-  const selectedData = activeOrigin ? (matrix[activeOrigin] || {}) : null;
-  const selectedTotal = selectedData ? Object.values(selectedData).reduce((s, v) => s + v, 0) : 0;
-
-  // For the summary table: totals per origin
-  const originTotals = usedOrigins.map(o => ({
-    origin: o,
-    total: Object.values(matrix[o] || {}).reduce((s, v) => s + v, 0),
-    topZone: Object.entries(matrix[o] || {}).sort((a, b) => b[1] - a[1])[0]?.[0] || "—",
-  })).sort((a, b) => b.total - a.total);
-
-  const maxTotal = Math.max(...originTotals.map(o => o.total), 1);
-
-  return (
-    <div>
-      {/* Intro label */}
-      <div style={{ fontSize: 11, color: t.dim, marginBottom: 14, lineHeight: 1.5 }}>
-        Click a shot origin to see exactly where on the net those goals went. Reveals pattern vulnerabilities for targeted training.
-      </div>
-
-      {/* Origin summary bars — clickable */}
-      <div style={{ marginBottom: 16 }}>
-        {originTotals.map(({ origin, total, topZone }) => (
-          <div
-            key={origin}
-            onClick={() => setActiveOrigin(activeOrigin === origin ? null : origin)}
-            style={{
-              display: "flex", alignItems: "center", gap: 10, marginBottom: 6,
-              padding: "8px 10px", borderRadius: 8, cursor: "pointer",
-              background: activeOrigin === origin ? t.red + "18" : "transparent",
-              border: `1px solid ${activeOrigin === origin ? t.red + "55" : "transparent"}`,
-              transition: "all 0.12s",
-            }}
-          >
-            <div style={{ width: 110, fontSize: 11, color: activeOrigin === origin ? t.bright : t.text, fontWeight: activeOrigin === origin ? 700 : 400, flexShrink: 0 }}>{ORIGIN_LABELS[origin] || origin}</div>
-            <div style={{ flex: 1, height: 10, background: t.bg, borderRadius: 3, overflow: "hidden" }}>
-              <div style={{ height: "100%", width: `${(total / maxTotal) * 100}%`, background: activeOrigin === origin ? t.red : t.orange, borderRadius: 3, transition: "width 0.2s" }} />
-            </div>
-            <div style={{ width: 20, fontSize: 12, fontWeight: 700, color: t.bright, textAlign: "right" }}>{total}</div>
-            <div style={{ width: 60, fontSize: 9, color: t.dim, textAlign: "right" }}>→ {topZone}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Net zone breakdown for selected origin */}
-      {activeOrigin && selectedData && (
-        <div style={{ background: t.cardAlt, borderRadius: 10, padding: 16, border: `1px solid ${t.border}` }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: t.bright, marginBottom: 4 }}>
-            Goals from <span style={{ color: t.orange }}>{activeOrigin}</span> — where they went in
-          </div>
-          <div style={{ fontSize: 10, color: t.dim, marginBottom: 14 }}>
-            {selectedTotal} goal{selectedTotal !== 1 ? "s" : ""} conceded from this position
-          </div>
-
-          {/* 3×3 net grid */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, maxWidth: 260, margin: "0 auto 14px" }}>
-            {NET_ZONE_GRID.flat().map(zone => {
-              const count = selectedData[zone] || 0;
-              const pctVal = selectedTotal > 0 ? (count / selectedTotal) : 0;
-              const intensity = pctVal;
-              return (
-                <div key={zone} style={{
-                  background: count > 0 ? `rgba(239,68,68,${0.12 + intensity * 0.7})` : t.bg,
-                  border: `1px solid ${count > 0 ? t.red + "55" : t.border}`,
-                  borderRadius: 6, padding: "10px 4px", textAlign: "center",
-                }}>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: count > 0 ? t.bright : t.dim }}>{count}</div>
-                  <div style={{ fontSize: 8, color: t.dim, marginTop: 2 }}>{zone}</div>
-                  {count > 0 && <div style={{ fontSize: 8, color: t.red, fontWeight: 600 }}>{(pctVal * 100).toFixed(0)}%</div>}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Coaching insight */}
-          {selectedTotal >= 2 && (() => {
-            const top = Object.entries(selectedData).sort((a, b) => b[1] - a[1])[0];
-            const topPct = top ? ((top[1] / selectedTotal) * 100).toFixed(0) : 0;
-            const isHighDanger = top?.[0]?.startsWith("Low") || top?.[0]?.startsWith("Mid");
-            return (
-              <div style={{ background: t.red + "12", border: `1px solid ${t.red}33`, borderRadius: 8, padding: "10px 12px", fontSize: 11, color: t.text, lineHeight: 1.6 }}>
-                <span style={{ color: t.red, fontWeight: 700 }}>⚠ Pattern: </span>
-                {topPct}% of goals from <strong>{activeOrigin}</strong> go to the <strong>{top?.[0]}</strong> zone.
-                {isHighDanger ? " Low/mid goals often indicate positioning or set stance — drill this channel in training." : " High goals from this zone suggest poor starting position or late reaction — review set position."}
-              </div>
-            );
-          })()}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SingleGameView({ match, goals, logRow, keeperName, primaryColor, onBack, onReport }) {
-  const bp = useBreakpoint();
-  if (!match) return (
-    <div style={{ padding: 32, color: t.dim, textAlign: "center" }}>
-      Match data unavailable.
-      <button onClick={onBack} style={{ marginTop: 16, display: "block", margin: "16px auto 0", padding: "8px 20px", background: t.accent, color: "#000", border: "none", borderRadius: 8, cursor: "pointer", fontFamily: font }}>← Back</button>
-    </div>
-  );
-
-  const pc = primaryColor || t.accent;
-  const svPct = match.shots_on_target > 0 ? (match.saves / match.shots_on_target * 100).toFixed(1) : "–";
-  const resultColor = logRow.res === "W" ? t.green : logRow.res === "L" ? t.red : t.yellow;
-  const isMatch = match.session_type === "match";
-
-  const saveTypes = [
-    { label: "Catch", val: match.saves_catch || 0 },
-    { label: "Parry", val: match.saves_parry || 0 },
-    { label: "Smother",  val: match.saves_dive  || 0 },
-    { label: "Block", val: match.saves_block || 0 },
-    { label: "Deflect",   val: match.saves_tip   || 0 },
-    { label: "Punch", val: match.saves_punch || 0 },
-  ].filter(s => s.val > 0);
-  const maxSave = Math.max(...saveTypes.map(s => s.val), 1);
-
-  const goalZones = {};
-  goals.forEach(g => { if (g.goal_zone) goalZones[g.goal_zone] = (goalZones[g.goal_zone] || 0) + 1; });
-
-  const distRows = [
-    { name: "GK Short", att: match.dist_gk_short_att || 0, suc: match.dist_gk_short_suc || 0 },
-    { name: "GK Long",  att: match.dist_gk_long_att  || 0, suc: match.dist_gk_long_suc  || 0 },
-    { name: "Throws",   att: match.dist_throws_att   || 0, suc: match.dist_throws_suc   || 0 },
-    { name: "Passes",   att: match.dist_passes_att   || 0, suc: match.dist_passes_suc   || 0 },
-  ].filter(d => d.att > 0);
-
-  const notes = match.coaching_notes || match.notes || null;
-  const focus = match.coach_focus || match.session_focus || null;
-
-  return (
-    <div style={{ fontFamily: font, color: t.text }}>
-      {/* Header bar */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-        <button onClick={onBack} style={{ background: t.cardAlt, border: `1px solid ${t.border}`, borderRadius: 8, padding: "8px 14px", color: t.bright, fontSize: 12, cursor: "pointer", fontFamily: font }}>
-          ← Back to Matches
-        </button>
-        <button onClick={() => onReport(match)} style={{ background: t.accent, border: "none", borderRadius: 8, padding: "8px 16px", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: font, boxShadow: `0 0 12px ${t.accentGlow}` }}>
-          📄 Generate Report
-        </button>
-      </div>
-
-      {/* Match header */}
-      <Card s={{ marginBottom: 12 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: t.bright }}>{logRow.opp}</div>
-            <div style={{ fontSize: 12, color: t.dim, marginTop: 2 }}>{logRow.date} · {logRow.ha} · {isMatch ? "Match" : "Training"}</div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {isMatch && <div style={{ fontSize: 22, fontWeight: 800, color: resultColor }}>{logRow.score || "–"}</div>}
-            {isMatch && (
-              <div style={{ padding: "4px 10px", borderRadius: 6, background: resultColor + "22", color: resultColor, fontSize: 12, fontWeight: 700 }}>{logRow.res}</div>
-            )}
-            {match.goals_conceded === 0 && isMatch && (
-              <div style={{ padding: "4px 10px", borderRadius: 6, background: t.green + "22", color: t.green, fontSize: 11, fontWeight: 700 }}>CS ✓</div>
-            )}
-          </div>
-        </div>
-      </Card>
-
-      {/* Key stats */}
-      <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "repeat(2, 1fr)" : "repeat(auto-fit, minmax(80px, 1fr))", gap: 8, marginBottom: 12 }}>
-        {[
-          { label: "SOT",     val: match.shots_on_target ?? "–" },
-          { label: "Saves",   val: match.saves ?? "–" },
-          { label: "GA",      val: match.goals_conceded ?? "–" },
-          { label: "Sv%",     val: svPct !== "–" ? svPct + "%" : "–" },
-          { label: "1v1 W",   val: match.one_v_one_won != null ? `${match.one_v_one_won}/${match.one_v_one_faced || 0}` : "–" },
-          { label: "Err→Gol", val: match.errors_leading_to_goal ?? 0 },
-        ].map(s => (
-          <div key={s.label} style={{ background: t.card, border: `1px solid ${t.border}`, borderRadius: 8, padding: "10px 8px", textAlign: "center" }}>
-            <div style={{ fontSize: 18, fontWeight: 700, color: t.bright }}>{s.val}</div>
-            <div style={{ fontSize: 9, color: t.dim, marginTop: 2, textTransform: "uppercase", letterSpacing: 0.5 }}>{s.label}</div>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 12 }}>
-        {saveTypes.length > 0 && (
-          <Card>
-            <Sec icon="🧤">Save Types</Sec>
-            {saveTypes.map(s => (
-              <div key={s.label} style={{ marginBottom: 8 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 3 }}>
-                  <span style={{ color: t.text }}>{s.label}</span>
-                  <span style={{ color: t.bright, fontWeight: 600 }}>{s.val}</span>
-                </div>
-                <div style={{ height: 6, background: t.bg, borderRadius: 3 }}>
-                  <div style={{ height: "100%", width: `${(s.val / maxSave) * 100}%`, background: pc, borderRadius: 3 }} />
-                </div>
-              </div>
-            ))}
-          </Card>
-        )}
-        <Card>
-          <GoalHeatmap zones={goalZones} title={match.goals_conceded > 0 ? `${match.goals_conceded} Goal${match.goals_conceded !== 1 ? "s" : ""} Conceded` : "Clean Sheet"} />
-        </Card>
-      </div>
-
-      {goals.length > 0 && (
-        <Card s={{ marginBottom: 12 }}>
-          <Sec icon="⚽">Goal Analysis</Sec>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-            <div>
-              <div style={{ fontSize: 10, color: t.dim, marginBottom: 6, textTransform: "uppercase" }}>Rank</div>
-              {["Saveable", "Difficult", "Unsaveable"].map(r => {
-                const cnt = goals.filter(g => g.goal_rank === r).length;
-                return cnt > 0 ? (
-                  <div key={r} style={{ fontSize: 11, display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                    <span style={{ color: t.text }}>{r}</span>
-                    <span style={{ fontWeight: 700, color: r === "Saveable" ? t.red : r === "Difficult" ? t.yellow : t.dim }}>{cnt}</span>
-                  </div>
-                ) : null;
-              })}
-            </div>
-            <div>
-              <div style={{ fontSize: 10, color: t.dim, marginBottom: 6, textTransform: "uppercase" }}>Source</div>
-              {["Open Play", "Corner", "Free Kick", "Penalty"].map(s => {
-                const cnt = goals.filter(g => g.goal_source === s).length;
-                return cnt > 0 ? (
-                  <div key={s} style={{ fontSize: 11, display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                    <span style={{ color: t.text }}>{s}</span>
-                    <span style={{ fontWeight: 700, color: t.bright }}>{cnt}</span>
-                  </div>
-                ) : null;
-              })}
-            </div>
-            <div>
-              <div style={{ fontSize: 10, color: t.dim, marginBottom: 6, textTransform: "uppercase" }}>Shot Type</div>
-              {["Foot", "Header", "Deflection"].map(s => {
-                const cnt = goals.filter(g => g.shot_type === s).length;
-                return cnt > 0 ? (
-                  <div key={s} style={{ fontSize: 11, display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                    <span style={{ color: t.text }}>{s}</span>
-                    <span style={{ fontWeight: 700, color: t.bright }}>{cnt}</span>
-                  </div>
-                ) : null;
-              })}
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {distRows.length > 0 && (
-        <Card s={{ marginBottom: 12 }}>
-          <Sec icon="🎯">Distribution Accuracy</Sec>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 8 }}>
-            {distRows.map(d => {
-              const p = d.att > 0 ? Math.round(d.suc / d.att * 100) : null;
-              return (
-                <div key={d.name} style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: p >= 80 ? t.green : p >= 60 ? t.accent : t.yellow }}>{p != null ? p + "%" : "–"}</div>
-                  <div style={{ fontSize: 10, color: t.dim, marginTop: 2 }}>{d.name}</div>
-                  <div style={{ fontSize: 10, color: t.text, marginTop: 1 }}>{d.suc}/{d.att}</div>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      )}
-
-      <Card s={{ marginBottom: 12 }}>
-        <Sec icon="🏃">Physical & Crosses</Sec>
-        <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 12 }}>
-          <div>
-            <div style={{ fontSize: 10, color: t.dim, marginBottom: 8, textTransform: "uppercase" }}>Sweeper</div>
-            {[
-              { label: "Clearances",    val: match.sweeper_clearances },
-              { label: "Interceptions", val: match.sweeper_interceptions },
-              { label: "Tackles",       val: match.sweeper_tackles },
-            ].map(x => (
-              <div key={x.label} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 5 }}>
-                <span style={{ color: t.text }}>{x.label}</span>
-                <span style={{ fontWeight: 700, color: t.bright }}>{x.val ?? 0}</span>
-              </div>
-            ))}
-          </div>
-          <div>
-            <div style={{ fontSize: 10, color: t.dim, marginBottom: 8, textTransform: "uppercase" }}>Crosses</div>
-            {[
-              { label: "Claimed", val: match.crosses_claimed },
-              { label: "Punched", val: match.crosses_punched },
-              { label: "Missed",  val: match.crosses_missed },
-            ].map(x => (
-              <div key={x.label} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 5 }}>
-                <span style={{ color: t.text }}>{x.label}</span>
-                <span style={{ fontWeight: 700, color: t.bright }}>{x.val ?? 0}</span>
-              </div>
-            ))}
-            {(match.crosses_total > 0) && (
-              <div style={{ marginTop: 6, fontSize: 11, color: t.dim, borderTop: `1px solid ${t.border}`, paddingTop: 6 }}>
-                Claim rate: <span style={{ color: t.bright, fontWeight: 700 }}>
-                  {Math.round((match.crosses_claimed || 0) / match.crosses_total * 100)}%
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-      </Card>
-
-      {notes && (
-        <Card s={{ borderLeft: `3px solid ${pc}` }}>
-          <Sec icon="📋">Coaching Notes</Sec>
-          <p style={{ fontSize: 12, color: t.text, lineHeight: 1.7, margin: 0 }}>{notes}</p>
-          {focus && (
-            <div style={{ marginTop: 10, background: pc + "15", borderRadius: 6, padding: "8px 12px", fontSize: 11, color: pc }}>
-              <strong>Session Focus:</strong> {focus}
-            </div>
-          )}
-        </Card>
-      )}
-    </div>
-  );
-}
 
 // ═══ REPORT VIEW ════════════════════════════════════════════════════════════
 function ReportView({ keeper, keeperData, alerts, targetGame, primaryColor, onBack }) {
@@ -1028,7 +250,7 @@ function ReportView({ keeper, keeperData, alerts, targetGame, primaryColor, onBa
           )}
           <div>
             <div style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Goals Conceded — Zone Map</div>
-            <GoalHeatmap zones={sG?.zones || {}} />
+            <GoalHeatmap theme={t} zones={sG?.zones || {}} />
           </div>
         </div>
 
@@ -1212,143 +434,8 @@ function ReportView({ keeper, keeperData, alerts, targetGame, primaryColor, onBa
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// EDIT MATCH MODAL
-// ═══════════════════════════════════════════════════════════════════════════════
-
-function EditMatchModal({ match, onSave, onClose }) {
-  const bp = useBreakpoint();
-  const [formData, setFormData] = useState({
-    opponent: match?.opponent || "",
-    match_date: match?.match_date || "",
-    session_type: match?.session_type || "match",
-    venue: match?.venue || "home",
-    result: match?.result || "—",
-    goals_for: match?.goals_for ?? 0,
-    goals_against: match?.goals_against ?? 0,
-    shots_on_target: match?.shots_on_target ?? 0,
-    saves: match?.saves ?? 0,
-    goals_conceded: match?.goals_conceded ?? 0,
-  });
-
-  const isMatch = formData.session_type === "match";
-  const handleChange = (field, value) => { setFormData(prev => ({ ...prev, [field]: value })); };
-  const handleSubmit = (e) => { e.preventDefault(); onSave(formData); };
-
-  const inputStyle = { width: "100%", boxSizing: "border-box", padding: "8px 12px", background: t.bg, border: `1px solid ${t.border}`, borderRadius: 6, color: t.text, fontFamily: font, fontSize: 13 };
-  const labelStyle = { display: "block", fontSize: 12, color: t.dim, marginBottom: 6, fontWeight: 600 };
-  const selectStyle = { ...inputStyle, cursor: "pointer" };
-
-  return (
-    <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, fontFamily: font }}>
-      <div style={{ background: t.card, borderRadius: 12, border: `1px solid ${t.border}`, padding: 24, maxWidth: 480, width: "90%", color: t.text }}>
-        <h2 style={{ fontSize: 18, fontWeight: 700, color: t.bright, margin: "0 0 20px" }}>Edit Match</h2>
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: 16 }}>
-            <label style={labelStyle}>Opponent</label>
-            <input type="text" value={formData.opponent} onChange={e => handleChange("opponent", e.target.value)} style={inputStyle} />
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 16 }}>
-            <div>
-              <label style={labelStyle}>Match Date</label>
-              <input type="date" value={formData.match_date} onChange={e => handleChange("match_date", e.target.value)} style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>Type</label>
-              <select value={formData.session_type} onChange={e => handleChange("session_type", e.target.value)} style={selectStyle}>
-                <option value="match">Match</option>
-                <option value="training">Training</option>
-              </select>
-            </div>
-          </div>
-          {isMatch && (
-            <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 16 }}>
-              <div>
-                <label style={labelStyle}>Venue</label>
-                <select value={formData.venue} onChange={e => handleChange("venue", e.target.value)} style={selectStyle}>
-                  <option value="home">Home</option>
-                  <option value="away">Away</option>
-                  <option value="neutral">Neutral</option>
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>Result</label>
-                <select value={formData.result} onChange={e => handleChange("result", e.target.value)} style={selectStyle}>
-                  <option value="W">Win</option>
-                  <option value="D">Draw</option>
-                  <option value="L">Loss</option>
-                  <option value="—">—</option>
-                </select>
-              </div>
-            </div>
-          )}
-          <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 16 }}>
-            <div>
-              <label style={labelStyle}>Goals For</label>
-              <input type="number" value={formData.goals_for} onChange={e => handleChange("goals_for", parseInt(e.target.value) || 0)} style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>Goals Against</label>
-              <input type="number" value={formData.goals_against} onChange={e => handleChange("goals_against", parseInt(e.target.value) || 0)} style={inputStyle} />
-            </div>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 16 }}>
-            <div>
-              <label style={labelStyle}>Shots on Target</label>
-              <input type="number" value={formData.shots_on_target} onChange={e => handleChange("shots_on_target", parseInt(e.target.value) || 0)} style={inputStyle} />
-            </div>
-            <div>
-              <label style={labelStyle}>Saves</label>
-              <input type="number" value={formData.saves} onChange={e => handleChange("saves", parseInt(e.target.value) || 0)} style={inputStyle} />
-            </div>
-          </div>
-          <div style={{ marginBottom: 20 }}>
-            <label style={labelStyle}>Goals Conceded</label>
-            <input type="number" value={formData.goals_conceded} onChange={e => handleChange("goals_conceded", parseInt(e.target.value) || 0)} style={inputStyle} />
-          </div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <button type="submit" style={{ flex: 1, padding: "10px 14px", borderRadius: 6, background: t.accent, border: "none", color: "#000", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: font }}>Save Changes</button>
-            <button type="button" onClick={onClose} style={{ flex: 1, padding: "10px 14px", borderRadius: 6, background: t.cardAlt, border: `1px solid ${t.border}`, color: t.text, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: font }}>Cancel</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// DELETE MATCH CONFIRMATION MODAL
-// ═══════════════════════════════════════════════════════════════════════════════
-
-function DeleteMatchConfirm({ match, onConfirm, onClose }) {
-  const dateStr = new Date(match?.match_date || "").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-  const opponent = match?.opponent || "Unknown";
-
-  return (
-    <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, fontFamily: font }}>
-      <div style={{ background: t.card, borderRadius: 12, border: `1px solid ${t.border}`, padding: 24, maxWidth: 420, width: "90%", color: t.text }}>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 16 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 10, background: t.red + "22", border: `1px solid ${t.red}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>
-            🗑️
-          </div>
-          <div>
-            <h2 style={{ fontSize: 16, fontWeight: 700, color: t.bright, margin: "0 0 6px" }}>Delete Match?</h2>
-            <p style={{ fontSize: 13, color: t.dim, margin: 0, lineHeight: 1.5 }}>
-              Delete match vs <strong style={{ color: t.text }}>{opponent}</strong> on <strong style={{ color: t.text }}>{dateStr}</strong>?
-            </p>
-            <p style={{ fontSize: 12, color: t.dim, margin: "10px 0 0", lineHeight: 1.5 }}>
-              This will also remove all associated goals and attributes. This cannot be undone.
-            </p>
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={onConfirm} style={{ flex: 1, padding: "10px 14px", borderRadius: 6, background: t.red, border: "none", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: font }}>Delete</button>
-          <button onClick={onClose} style={{ flex: 1, padding: "10px 14px", borderRadius: 6, background: t.cardAlt, border: `1px solid ${t.border}`, color: t.text, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: font }}>Cancel</button>
-        </div>
-      </div>
-    </div>
-  );
-}
+// EditMatchModal — extracted to @/components/dashboard/EditMatchModal.jsx
+// DeleteMatchConfirm — extracted to @/components/dashboard/DeleteMatchConfirm.jsx
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN DASHBOARD
@@ -1395,26 +482,11 @@ export default function DashboardPage() {
 
   const fetchKeepers = async () => {
     if (!user) return;
-    if (isDelegate && delegateOf?.dashboard_access) {
-      const { data } = await supabase
-        .from("keepers").select("*")
-        .eq("coach_id", delegateOf.coach_id).eq("active", true)
-        .in("id", delegateOf.dashboard_keepers)
-        .order("created_at", { ascending: true });
-      if (data) {
-        setKeepers(data);
-        if (!selectedKeeper && data.length > 0) setSelectedKeeper(data[0].id);
-      }
-    } else {
-      const { data } = await supabase
-        .from("keepers").select("*")
-        .eq("coach_id", user.id).eq("active", true)
-        .order("created_at", { ascending: true });
-      if (data) {
-        setKeepers(data);
-        if (!selectedKeeper && data.length > 0) setSelectedKeeper(data[0].id);
-      }
-    }
+    const coachId = isDelegate && delegateOf ? delegateOf.coach_id : user.id;
+    const scopeToIds = isDelegate && delegateOf?.dashboard_access ? delegateOf.dashboard_keepers : null;
+    const data = await fetchActiveKeepers(supabase, coachId, { scopeToIds });
+    setKeepers(data);
+    if (!selectedKeeper && data.length > 0) setSelectedKeeper(data[0].id);
     setLoadingKeepers(false);
   };
 
@@ -1422,17 +494,14 @@ export default function DashboardPage() {
     if (!user) return;
     setLoadingData(true);
     const coachId = isDelegate && delegateOf ? delegateOf.coach_id : user.id;
-    const [matchRes, goalRes, attrRes, shotRes] = await Promise.all([
-      supabase.from("matches").select("*").eq("coach_id", coachId).order("match_date", { ascending: true }),
-      supabase.from("goals_conceded").select("*").eq("coach_id", coachId),
-      supabase.from("match_attributes").select("*").eq("coach_id", coachId),
-      supabase.from("shot_events").select("*").eq("coach_id", coachId),
-    ]);
-    if (matchRes.data) setAllMatches(matchRes.data);
-    if (goalRes.data) setAllGoals(goalRes.data);
-    if (attrRes.data) setAllAttrs(attrRes.data);
-    if (shotRes.data) setAllShotEvents(shotRes.data);
-    const [nR2, rR2] = await Promise.all([supabase.from("match_notes").select("match_id, author_role, submitted_at").eq("coach_id", coachId), supabase.from("match_rankings").select("match_id, author_role, submitted_at").eq("coach_id", coachId)]); const nS2 = {}; if (nR2.data) nR2.data.forEach(n => { if (!nS2[n.match_id]) nS2[n.match_id] = {}; nS2[n.match_id][n.author_role] = n.submitted_at; }); setNotesStatus(nS2); const rS2 = {}; if (rR2.data) rR2.data.forEach(r => { if (!rS2[r.match_id]) rS2[r.match_id] = {}; rS2[r.match_id][r.author_role] = r.submitted_at; }); setRankingsStatus(rS2);
+    const { matches, goals, attrs, shotEvents } = await fetchAnalyticsBundle(supabase, coachId);
+    setAllMatches(matches);
+    setAllGoals(goals);
+    setAllAttrs(attrs);
+    setAllShotEvents(shotEvents);
+    const { notesStatus: nS, rankingsStatus: rS } = await fetchReviewStatus(supabase, coachId);
+    setNotesStatus(nS);
+    setRankingsStatus(rS);
     setLoadingData(false);
   };
 
@@ -1448,9 +517,7 @@ export default function DashboardPage() {
   const handleDeleteMatch = async () => {
     if (!deletingMatch?.id) return;
     try {
-      await supabase.from("goals_conceded").delete().eq("match_id", deletingMatch.id);
-      await supabase.from("match_attributes").delete().eq("match_id", deletingMatch.id);
-      await supabase.from("matches").delete().eq("id", deletingMatch.id);
+      await deleteMatchCascade(supabase, deletingMatch.id);
       setDeletingMatch(null);
       fetchAnalyticsData();
     } catch (err) {
@@ -1549,8 +616,8 @@ export default function DashboardPage() {
 
   // --- NOTES & RANKINGS HELPERS ---
   const NOTE_ATTR_LABELS = { game_rating: "Game Rating", shot_stopping: "Shot Stopping", handling: "Handling", positioning: "Positioning", aerial_dominance: "Aerial Dominance", distribution: "Distribution", decision_making: "Decision Making", sweeper_play: "Sweeper Play", set_piece_org: "Set Piece Org.", footwork_agility: "Footwork & Agility", reaction_speed: "Reaction Speed", communication: "Communication", command_of_box: "Command of Box", composure: "Composure", compete_level: "Compete Level" };
-  const fetchNoteContent = async (mid) => { const { data } = await supabase.from("match_notes").select("*").eq("match_id", mid).eq("keeper_id", selectedKeeper); const r = {}; if (data) data.forEach(n => { r[n.author_role] = n; }); setNotesData(p => ({...p, [mid]: r})); };
-  const fetchRankingContent = async (mid) => { const { data } = await supabase.from("match_rankings").select("*").eq("match_id", mid).eq("keeper_id", selectedKeeper); const r = {}; if (data) data.forEach(x => { r[x.author_role] = x; }); setRankingsData(p => ({...p, [mid]: r})); };
+  const fetchNoteContent = async (mid) => { const r = await fetchNoteContentQ(supabase, mid, selectedKeeper); setNotesData(p => ({...p, [mid]: r})); };
+  const fetchRankingContent = async (mid) => { const r = await fetchRankingContentQ(supabase, mid, selectedKeeper); setRankingsData(p => ({...p, [mid]: r})); };
   const submitNote = async (mid) => { const _nt = document.getElementById("notes-textarea-"+mid)?.value || ""; if (!_nt.trim()||submittingNote) return; setSubmittingNote(true); const cId=isDelegate?delegateOf.coach_id:user.id; const ar=isDelegate&&(delegateOf.role==="goalkeeper"||delegateOf.role==="gk_parent")?"keeper":"coach"; await supabase.from("match_notes").upsert({match_id:mid,coach_id:cId,keeper_id:selectedKeeper,author_id:user.id,author_role:ar,note_text:_nt.trim(),submitted_at:new Date().toISOString(),updated_at:new Date().toISOString()},{onConflict:"match_id,keeper_id,author_role"}); setNotesStatus(p=>({...p,[mid]:{...(p[mid]||{}),[ar]:new Date().toISOString()}})); await fetchNoteContent(mid); const _ta=document.getElementById("notes-textarea-"+mid); if(_ta) _ta.value=""; setEditingNoteId(null); setSubmittingNote(false); };
   const submitRanking = async (mid) => { if (submittingRanking) return; setSubmittingRanking(true); const cId=isDelegate?delegateOf.coach_id:user.id; const ar=isDelegate&&(delegateOf.role==="goalkeeper"||delegateOf.role==="gk_parent")?"keeper":"coach"; await supabase.from("match_rankings").upsert({match_id:mid,coach_id:cId,keeper_id:selectedKeeper,author_id:user.id,author_role:ar,submitted_at:new Date().toISOString(),updated_at:new Date().toISOString(),...rankingValues},{onConflict:"match_id,keeper_id,author_role"}); setRankingsStatus(p=>({...p,[mid]:{...(p[mid]||{}),[ar]:new Date().toISOString()}})); await fetchRankingContent(mid); setRankingValues({}); setEditingRankingId(null); setSubmittingRanking(false); };
   const getIconState = (so,mid) => { if(!so[mid]) return "pending"; if(so[mid].coach&&so[mid].keeper) return "both-done"; if(so[mid].coach) return "coach-done"; if(so[mid].keeper) return "keeper-done"; return "pending"; };
@@ -1765,7 +832,7 @@ export default function DashboardPage() {
               </Card>
             )}
             {!selectedKeeper && keepers.length > 0 && (
-              <EmptyState icon="👆" title="Select a Keeper" subtitle="Choose a goalkeeper from the dropdown to view analytics." />
+              <EmptyState theme={t} icon="👆" title="Select a Keeper" subtitle="Choose a goalkeeper from the dropdown to view analytics." />
             )}
             {selectedKeeper && !hasMatches && tab !== "compare" && (
               <Card s={{ textAlign: "center", padding: 32 }}>
@@ -1811,11 +878,11 @@ export default function DashboardPage() {
                 <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
                   <Card>
                     <div style={{ fontSize: 13, fontWeight: 700, color: t.text, marginBottom: 12 }}>Where Goals Went In</div>
-                    <GoalHeatmap zones={dGoals ? dGoals.zones : {}} />
+                    <GoalHeatmap theme={t} zones={dGoals ? dGoals.zones : {}} />
                   </Card>
                   <Card>
                     <div style={{ fontSize: 13, fontWeight: 700, color: t.text, marginBottom: 12 }}>Where Goals Came From</div>
-                    <PitchOriginMap origins={dGoals ? dGoals.origins : {}} />
+                    <PitchOriginMap theme={t} origins={dGoals ? dGoals.origins : {}} />
                   </Card>
                 </div>
               </Sec>
@@ -2080,6 +1147,7 @@ export default function DashboardPage() {
               <div>
                 {selectedGame ? (
                   <SingleGameView
+                    theme={t}
                     match={selectedGame.match}
                     goals={selectedGame.goals}
                     logRow={selectedGame.logRow}
@@ -2169,7 +1237,7 @@ export default function DashboardPage() {
               <div>
                 <Sec icon="⚡">Coaching Alerts — {selectedKeeperObj?.name}</Sec>
                 {alerts.length === 0 ? (
-                  <EmptyState icon="✅" title="All Clear" subtitle="No coaching alerts based on current performance trends." />
+                  <EmptyState theme={t} icon="✅" title="All Clear" subtitle="No coaching alerts based on current performance trends." />
                 ) : (
                   alerts.filter(function(al) { return alertFilter === "All" || al.cat === alertFilter; }).map((al, i) => (
                     <Card key={i} s={{ marginBottom: 12 }}>
@@ -2197,7 +1265,7 @@ export default function DashboardPage() {
               <div>
                 <Sec icon="🥅">Goals Analysis — {scopeLabel}</Sec>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 14, marginBottom: 14 }}>
-                  <Card><GoalHeatmap zones={dGoals?.zones} title="Where Goals Go In" /></Card>
+                  <Card><GoalHeatmap theme={t} zones={dGoals?.zones} title="Where Goals Go In" /></Card>
                   <Card>
                     <div style={{ fontSize: 10, color: t.dim, marginBottom: 8 }}>Goal Sources</div>
                     {dGoals?.sources && Object.entries(dGoals.sources).length > 0 ? (
@@ -2240,7 +1308,7 @@ export default function DashboardPage() {
                 <div style={{ marginTop: 14 }}>
                   <Sec icon="🎯">Shot Origin vs Net Zone — Where Vulnerability Lives</Sec>
                   <Card>
-                    <ShotCrossRef goals={isL5 ? d.rawL5Goals : d.rawGoals} />
+                    <ShotCrossRef theme={t} goals={isL5 ? d.rawL5Goals : d.rawGoals} />
                   </Card>
                 </div>
               </div>
@@ -2392,7 +1460,7 @@ export default function DashboardPage() {
                       ))}
                     </Card>
                   </div>
-                ) : <EmptyState icon="⭐" title="No Attribute Ratings" subtitle="Rate keeper attributes after each match in Pitchside." />}
+                ) : <EmptyState theme={t} icon="⭐" title="No Attribute Ratings" subtitle="Rate keeper attributes after each match in Pitchside." />}
                 {s && (
                   <Card>
                     <Sec icon="🧤">Save Types ({scopeLabel})</Sec>
@@ -2539,11 +1607,11 @@ export default function DashboardPage() {
                       </Card>
                     )}
                     <div style={{ display: "grid", gridTemplateColumns: bp.isMobile ? "1fr" : "1fr 1fr", gap: 14 }}>
-                      <Card><GoalHeatmap zones={d.seasonGoals?.zones} title={`${selectedKeeperObj?.name?.split(" ")[0]} Goals`} /></Card>
-                      <Card><GoalHeatmap zones={cmpData.seasonGoals?.zones} title={`${cmpKeeperObj?.name?.split(" ")[0]} Goals`} /></Card>
+                      <Card><GoalHeatmap theme={t} zones={d.seasonGoals?.zones} title={`${selectedKeeperObj?.name?.split(" ")[0]} Goals`} /></Card>
+                      <Card><GoalHeatmap theme={t} zones={cmpData.seasonGoals?.zones} title={`${cmpKeeperObj?.name?.split(" ")[0]} Goals`} /></Card>
                     </div>
                   </div>
-                ) : <EmptyState icon="⚖️" title="Select a Keeper to Compare" subtitle="Choose a second goalkeeper from the dropdown above." />}
+                ) : <EmptyState theme={t} icon="⚖️" title="Select a Keeper to Compare" subtitle="Choose a second goalkeeper from the dropdown above." />}
               </div>
             )}
 
@@ -2555,10 +1623,10 @@ export default function DashboardPage() {
         StixAnalytix · Built for coaching professionals
       </div>
 
-      {showKeeperModal && <KeeperModal keeper={null} primaryColor={primaryColor} onClose={() => setShowKeeperModal(false)} onSave={handleAddKeeper} />}
-      {editingKeeper && <KeeperModal keeper={editingKeeper} primaryColor={primaryColor} onClose={() => setEditingKeeper(null)} onSave={handleEditKeeper} onDeactivate={handleDeactivateKeeper} />}
-      {editingMatch && <EditMatchModal match={editingMatch} onSave={handleEditMatch} onClose={() => setEditingMatch(null)} />}
-      {deletingMatch && <DeleteMatchConfirm match={deletingMatch} onConfirm={handleDeleteMatch} onClose={() => setDeletingMatch(null)} />}
+      {showKeeperModal && <KeeperModal theme={t} keeper={null} primaryColor={primaryColor} onClose={() => setShowKeeperModal(false)} onSave={handleAddKeeper} />}
+      {editingKeeper && <KeeperModal theme={t} keeper={editingKeeper} primaryColor={primaryColor} onClose={() => setEditingKeeper(null)} onSave={handleEditKeeper} onDeactivate={handleDeactivateKeeper} />}
+      {editingMatch && <EditMatchModal match={editingMatch} onSave={handleEditMatch} onClose={() => setEditingMatch(null)} theme={t} />}
+      {deletingMatch && <DeleteMatchConfirm match={deletingMatch} onConfirm={handleDeleteMatch} onClose={() => setDeletingMatch(null)} theme={t} />}
     </div>
   );
 }

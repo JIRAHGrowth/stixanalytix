@@ -13,13 +13,12 @@ export default function UploadPageWrapper() {
   );
 }
 
-const t = {
-  bg: "#070b0e", card: "#0f1419", cardAlt: "#151c22", border: "#1e2a32",
-  accent: "#10b981", accentDim: "#065f46", red: "#ef4444",
-  green: "#22c55e", yellow: "#eab308", orange: "#f97316",
-  text: "#d1d9e0", dim: "#5c6b77", bright: "#f0f4f7",
-};
-const font = "'DM Sans', -apple-system, sans-serif";
+import { tDark } from "@/lib/theme";
+import { FONT } from "@/lib/constants";
+import { fetchActiveKeepers } from "@/lib/queries";
+
+const t = tDark;
+const font = FONT;
 
 const STATUS_LABEL = {
   queued: { label: "Queued", icon: "⏱", color: t.dim },
@@ -161,11 +160,9 @@ function UploadPage() {
     if (!user) return;
     let mounted = true;
     (async () => {
-      const { data: ks } = await supabase
-        .from("keepers").select("*").eq("coach_id", user.id).eq("active", true)
-        .order("number", { ascending: true });
+      const ks = await fetchActiveKeepers(supabase, user.id, { orderBy: "number" });
       if (!mounted) return;
-      setKeepers(ks || []);
+      setKeepers(ks);
       if (!form.keeper_id && ks?.[0]) setF({ keeper_id: ks[0].id });
 
       const res = await fetch("/api/video-jobs");

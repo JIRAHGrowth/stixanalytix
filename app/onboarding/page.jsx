@@ -3,19 +3,14 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 
-const t = {
-  bg: "#070b0e", card: "#0f1419", cardAlt: "#151c22", border: "#1e2a32",
-  accent: "#10b981", accentDim: "#065f46", accentGlow: "#10b98133",
-  gold: "#d4a853", goldDim: "#d4a85322",
-  red: "#ef4444", green: "#22c55e", yellow: "#eab308", orange: "#f97316",
-  teal: "#14b8a6", cyan: "#06b6d4", purple: "#a78bfa",
-  text: "#d1d9e0", dim: "#5c6b77", bright: "#f0f4f7",
-};
-const font = "'DM Sans', -apple-system, sans-serif";
+import { tDark } from "@/lib/theme";
+import { COACH_ROLES, KEEPER_DEPTHS, FOOTED, FONT } from "@/lib/constants";
 
-const ROLES = ["GK Coach", "Director of Goalkeeping", "Head of Academy GK", "Scout", "Technical Director", "Individual Keeper", "Parent"];
-const DEPTHS = ["Starter", "Backup", "Third", "Development"];
-const CATCHING = ["Left", "Right", "Ambidextrous"];
+const t = tDark;
+const font = FONT;
+const ROLES = COACH_ROLES;
+const DEPTHS = KEEPER_DEPTHS;
+const CATCHING = FOOTED;
 
 // ═══ UI COMPONENTS ═══════════════════════════════════════════════════════════
 

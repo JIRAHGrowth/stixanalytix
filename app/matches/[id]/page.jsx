@@ -5,29 +5,16 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 
-const t = {
-  bg: "#070b0e", card: "#0f1419", cardAlt: "#151c22", border: "#1e2a32",
-  accent: "#10b981", accentDim: "#065f46", red: "#ef4444",
-  green: "#22c55e", yellow: "#eab308", orange: "#f97316",
-  text: "#d1d9e0", dim: "#5c6b77", bright: "#f0f4f7",
-};
-const font = "'DM Sans', -apple-system, sans-serif";
+import { tDark } from "@/lib/theme";
+import { ZONE_LABELS, ORIGIN_LABELS, GK_ACTION_SEVERITY, FONT } from "@/lib/constants";
+import { fetchMatchById, fetchMatchDetailBundle } from "@/lib/queries";
 
-const ZONE_LABELS = {
-  "High L": "Top Left", "High C": "Top Centre", "High R": "Top Right",
-  "Mid L": "Mid Left", "Mid C": "Mid Centre", "Mid R": "Mid Right",
-  "Low L": "Low Left", "Low C": "Low Centre", "Low R": "Low Right",
-};
-const ORIGIN_LABELS = {
-  "6yard": "6-Yard Box", "boxL": "Left Channel", "boxC": "Central Box",
-  "boxR": "Right Channel", "outL": "Wide Left", "outC": "Central Distance",
-  "outR": "Wide Right", "cornerL": "Corner Left", "cornerR": "Corner Right",
-  "crossL": "Cross Left", "crossR": "Cross Right",
-};
-const ACTION_COLORS = {
-  Catch: t.green, Block: t.green, Parry: t.accent, Deflect: t.accent,
-  Punch: t.accent, Missed: t.red, Goal: t.red, unclear: t.dim,
-};
+const t = tDark;
+const font = FONT;
+
+const ACTION_COLORS = Object.fromEntries(
+  Object.entries(GK_ACTION_SEVERITY).map(([k, v]) => [k, t[v]])
+);
 
 function fmtTs(s) {
   if (s == null) return null;
@@ -51,26 +38,22 @@ export default function MatchDetailPage() {
     if (!user || !id) return;
     let mounted = true;
     (async () => {
-      const matchRes = await supabase.from("matches").select("*").eq("id", id).maybeSingle();
+      const { data: matchData, error: matchErr } = await fetchMatchById(supabase, id);
       if (!mounted) return;
-      if (matchRes.error || !matchRes.data) {
-        setError(matchRes.error?.message || "Match not found");
+      if (matchErr || !matchData) {
+        setError(matchErr?.message || "Match not found");
         setLoading(false);
         return;
       }
-      setMatch(matchRes.data);
+      setMatch(matchData);
 
-      const [gcRes, gsRes, seRes, kRes] = await Promise.all([
-        supabase.from("goals_conceded").select("*").eq("match_id", id).order("timestamp_seconds", { ascending: true, nullsFirst: false }),
-        supabase.from("goals_scored").select("*").eq("match_id", id).order("timestamp_seconds", { ascending: true, nullsFirst: false }),
-        supabase.from("shot_events").select("*").eq("match_id", id).order("timestamp_seconds", { ascending: true, nullsFirst: false }),
-        matchRes.data.keeper_id ? supabase.from("keepers").select("*").eq("id", matchRes.data.keeper_id).maybeSingle() : Promise.resolve({ data: null }),
-      ]);
+      const { goalsConceded: gc, goalsScored: gs, shotEvents: se, keeper: k } =
+        await fetchMatchDetailBundle(supabase, id, matchData.keeper_id);
       if (!mounted) return;
-      setGoalsConceded(gcRes.data || []);
-      setGoalsScored(gsRes.data || []);
-      setSaves(seRes.data || []);
-      setKeeper(kRes.data);
+      setGoalsConceded(gc);
+      setGoalsScored(gs);
+      setSaves(se);
+      setKeeper(k);
       setLoading(false);
     })();
     return () => { mounted = false; };

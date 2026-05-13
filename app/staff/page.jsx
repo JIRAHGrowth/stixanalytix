@@ -4,27 +4,15 @@ import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-// ═══ THEME (matches dashboard/pitchside exactly) ════════════════════════════
-const t = {
-  bg: "#070b0e", card: "#0f1419", cardAlt: "#151c22", border: "#1e2a32",
-  accent: "#10b981", accentDim: "#065f46", accentGlow: "#10b98133",
-  gold: "#d4a853", orange: "#f97316",
-  red: "#ef4444", green: "#22c55e", yellow: "#eab308",
-  cyan: "#06b6d4", purple: "#a78bfa", teal: "#14b8a6",
-  text: "#d1d9e0", dim: "#5c6b77", bright: "#f0f4f7",
-};
-const font = "'DM Sans', -apple-system, sans-serif";
+import { tDark } from "@/lib/theme";
+import { DELEGATE_ROLES, FONT } from "@/lib/constants";
+import { fetchActiveKeepers, fetchDelegates as fetchDelegatesQ } from "@/lib/queries";
 
-const ROLES = [
-  { id: "assistant_coach", label: "Assistant Coach", icon: "🧑‍💼", desc: "Logs matches and views analytics for assigned keepers" },
-  { id: "gk_parent", label: "GK Parent", icon: "👨‍👧", desc: "Logs matches and optionally views stats for their keeper" },
-  { id: "scout", label: "Scout", icon: "🔍", desc: "Views analytics only — no match logging" },
-  { id: "team_manager", label: "Team Manager", icon: "📋", desc: "Logs matches for any assigned keepers" },
-  { id: "academy_coach", label: "Academy GK Coach", icon: "🎓", desc: "Full logging and analytics for their age group" },
-  { id: "goalkeeper", label: "Goalkeeper", icon: "🧤", desc: "Submits their own notes and rankings for matches they played in" },
-];
+const t = tDark;
+const font = FONT;
+const ROLES = DELEGATE_ROLES;
 
-const roleMeta = (roleId) => ROLES.find(r => r.id === roleId) || { label: roleId, icon: "👤" };
+const roleMeta = (roleId) => ROLES.find(r => r.id === roleId) || { label: roleId, icon: "\u{1F464}" };
 
 // ═══ UI COMPONENTS ══════════════════════════════════════════════════════════
 
@@ -501,23 +489,14 @@ export default function StaffPage() {
   }, [user, profile]);
 
   const fetchDelegates = async () => {
-    const { data } = await supabase
-      .from("delegates")
-      .select("*")
-      .eq("coach_id", user.id)
-      .order("created_at", { ascending: false });
-    if (data) setDelegates(data);
+    const data = await fetchDelegatesQ(supabase, user.id);
+    setDelegates(data);
     setLoadingData(false);
   };
 
   const fetchKeepers = async () => {
-    const { data } = await supabase
-      .from("keepers")
-      .select("*")
-      .eq("coach_id", user.id)
-      .eq("active", true)
-      .order("created_at");
-    if (data) setKeepers(data);
+    const data = await fetchActiveKeepers(supabase, user.id);
+    setKeepers(data);
   };
 
   // ═══ ACTIONS ═══
