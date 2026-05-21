@@ -25,6 +25,7 @@ const inputStyle = {
 };
 
 import { defaultZone, defaultSource, defaultShotType, fmtTs, tsStrToSeconds } from "@/lib/mappings";
+import { defaultKeepGoal, defaultKeepSave, defaultKeepDistribution } from "@/lib/default-keep";
 
 export default function ReviewPage() {
   const { user, loading: authLoading } = useAuth();
@@ -70,9 +71,11 @@ export default function ReviewPage() {
         const scorer = String(g.scoring_team || "").toLowerCase();
         const scoredByUs = scorer && myColor && scorer.includes(myColor);
         const scoredByOpp = scorer && oppColor && scorer.includes(oppColor);
+        const auto = defaultKeepGoal(g);
         return {
           _id: `g${i}`,
-          keep: true,
+          keep: auto.keep,
+          _auto: auto,
           scored_by_us: scoredByUs ? true : scoredByOpp ? false : null,
           // Editable concession fields (only used if scored_by_us === false)
           goal_zone: defaultZone(g),
@@ -102,9 +105,11 @@ export default function ReviewPage() {
         } else if (d.under_pressure != null) {
           pressState = "unclear";
         }
+        const auto = defaultKeepDistribution(d);
         return {
           _id: `d${i}`,
-          keep: true,
+          keep: auto.keep,
+          _auto: auto,
           timestamp_seconds: d.timestamp_seconds,
           match_clock: d.match_clock,
           trigger: d.trigger || "",
@@ -122,9 +127,12 @@ export default function ReviewPage() {
 
       // Phase 2.1 — load save events from gemini_output.saves.parsed.saves
       const savesParsed = json.job?.gemini_output?.saves?.parsed || null;
-      const initialSaves = (savesParsed?.saves || []).map((s, i) => ({
+      const initialSaves = (savesParsed?.saves || []).map((s, i) => {
+        const auto = defaultKeepSave(s);
+        return ({
         _id: `s${i}`,
-        keep: true,
+        keep: auto.keep,
+        _auto: auto,
         timestamp_seconds: s.timestamp_seconds,
         match_clock: s.match_clock,
         shot_origin: s.shot_origin || "",
@@ -139,7 +147,8 @@ export default function ReviewPage() {
         notes: "",
         // raw Gemini context preserved for review-diff and reference
         gemini: s,
-      }));
+        });
+      });
 
       // Restore from localStorage if a draft exists for this job. Drafts are
       // tied to the job_id and the gemini_output count so we don't restore an
@@ -462,6 +471,11 @@ export default function ReviewPage() {
                 <div style={{ fontSize: 11, color: t.dim, marginTop: 4 }}>GK: {c.gemini.gk_observations}</div>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 140 }}>
+                {c._auto && (
+                  <div title={c._auto.explain || ""} style={{ fontSize: 9, color: c._auto.keep ? t.green : (c._auto.reason === "skip-sb" ? t.red : t.dim), fontFamily: "monospace", textAlign: "right", letterSpacing: 0.3 }}>
+                    auto: {c._auto.reason}
+                  </div>
+                )}
                 <label style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 6 }}>
                   <input type="checkbox" checked={c.keep} onChange={e => updateCand(c._id, { keep: e.target.checked })} />
                   Real goal
@@ -802,6 +816,11 @@ function SavesTable({ rows, onChange, t, font }) {
                     </td>
                     <td style={{ ...cellStyle, color: confColor, fontWeight: 600, fontSize: 10, textTransform: "uppercase" }}>
                       {r.coach_added ? "added" : (r.gemini?.confidence || "—")}
+                      {r._auto && (
+                        <div title={r._auto.explain || ""} style={{ fontSize: 8, color: r._auto.keep ? t.green : t.dim, fontWeight: 500, fontFamily: "monospace", textTransform: "lowercase", marginTop: 2, letterSpacing: 0.3 }}>
+                          auto:{r._auto.reason}
+                        </div>
+                      )}
                     </td>
                     <td style={{ ...cellStyle, textAlign: "center" }}>
                       {r.coach_added && (
@@ -1040,7 +1059,14 @@ function DistributionTable({ rows, onChange, t, font }) {
                         {RECEIVERS.map(o => <option key={o} value={o}>{o.replace(/_/g, ' ')}</option>)}
                       </select>
                     </td>
-                    <td style={{ ...cellStyle, color: confColor, fontWeight: 600, textTransform: "lowercase" }}>{r.coach_added ? "—" : (r.gemini?.confidence || "—")}</td>
+                    <td style={{ ...cellStyle, color: confColor, fontWeight: 600, textTransform: "lowercase" }}>
+                      {r.coach_added ? "—" : (r.gemini?.confidence || "—")}
+                      {r._auto && (
+                        <div title={r._auto.explain || ""} style={{ fontSize: 8, color: r._auto.keep ? t.green : t.dim, fontWeight: 500, fontFamily: "monospace", textTransform: "lowercase", marginTop: 2, letterSpacing: 0.3 }}>
+                          auto:{r._auto.reason}
+                        </div>
+                      )}
+                    </td>
                     <td style={{ ...cellStyle, textAlign: "center" }}>
                       <button type="button" onClick={() => removeRow(r._id)} title="Remove row" style={{ background: "none", border: "none", color: t.dim, cursor: "pointer", fontSize: 12 }}>✕</button>
                     </td>
