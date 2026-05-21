@@ -131,7 +131,9 @@ function UploadPage() {
 
     const upload = new tus.Upload(file, {
       endpoint,
-      retryDelays: [0, 3000, 5000, 10000, 20000],
+      // ~5 min total retry budget — large match videos take 15-30 min and
+      // home Wi-Fi blips routinely exceed the previous ~38s ceiling.
+      retryDelays: [0, 3000, 5000, 10000, 20000, 30000, 60000, 120000],
       headers: {
         authorization: `Bearer ${session.access_token}`,
         "x-upsert": "false",
@@ -146,6 +148,13 @@ function UploadPage() {
       },
       // 6 MB chunks — Supabase's required size for resumable uploads.
       chunkSize: 6 * 1024 * 1024,
+      // status 0 = no response received (network drop). Retry; don't fall
+      // through to onError, which kills the whole upload.
+      onShouldRetry: (err) => {
+        const status = err?.originalResponse?.getStatus?.();
+        if (status === 0 || status === undefined) return true;
+        return status >= 500 || status === 408 || status === 429;
+      },
       onError: (err) => reject(new Error(`Upload failed: ${err.message || err}`)),
       onProgress: (loaded, total) => {
         setUploadProgress(Math.round((loaded / total) * 100));
