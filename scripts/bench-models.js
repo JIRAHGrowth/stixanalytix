@@ -99,7 +99,13 @@ function runBenchJob(model, match, outDir, opts) {
     '--vars-json', match.truth,
   ];
   console.log(`  [run]  python ${args.slice(1).join(' ')}`);
-  const r = spawnSync('python', args, { stdio: 'inherit', cwd: ROOT });
+  // PYTHONUTF8=1 forces Python's stdio to UTF-8 regardless of the OS default
+  // (Windows defaults to cp1252, which crashes on any non-ASCII print).
+  const r = spawnSync('python', args, {
+    stdio: 'inherit',
+    cwd: ROOT,
+    env: { ...process.env, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8' },
+  });
   if (r.status !== 0) {
     console.error(`  [fail] ${model} on ${match.key} (exit ${r.status})`);
     return { outFile, failed: true };

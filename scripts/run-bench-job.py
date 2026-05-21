@@ -297,7 +297,7 @@ def main() -> int:
 
     gemini_output["bench_variant"] = "raw"
     out_path.write_text(json.dumps({"gemini_output": gemini_output}, indent=2), encoding="utf-8")
-    print(f"[{args.model}] saved → {out_path.relative_to(ROOT)}  ({fmt_min(time.time() - job_t0)} total)")
+    print(f"[{args.model}] saved -> {out_path.relative_to(ROOT)}  ({fmt_min(time.time() - job_t0)} total)")
 
     # Reconciled variant — zero extra API spend, just post-processing the same
     # parsed event lists through the production worker's cross-event filters.
@@ -307,7 +307,7 @@ def main() -> int:
         reconciled = _build_reconciled_variant(gemini_output)
         rec_path = out_path.with_suffix(".reconciled.json")
         rec_path.write_text(json.dumps({"gemini_output": reconciled}, indent=2), encoding="utf-8")
-        print(f"[{args.model}] reconciled variant → {rec_path.relative_to(ROOT)}")
+        print(f"[{args.model}] reconciled variant -> {rec_path.relative_to(ROOT)}")
     except Exception as e:
         print(f"[{args.model}] reconciliation failed (raw output still saved): {e}", file=sys.stderr)
 
