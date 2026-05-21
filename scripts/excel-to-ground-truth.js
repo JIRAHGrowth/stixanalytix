@@ -162,8 +162,13 @@ function map(table, key) {
 function parseEventSheet(sheet, columnDefs, opts = {}) {
   const events = [];
   const dataStart = opts.dataStartRow || 2; // Goals/Saves/etc — header at row 1, sample at 2
-  const lastRow = sheet.actualRowCount;
-  for (let r = dataStart; r <= lastRow; r++) {
+  // sheet.actualRowCount is unreliable after read+write cycles or when the
+  // template's validated-but-empty rows haven't been touched. Walk until we
+  // see N consecutive empty rows so we don't truncate populated data.
+  const MAX_EMPTY_RUN = 10;
+  const HARD_CAP = 1000;
+  let emptyRun = 0;
+  for (let r = dataStart; r <= HARD_CAP; r++) {
     const row = sheet.getRow(r);
     const obj = {};
     let hasAny = false;
@@ -172,7 +177,8 @@ function parseEventSheet(sheet, columnDefs, opts = {}) {
       obj[col.key] = v;
       if (v != null && v !== '') hasAny = true;
     });
-    if (hasAny) events.push(obj);
+    if (hasAny) { events.push(obj); emptyRun = 0; }
+    else { emptyRun++; if (emptyRun >= MAX_EMPTY_RUN) break; }
   }
   return events;
 }
