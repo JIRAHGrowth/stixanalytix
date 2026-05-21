@@ -74,11 +74,38 @@ try:
         DISTRIBUTION_RESPONSE_SCHEMA,
         _render_prompt,
         _filter_low_signal_saves,
+        _reconcile_events,
     )
 except Exception as e:
     print(f"Could not import schemas from worker/app.py: {e}", file=sys.stderr)
     print("Worker module must be importable without Modal runtime — check imports.", file=sys.stderr)
     sys.exit(1)
+
+
+def _build_reconciled_variant(raw_output: dict) -> dict:
+    """Apply the production worker's cross-event reconciliation (`_reconcile_events`)
+    to a deep copy of the raw bench output. Returns a `gemini_output`-shape dict
+    with the trimmed event lists. Lets the bench scorecard show both
+    raw-vs-reconciled numbers per model in the same run — same API spend,
+    answers two questions instead of one.
+    """
+    import copy as _copy
+    rec = _copy.deepcopy(raw_output)
+    goals = ((rec.get("goals") or {}).get("parsed") or {}).get("goals") or []
+    saves = ((rec.get("saves") or {}).get("parsed") or {}).get("saves") or []
+    dist  = ((rec.get("distribution") or {}).get("parsed") or {}).get("distribution") or []
+    g2, s2, d2 = _reconcile_events(goals, saves, dist)
+    if rec.get("goals") and rec["goals"].get("parsed") is not None:
+        rec["goals"]["parsed"]["goals"] = g2
+    if rec.get("saves") and rec["saves"].get("parsed") is not None:
+        rec["saves"]["parsed"]["saves"] = s2
+    if rec.get("distribution") and rec["distribution"].get("parsed") is not None:
+        rec["distribution"]["parsed"]["distribution"] = d2
+    # Keep the legacy top-level compat in sync with the reconciled goals.
+    if rec.get("parsed") and rec.get("goals") and rec["goals"].get("parsed") is not None:
+        rec["parsed"] = rec["goals"]["parsed"]
+    rec["bench_variant"] = "reconciled"
+    return rec
 
 
 def utc_iso() -> str:
@@ -268,8 +295,22 @@ def main() -> int:
         "template_vars": template_vars,
     }
 
+    gemini_output["bench_variant"] = "raw"
     out_path.write_text(json.dumps({"gemini_output": gemini_output}, indent=2), encoding="utf-8")
     print(f"[{args.model}] saved → {out_path.relative_to(ROOT)}  ({fmt_min(time.time() - job_t0)} total)")
+
+    # Reconciled variant — zero extra API spend, just post-processing the same
+    # parsed event lists through the production worker's cross-event filters.
+    # Lets the scorecard answer "how much of the FP gap closes with rules"
+    # alongside the raw-model comparison.
+    try:
+        reconciled = _build_reconciled_variant(gemini_output)
+        rec_path = out_path.with_suffix(".reconciled.json")
+        rec_path.write_text(json.dumps({"gemini_output": reconciled}, indent=2), encoding="utf-8")
+        print(f"[{args.model}] reconciled variant → {rec_path.relative_to(ROOT)}")
+    except Exception as e:
+        print(f"[{args.model}] reconciliation failed (raw output still saved): {e}", file=sys.stderr)
+
     return 0
 
 

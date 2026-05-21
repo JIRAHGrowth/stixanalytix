@@ -127,13 +127,14 @@ function runEval(geminiOutputFile, truthFile, tolerance) {
   try { return JSON.parse(m[1]); } catch { return null; }
 }
 
-function scorecardRow(model, match, evalSummary, benchOutput) {
+function scorecardRow(model, match, variant, evalSummary, benchOutput) {
   const sections = evalSummary?.sections || {};
   const cost = benchOutput ? estimateMatchCost(model, benchOutput) : { usd: null };
   const totalElapsed = benchOutput?.bench_meta?.total_elapsed_sec || null;
   return {
     match: match.key,
     model,
+    variant,
     cost_usd: cost.usd,
     elapsed_sec: totalElapsed,
     goals_precision: sections.goals?.precision ?? null,
@@ -178,24 +179,26 @@ function emitMarkdown(rows, outPath, meta) {
   lines.push(`Models: ${meta.models.join(' · ')}`);
   lines.push(`Matches: ${meta.matches.map(m => m.key).join(' · ')}`);
   lines.push('');
-  // Top-level summary table
-  lines.push(`## Headline (per match × model)`);
+  // Top-level summary table — variants ('raw' vs 'reconciled') stacked per model
+  lines.push(`## Headline (per match × model × variant)`);
   lines.push('');
-  lines.push('| Match | Model | $ | Time | Goals P/R/MAE | Saves P/R/MAE | Dist P/R/MAE |');
-  lines.push('|---|---|---|---|---|---|---|');
+  lines.push('Variants: `raw` = model output post-low-signal-saves-filter only. `reconciled` = same output through the production worker\'s `_reconcile_events` (scoreboard delta, evidence count, cross-event collisions, low-conf dist drop). Diff = what the rules buy us per model.');
+  lines.push('');
+  lines.push('| Match | Model | Variant | $ | Time | Goals P/R/MAE | Saves P/R/MAE | Dist P/R/MAE |');
+  lines.push('|---|---|---|---|---|---|---|---|');
   for (const r of rows) {
     const cell = (p, rec, mae) => `${pct(p)} / ${pct(rec)} / ${mae != null ? mae.toFixed(1) + 's' : '—'}`;
-    lines.push(`| ${r.match} | \`${r.model}\` | ${fmtUsd(r.cost_usd)} | ${r.elapsed_sec ? r.elapsed_sec.toFixed(0) + 's' : '—'} | ${cell(r.goals_precision, r.goals_recall, r.goals_mae_sec)} | ${cell(r.saves_precision, r.saves_recall, r.saves_mae_sec)} | ${cell(r.dist_precision, r.dist_recall, r.dist_mae_sec)} |`);
+    lines.push(`| ${r.match} | \`${r.model}\` | ${r.variant || '—'} | ${fmtUsd(r.cost_usd)} | ${r.elapsed_sec ? r.elapsed_sec.toFixed(0) + 's' : '—'} | ${cell(r.goals_precision, r.goals_recall, r.goals_mae_sec)} | ${cell(r.saves_precision, r.saves_recall, r.saves_mae_sec)} | ${cell(r.dist_precision, r.dist_recall, r.dist_mae_sec)} |`);
   }
   lines.push('');
   // Event counts (helps spot model that over/under-detects)
   lines.push(`## Detection counts (truth → predicted)`);
   lines.push('');
-  lines.push('| Match | Model | Goals | Saves | Distribution |');
-  lines.push('|---|---|---|---|---|');
+  lines.push('| Match | Model | Variant | Goals | Saves | Distribution |');
+  lines.push('|---|---|---|---|---|---|');
   for (const r of rows) {
     const f = (t, p) => `${t ?? '?'} → ${p ?? '?'}`;
-    lines.push(`| ${r.match} | \`${r.model}\` | ${f(r.goals_truth, r.goals_pred)} | ${f(r.saves_truth, r.saves_pred)} | ${f(r.dist_truth, r.dist_pred)} |`);
+    lines.push(`| ${r.match} | \`${r.model}\` | ${r.variant || '—'} | ${f(r.goals_truth, r.goals_pred)} | ${f(r.saves_truth, r.saves_pred)} | ${f(r.dist_truth, r.dist_pred)} |`);
   }
   lines.push('');
   lines.push(`## Caveats`);
@@ -230,22 +233,43 @@ async function main() {
     for (const model of opts.models) {
       console.log(`▶ ${model} on ${match.key}`);
       const job = runBenchJob(model, match, opts.outDir, opts);
-      if (job.failed) { rows.push({ match: match.key, model, error: 'job_failed' }); continue; }
+      if (job.failed) {
+        rows.push({ match: match.key, model, variant: 'raw', error: 'job_failed' });
+        continue;
+      }
 
-      // Load gemini_output to compute cost + feed eval
-      let benchPayload = null;
-      try { benchPayload = JSON.parse(fs.readFileSync(job.outFile, 'utf8')); }
-      catch (e) { console.error(`  [warn] could not parse ${job.outFile}: ${e.message}`); }
-      const benchOutput = benchPayload?.gemini_output || benchPayload;
+      // Score both variants the bench job produced — raw (model-only) and
+      // reconciled (with production worker's cross-event filters applied).
+      // Same model run, two scorecard rows; the diff is the rules' contribution.
+      const variants = [
+        { name: 'raw', file: job.outFile },
+        { name: 'reconciled', file: job.outFile.replace(/\.json$/, '.reconciled.json') },
+      ];
+      for (const v of variants) {
+        if (!fs.existsSync(v.file)) {
+          if (v.name === 'raw') {
+            console.error(`  [warn] raw output missing: ${v.file}`);
+            rows.push({ match: match.key, model, variant: v.name, error: 'output_missing' });
+          }
+          // reconciled missing is non-fatal — log and skip
+          continue;
+        }
+        let benchPayload = null;
+        try { benchPayload = JSON.parse(fs.readFileSync(v.file, 'utf8')); }
+        catch (e) { console.error(`  [warn] could not parse ${v.file}: ${e.message}`); }
+        const benchOutput = benchPayload?.gemini_output || benchPayload;
 
-      console.log(`  scoring against ${path.relative(ROOT, match.truth)}...`);
-      const evalSummary = runEval(job.outFile, match.truth, opts.tolerance);
-      const row = scorecardRow(model, match, evalSummary, benchOutput);
-      rows.push(row);
+        console.log(`  scoring [${v.name}] against ${path.relative(ROOT, match.truth)}...`);
+        const evalSummary = runEval(v.file, match.truth, opts.tolerance);
+        const row = scorecardRow(model, match, v.name, evalSummary, benchOutput);
+        rows.push(row);
 
-      // Per-run eval JSON for later diffing / audit trail
-      const evalOut = job.outFile.replace(/\.json$/, '.eval.json');
-      fs.writeFileSync(evalOut, JSON.stringify({ model, match: match.key, summary: evalSummary, row }, null, 2));
+        const evalOut = v.file.replace(/\.json$/, '.eval.json');
+        fs.writeFileSync(evalOut, JSON.stringify(
+          { model, match: match.key, variant: v.name, summary: evalSummary, row },
+          null, 2
+        ));
+      }
     }
   }
 
