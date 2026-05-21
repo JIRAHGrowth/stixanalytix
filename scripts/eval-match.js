@@ -12,6 +12,9 @@
  *     [--tolerance 10]               # ±N seconds for matching events
  *     [--save-report]                # write a dated report to scripts/eval-reports/
  *
+ * Or evaluate a local gemini_output JSON file (bench harness path):
+ *   node scripts/eval-match.js --truth <truth.json> --gemini-output-file <out.json>
+ *
  * Or compare two Gemini runs against each other (no ground truth):
  *   node scripts/eval-match.js --job <id-A> --vs-job <id-B>
  *
@@ -254,6 +257,10 @@ function reportSection(name, truth, pred, tolerance) {
   const fn = missedTruth.length;
   const precision = (tp + fp) > 0 ? tp / (tp + fp) : 0;
   const recall = (tp + fn) > 0 ? tp / (tp + fn) : 0;
+  // Timestamp drift on matched events — the Phase 0 hypothesis lives here.
+  const timestampMaeSec = matched.length
+    ? matched.reduce((acc, [, , d]) => acc + d, 0) / matched.length
+    : null;
   const labeler = LABELERS[name] || ((e) => JSON.stringify(e));
   const semantic = SEMANTIC_CHECKS[name] || (() => '');
 
@@ -266,6 +273,9 @@ function reportSection(name, truth, pred, tolerance) {
   lines.push(`False pos:  ${fp}  (Gemini reported but not in truth)`);
   lines.push(`Precision:  ${(precision * 100).toFixed(1)}%   (of what Gemini reported, ${pct(tp, tp + fp)} were real)`);
   lines.push(`Recall:     ${(recall * 100).toFixed(1)}%   (of real events, ${pct(tp, tp + fn)} were caught)`);
+  if (timestampMaeSec !== null) {
+    lines.push(`Timestamp MAE: ${timestampMaeSec.toFixed(1)}s (mean abs error on matched events)`);
+  }
 
   if (matched.length) {
     lines.push(``);
@@ -331,17 +341,35 @@ function reportSection(name, truth, pred, tolerance) {
     }
   }
 
-  return { lines, precision, recall, tp, fp, fn };
+  return { lines, precision, recall, tp, fp, fn, timestampMaeSec };
 }
 
 async function main() {
   const args = parseArgs(process.argv);
   const tolerance = parseInt(args.tolerance, 10) || 10;
 
-  if (!args.job) die('--job <video_job_id> is required');
+  if (!args.job && !args['gemini-output-file']) {
+    die('--job <video_job_id> or --gemini-output-file <path> is required');
+  }
 
-  const jobRow = await fetchJob(args.job);
-  console.log(`Loaded job ${jobRow.id}`);
+  let jobRow;
+  let sourceLabel;
+  if (args['gemini-output-file']) {
+    const p = path.resolve(args['gemini-output-file']);
+    const payload = JSON.parse(fs.readFileSync(p, 'utf8'));
+    jobRow = {
+      id: payload.bench_key || path.basename(p, '.json'),
+      gemini_output: payload.gemini_output || payload,
+      match_metadata: payload.match_metadata || null,
+    };
+    sourceLabel = path.relative(process.cwd(), p);
+    console.log(`Loaded gemini_output from file: ${sourceLabel}`);
+    if (payload.model) console.log(`  model: ${payload.model}`);
+  } else {
+    jobRow = await fetchJob(args.job);
+    sourceLabel = `job ${jobRow.id}`;
+    console.log(`Loaded job ${jobRow.id}`);
+  }
   if (jobRow.match_metadata?.opponent) {
     console.log(`  vs ${jobRow.match_metadata.opponent}, ${jobRow.match_metadata.match_date}`);
   }
@@ -404,15 +432,38 @@ async function main() {
     const dir = path.join(__dirname, 'eval-reports');
     fs.mkdirSync(dir, { recursive: true });
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const out = path.join(dir, `eval_${args.job}_${stamp}.txt`);
+    const slug = (args.job || jobRow.id || 'file').replace(/[^a-z0-9_-]/gi, '_');
+    const out = path.join(dir, `eval_${slug}_${stamp}.txt`);
     fs.writeFileSync(out, [
       `Match eval — ${new Date().toISOString()}`,
-      `Job: ${args.job}`,
+      `Source: ${sourceLabel}`,
       args.truth ? `Truth: ${args.truth}` : `vs-job: ${args['vs-job']}`,
       `Tolerance: ±${tolerance}s`,
       ...allLines,
     ].join('\n'));
     console.log(`\nReport saved: ${path.relative(process.cwd(), out)}`);
+  }
+
+  // Emit a machine-readable summary on stderr for the bench orchestrator to
+  // consume. Stays out of the human-readable stdout.
+  if (args.truth && summary.goals) {
+    const machine = {
+      source: sourceLabel,
+      truth: args.truth,
+      tolerance,
+      sections: {},
+    };
+    for (const [name, rpt] of Object.entries(summary)) {
+      if (!rpt) continue;
+      machine.sections[name] = {
+        truth_count: rpt.tp + rpt.fn,
+        pred_count: rpt.tp + rpt.fp,
+        tp: rpt.tp, fp: rpt.fp, fn: rpt.fn,
+        precision: rpt.precision, recall: rpt.recall,
+        timestamp_mae_sec: rpt.timestampMaeSec,
+      };
+    }
+    process.stderr.write('\n__BENCH_JSON__' + JSON.stringify(machine) + '\n');
   }
 }
 

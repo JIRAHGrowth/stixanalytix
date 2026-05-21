@@ -40,3 +40,10 @@ scripts/ground-truth/*.json
 
 # eval reports — produced by scripts/eval-match.js with --save-report
 scripts/eval-reports/
+
+# bench harness — model-comparison outputs and downloaded source videos
+scripts/.bench-videos/
+# Per-run bench job outputs are large; commit only the scorecard summaries.
+scripts/bench-results/*
+!scripts/bench-results/scorecards/
+!scripts/bench-results/scorecards/.gitkeep
