@@ -24,7 +24,7 @@
  * Use --skip-existing to resume after a failed run.
  */
 
-require('dotenv').config({ path: '.env.local' });
+require('dotenv').config({ path: '.env.local', quiet: true });
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
