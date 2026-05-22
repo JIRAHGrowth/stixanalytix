@@ -1,0 +1,4 @@
+match,model,variant,error
+judah-2026-05-16-oufc-sosc,gemini-2.5-pro,raw,job_failed
+judah-2026-05-16-oufc-sosc,gemini-3-pro,raw,job_failed
+judah-2026-05-16-oufc-sosc,gemini-2.5-flash,raw,job_failed

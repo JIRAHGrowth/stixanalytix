@@ -47,3 +47,8 @@ scripts/.bench-videos/
 scripts/bench-results/*
 !scripts/bench-results/scorecards/
 !scripts/bench-results/scorecards/.gitkeep
+
+# GCP service account credentials — NEVER commit.
+.gcp-key.json
+*.gcp-key.json
+*-credentials.json

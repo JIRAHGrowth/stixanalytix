@@ -55,6 +55,15 @@ const PRICES = {
     cached_input_per_m: 0.50,
     deprecation_date: null,
   },
+  // Preview alias the API actually uses today; same rates as the GA 3 Pro line.
+  'gemini-3-pro-preview': {
+    input_under_200k_per_m: 2.00,
+    output_under_200k_per_m: 12.00,
+    input_over_200k_per_m: 4.00,
+    output_over_200k_per_m: 18.00,
+    cached_input_per_m: 0.50,
+    deprecation_date: null,
+  },
 
   // Gemini 3.5 Flash — announced Google I/O 2026-05-19; rates TBD
   // Placeholder uses 2.5 Flash rates; refresh once Google publishes pricing.
