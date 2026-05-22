@@ -39,10 +39,25 @@ export async function DELETE(_req, { params }) {
   }).eq('id', id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Clean up the uploaded file. We don't surface errors here — orphaned files
-  // are cheap and the lifecycle policy will eventually catch them.
+  // Refcount-aware storage cleanup: only remove the file if NO other video_jobs
+  // row references the same storage_path. Multiple jobs can share an upload
+  // session — historically published rows sometimes share a path with TEST
+  // attempts that re-used the same uploaded video. Blind deletion here would
+  // orphan those other rows (we've already paid the cost of this once — see
+  // the May-22 retention recovery in commit history).
   if (r.job.storage_path) {
-    admin.storage.from('match-videos').remove([r.job.storage_path]).catch(() => {});
+    const { count, error: cntErr } = await admin
+      .from('video_jobs')
+      .select('id', { count: 'exact', head: true })
+      .eq('storage_path', r.job.storage_path)
+      .neq('id', id);
+    if (cntErr) {
+      // Be conservative on count failure — leave the storage file alone.
+      console.warn('refcount check failed, leaving storage in place:', cntErr.message);
+    } else if (count === 0) {
+      admin.storage.from('match-videos').remove([r.job.storage_path]).catch(() => {});
+    }
+    // count > 0: other rows still reference this storage_path; do nothing.
   }
   return NextResponse.json({ ok: true });
 }

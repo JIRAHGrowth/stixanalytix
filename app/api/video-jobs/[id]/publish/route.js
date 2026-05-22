@@ -395,17 +395,17 @@ export async function POST(request, { params }) {
       console.error('coach_corrections diff failed (non-fatal):', e);
     }
 
-    // Clean up the uploaded video file once we have the analyzed output safely
-    // in matches/goals_conceded. Storage isn't free.
-    //
-    // Gated behind DELETE_SOURCE_VIDEO_ON_PUBLISH because deleting on publish
-    // makes re-analysis impossible (the worker downloads from a signed URL
-    // pointing at this file). Until R2 cold storage is wired, coaches re-
-    // analysing or re-watching footage from the dashboard is more valuable
-    // than the storage cost. Set to "true" in env to opt back in.
-    if (process.env.DELETE_SOURCE_VIDEO_ON_PUBLISH === 'true' && job.storage_path) {
-      admin.storage.from('match-videos').remove([job.storage_path]).catch(() => {});
-    }
+    // Retention policy 2026-05-22: source videos are KEPT in Supabase Storage
+    // after publish. Three reasons that overweight the storage cost:
+    //   1. Phase 3 SFT (fine-tuning) requires source videos for the matches we
+    //      want to train on. Deleting on publish loses training data forever.
+    //   2. Re-analysis (different model, different prompts, different rules)
+    //      is a recurring operation in our development cycle.
+    //   3. Coach review surfaces / dashboard playback may want to link back to
+    //      the source footage; deletion makes that impossible.
+    // Supabase storage at ~$0.021/GB/month is ~$1/coach/season — trivial.
+    // The previous DELETE_SOURCE_VIDEO_ON_PUBLISH env-var gate is removed
+    // intentionally; no implicit deletion lives here anymore.
 
     return NextResponse.json({ match_id: matchId, ok: true });
   } catch (err) {
