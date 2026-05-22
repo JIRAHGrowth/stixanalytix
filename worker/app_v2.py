@@ -370,17 +370,31 @@ def _init_gcp_credentials():
     raw = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
     if not raw:
         raise RuntimeError("GOOGLE_APPLICATION_CREDENTIALS_JSON missing in Modal secret")
-    try:
-        creds = json.loads(raw)
-    except json.JSONDecodeError as e:
-        # Surface enough context to diagnose without exposing secrets.
+    # Defensive parse: some web-UI paste paths (including Modal's secret
+    # dashboard form, as observed on 2026-05-22) strip the outer `{` and `}`
+    # braces from JSON values. If raw parsing fails, try wrapping the
+    # content in braces before reporting the user-facing error.
+    creds = None
+    parse_err = None
+    raw_stripped = raw.strip()
+    candidates = [raw_stripped]
+    if not (raw_stripped.startswith("{") and raw_stripped.endswith("}")):
+        candidates.append("{" + raw_stripped + "}")
+    for candidate in candidates:
+        try:
+            creds = json.loads(candidate)
+            break
+        except json.JSONDecodeError as e:
+            parse_err = e
+    if creds is None:
         head = raw[:80].replace("\n", "\\n").replace("\r", "\\r")
         tail = raw[-40:].replace("\n", "\\n").replace("\r", "\\r")
         raise RuntimeError(
-            f"GOOGLE_APPLICATION_CREDENTIALS_JSON does not parse: {e}. "
+            f"GOOGLE_APPLICATION_CREDENTIALS_JSON does not parse: {parse_err}. "
             f"length={len(raw)}, head={head!r}, tail={tail!r}. "
             f"Expected a JSON object starting with '{{\"type\": \"service_account\", ...'. "
-            f"Re-paste the full contents of .gcp-key.json into the Modal secret value."
+            f"Re-paste the full contents of .gcp-key.json into the Modal secret value, "
+            f"ensuring both opening {{ and closing }} braces are included."
         )
     if not isinstance(creds, dict) or creds.get("type") != "service_account":
         raise RuntimeError(
