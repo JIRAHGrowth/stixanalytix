@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
 import json
 import os
 import subprocess
@@ -203,62 +204,51 @@ def render_chunk_prompt(template: str, vars: dict, chunk: ChunkWindow) -> str:
     return base + chunk_note
 
 
-def run_one_chunk_prompt(
-    client: genai.Client,
-    model: str,
-    file_uri: str,
-    prompt_path: Path,
+def _build_generate_config(
     schema: dict,
-    vars: dict,
-    chunk: ChunkWindow,
     media_resolution: gtypes.MediaResolution,
-) -> dict:
-    """Run one prompt against a single virtual chunk of the uploaded video.
-    `file_uri` is either an AI-Studio Files API URI (https://...) or a
-    Cloud Storage URI (gs://...). FileData accepts both."""
-    template = prompt_path.read_text(encoding="utf-8")
-    prompt = render_chunk_prompt(template, vars, chunk)
-
-    video_part = gtypes.Part(
-        file_data=gtypes.FileData(
-            file_uri=file_uri,
-            mime_type="video/mp4",
-        ),
-        video_metadata=gtypes.VideoMetadata(
-            start_offset=f"{chunk.start_sec}s",
-            end_offset=f"{chunk.end_sec}s",
-        ),
-    )
-    text_part = gtypes.Part(text=prompt)
-
-    config = gtypes.GenerateContentConfig(
+    cached_content_name: str | None,
+) -> gtypes.GenerateContentConfig:
+    """Build the GenerateContentConfig. thinking_budget=0 is the right setting
+    for deterministic JSON extraction (per Google's SFT tuning docs) — thinking
+    is wasted output tokens here. cached_content (if set) prepends a Vertex
+    cache containing the video+chunk_metadata so video tokens aren't re-billed
+    per call."""
+    return gtypes.GenerateContentConfig(
         response_mime_type="application/json",
         response_schema=schema,
         media_resolution=media_resolution,
+        thinking_config=gtypes.ThinkingConfig(thinking_budget=0),
+        cached_content=cached_content_name,
     )
 
+
+def _generate_with_retry(
+    client: genai.Client,
+    model: str,
+    contents: list,
+    config: gtypes.GenerateContentConfig,
+    label: str,
+) -> dict:
+    """Shared retry + parse loop for any generate_content call."""
     t0 = time.time()
     last_err = None
     resp = None
     for attempt in range(1, 4):
         try:
-            resp = client.models.generate_content(
-                model=model,
-                contents=[video_part, text_part],
-                config=config,
-            )
+            resp = client.models.generate_content(model=model, contents=contents, config=config)
             break
         except Exception as e:
             last_err = e
             msg = str(e)
             if "429" in msg or "RESOURCE_EXHAUSTED" in msg:
-                print(f"  [chunk {chunk.index} {prompt_path.name}] rate limit/quota; stopping.", file=sys.stderr)
+                print(f"  [{label}] rate limit/quota; stopping.", file=sys.stderr)
                 raise
             transient = any(k in msg for k in ("503", "500", "UNAVAILABLE", "DEADLINE_EXCEEDED"))
             if not transient:
                 raise
             wait = attempt * 20
-            print(f"  [chunk {chunk.index} {prompt_path.name}] transient ({msg[:80]}); wait {wait}s")
+            print(f"  [{label}] transient ({msg[:80]}); wait {wait}s")
             time.sleep(wait)
     if resp is None:
         raise last_err or RuntimeError("All attempts failed")
@@ -269,7 +259,6 @@ def run_one_chunk_prompt(
         parsed = json.loads(raw_text)
     except json.JSONDecodeError:
         parsed = None
-
     usage = getattr(resp, "usage_metadata", None)
     usage_dict = None
     if usage is not None:
@@ -280,6 +269,79 @@ def run_one_chunk_prompt(
             "cached_content_token_count": getattr(usage, "cached_content_token_count", None),
         }
     return {"raw": raw_text, "parsed": parsed, "usage": usage_dict, "elapsed_sec": round(elapsed, 1)}
+
+
+def run_one_chunk_prompt(
+    client: genai.Client,
+    model: str,
+    file_uri: str,
+    prompt_path: Path,
+    schema: dict,
+    vars: dict,
+    chunk: ChunkWindow,
+    media_resolution: gtypes.MediaResolution,
+    cached_content_name: str | None = None,
+) -> dict:
+    """Run one prompt against a single virtual chunk of the uploaded video.
+    `file_uri` is either an AI-Studio Files API URI or a gs:// URI.
+    If `cached_content_name` is set, the chunk's video Part is OMITTED — the
+    cache already contains video+chunk_metadata — and only the prompt text
+    is sent fresh per call.
+    """
+    template = prompt_path.read_text(encoding="utf-8")
+    prompt = render_chunk_prompt(template, vars, chunk)
+
+    if cached_content_name:
+        # Cache already contains video+offset; just send the prompt text.
+        contents = [gtypes.Part(text=prompt)]
+    else:
+        contents = [
+            gtypes.Part(
+                file_data=gtypes.FileData(file_uri=file_uri, mime_type="video/mp4"),
+                video_metadata=gtypes.VideoMetadata(
+                    start_offset=f"{chunk.start_sec}s",
+                    end_offset=f"{chunk.end_sec}s",
+                ),
+            ),
+            gtypes.Part(text=prompt),
+        ]
+
+    config = _build_generate_config(schema, media_resolution, cached_content_name)
+    return _generate_with_retry(
+        client, model, contents, config,
+        label=f"chunk {chunk.index} {prompt_path.name}",
+    )
+
+
+def create_chunk_cache(
+    client: genai.Client,
+    model: str,
+    file_uri: str,
+    chunk: ChunkWindow,
+    media_resolution: gtypes.MediaResolution,
+    ttl_seconds: int = 600,
+):
+    """Create a Vertex CachedContent holding the chunk's video slice. Returns
+    the CachedContent object (use .name to reference). The cache holds the
+    video file + chunk_metadata so all 3 prompts for that chunk share the same
+    pre-processed video tokens.
+
+    Vertex 2.5 Flash minimum cache size is 4,096 tokens. A 5-min chunk at
+    MEDIUM is ~76,800 video tokens — well above the floor.
+    """
+    video_part = gtypes.Part(
+        file_data=gtypes.FileData(file_uri=file_uri, mime_type="video/mp4"),
+        video_metadata=gtypes.VideoMetadata(
+            start_offset=f"{chunk.start_sec}s",
+            end_offset=f"{chunk.end_sec}s",
+        ),
+    )
+    cfg = gtypes.CreateCachedContentConfig(
+        contents=[gtypes.Content(role="user", parts=[video_part])],
+        ttl=f"{ttl_seconds}s",
+        display_name=f"bench-chunk-{chunk.index}",
+    )
+    return client.caches.create(model=model, config=cfg)
 
 
 def merge_chunk_results(
@@ -352,7 +414,18 @@ def main() -> int:
                         help="Default 300s (5min) to match Vertex SFT MEDIUM constraint.")
     parser.add_argument("--use-vertex", action="store_true",
                         help="Use Vertex AI backend (requires GOOGLE_CLOUD_PROJECT + auth).")
+    parser.add_argument("--enable-caching", action="store_true",
+                        help="Vertex-only. Create a per-chunk CachedContent so all 3 prompts "
+                             "for that chunk share pre-processed video tokens. Cuts input "
+                             "cost ~3x; required for production economics.")
+    parser.add_argument("--cache-ttl-sec", type=int, default=600,
+                        help="TTL for per-chunk caches (default 600s = 10 min). Set tight to "
+                             "avoid paying for idle cache storage.")
     args = parser.parse_args()
+
+    if args.enable_caching and not args.use_vertex:
+        print("--enable-caching requires --use-vertex (AI Studio caching is implicit).", file=sys.stderr)
+        return 1
 
     video_path = Path(args.video).resolve()
     if not video_path.is_file():
@@ -439,32 +512,69 @@ def main() -> int:
         ("distribution", ROOT / "prompts" / "distribution.md", DISTRIBUTION_RESPONSE_SCHEMA),
     ]
 
-    section_results: dict[str, dict] = {}
+    # Chunk-major loop: for each chunk, (optionally) create a cache holding the
+    # video slice, then run all 3 prompts against that cache, then delete it.
+    # This is the production-faithful shape — caches are short-lived per match.
+    available_prompts = [(s, p, sc) for s, p, sc in prompt_specs if p.exists()]
+    for s, p, _ in prompt_specs:
+        if not p.exists():
+            print(f"[{args.model}] skip {s} (prompt {p.name} missing)")
+
+    # Build per-chunk × per-section result matrix
+    chunk_section_results: dict[int, dict[str, dict]] = {chunk.index: {} for chunk in chunks}
     chunk_meta = []
 
-    for section, ppath, schema in prompt_specs:
-        if not ppath.exists():
-            print(f"[{args.model}] skip {section} (prompt missing)")
-            continue
-        print(f"[{args.model}] === {section}: {len(chunks)} chunks ===")
-        per_chunk = []
-        for chunk in chunks:
-            print(f"[{args.model}] chunk {chunk.index} ({chunk.start_sec}-{chunk.end_sec}s) {section}...")
-            cr = run_one_chunk_prompt(
-                client, args.model, file_uri, ppath, schema, template_vars, chunk, media_resolution
-            )
-            n = len((cr.get("parsed") or {}).get(SECTION_TO_LISTKEY[section], []) or [])
-            print(f"  -> {n} events in {cr['elapsed_sec']}s")
-            per_chunk.append(cr)
-        section_results[section] = merge_chunk_results(section, per_chunk, chunks)
-
-    # Per-section chunk index for the manifest
     for chunk in chunks:
+        cache_obj = None
+        cache_label = "no-cache"
+        if args.enable_caching:
+            print(f"[{args.model}] chunk {chunk.index}: creating cache ({chunk.start_sec}-{chunk.end_sec}s, ttl={args.cache_ttl_sec}s)...")
+            t_c = time.time()
+            cache_obj = create_chunk_cache(
+                client, args.model, file_uri, chunk, media_resolution, ttl_seconds=args.cache_ttl_sec,
+            )
+            cache_label = f"cache={cache_obj.name.split('/')[-1]}"
+            print(f"  -> {cache_label} created in {time.time() - t_c:.1f}s")
+
+        try:
+            for section, ppath, schema in available_prompts:
+                print(f"[{args.model}] chunk {chunk.index} {section}.md {cache_label}...")
+                cr = run_one_chunk_prompt(
+                    client, args.model, file_uri, ppath, schema, template_vars, chunk,
+                    media_resolution,
+                    cached_content_name=(cache_obj.name if cache_obj else None),
+                )
+                n = len((cr.get("parsed") or {}).get(SECTION_TO_LISTKEY[section], []) or [])
+                cached_used = (cr.get("usage") or {}).get("cached_content_token_count") or 0
+                print(f"  -> {n} events in {cr['elapsed_sec']}s (cached_tok={cached_used})")
+                chunk_section_results[chunk.index][section] = cr
+        finally:
+            if cache_obj is not None:
+                try:
+                    client.caches.delete(name=cache_obj.name)
+                except Exception as e:
+                    print(f"  [warn] cache cleanup failed for {cache_obj.name}: {e}", file=sys.stderr)
+
         chunk_meta.append({
             "index": chunk.index,
             "start_sec": chunk.start_sec,
             "end_sec": chunk.end_sec,
+            "cache_used": cache_obj is not None,
         })
+
+    # Reshape chunk-major -> section-major for merge_chunk_results
+    section_results: dict[str, dict] = {}
+    for section, _, _ in available_prompts:
+        per_chunk = [chunk_section_results[c.index].get(section) for c in chunks]
+        section_results[section] = merge_chunk_results(section, per_chunk, chunks)
+        # Also preserve per-chunk parsed events on the chunk_meta — directly
+        # consumable as Vertex SFT training rows later (no re-derivation needed).
+        list_key = SECTION_TO_LISTKEY[section]
+        for chunk, cr in zip(chunks, per_chunk):
+            if cr is None:
+                continue
+            chunk_local_events = ((cr.get("parsed") or {}).get(list_key) or [])
+            chunk_meta[chunk.index].setdefault("events_per_section", {})[section] = chunk_local_events
 
     # Apply low-signal saves filter (model-agnostic) just like worker does
     if "saves" in section_results and section_results["saves"].get("parsed"):
@@ -491,9 +601,36 @@ def main() -> int:
     if "distribution" in section_results:
         gemini_output["distribution"] = section_results["distribution"]
 
+    # Reproducibility tags — every scorecard row can be traced back to a
+    # specific commit + config. Lets us answer "did precision regress when
+    # we changed prompts" with a single diff.
+    try:
+        commit_sha = subprocess.run(
+            ["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=ROOT, timeout=5,
+        ).stdout.strip()
+    except Exception:
+        commit_sha = None
+    config_payload = {
+        "model": args.model,
+        "media_resolution": args.media_resolution,
+        "chunk_duration_sec": args.chunk_duration_sec,
+        "use_vertex": args.use_vertex,
+        "enable_caching": args.enable_caching,
+        "cache_ttl_sec": args.cache_ttl_sec if args.enable_caching else None,
+        "thinking_budget": 0,
+        "low_signal_saves_filter": True,
+    }
+    config_hash = hashlib.sha256(
+        json.dumps(config_payload, sort_keys=True).encode("utf-8")
+    ).hexdigest()[:12]
+
     gemini_output["bench_meta"] = {
         "sdk": "google.genai",
         "sdk_version": getattr(genai, "__version__", "?"),
+        "commit_sha": commit_sha,
+        "config_hash": config_hash,
+        "config": config_payload,
+        "enable_caching": args.enable_caching,
         "backend": backend,
         "media_resolution": args.media_resolution,
         "chunk_duration_sec": args.chunk_duration_sec,
