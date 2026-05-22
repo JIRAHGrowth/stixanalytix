@@ -102,6 +102,64 @@ def get_video_duration_seconds(path: Path) -> int:
     return int(round(float(r.stdout.strip())))
 
 
+def _gcloud_cmd_path() -> str:
+    """Resolve the gcloud CLI path. Windows winget puts it in user AppData
+    where the bash subshell doesn't see it on PATH."""
+    candidates = [
+        os.environ.get("GCLOUD_PATH"),
+        "gcloud",
+        "C:/Users/joshu/AppData/Local/Google/Cloud SDK/google-cloud-sdk/bin/gcloud.cmd",
+    ]
+    for c in candidates:
+        if not c:
+            continue
+        try:
+            subprocess.run([c, "--version"], capture_output=True, check=True, timeout=10)
+            return c
+        except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            continue
+    raise RuntimeError("gcloud CLI not found; required for --use-vertex GCS upload")
+
+
+def ensure_video_in_gcs(local_path: Path, bucket: str) -> str:
+    """Idempotent upload of a local video to gs://bucket/bench-videos/<basename>.
+    Returns the gs:// URI. Skips upload if the object already exists with the
+    same size (cheap stat check, no etag verification).
+
+    Vertex generate_content requires gs:// references for video — the AI Studio
+    Files API isn't supported. We reuse the SFT training bucket for inference
+    too; the path convention is bench-videos/ for raw match files.
+    """
+    gcloud = _gcloud_cmd_path()
+    blob = f"bench-videos/{local_path.name}"
+    gs_uri = f"gs://{bucket}/{blob}"
+
+    # Check if remote object already exists at correct size
+    local_size = local_path.stat().st_size
+    try:
+        r = subprocess.run(
+            [gcloud, "storage", "objects", "describe", gs_uri, "--format=value(size)"],
+            capture_output=True, text=True, timeout=30,
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            remote_size = int(r.stdout.strip())
+            if remote_size == local_size:
+                print(f"  [gcs] cache hit: {gs_uri} ({remote_size} bytes)")
+                return gs_uri
+            print(f"  [gcs] size mismatch (local={local_size}, remote={remote_size}); re-uploading")
+    except (subprocess.TimeoutExpired, ValueError):
+        pass
+
+    print(f"  [gcs] uploading {local_path.name} ({local_size / 1024 / 1024:.0f} MB) -> {gs_uri}")
+    t0 = time.time()
+    subprocess.run(
+        [gcloud, "storage", "cp", str(local_path), gs_uri],
+        check=True,
+    )
+    print(f"  [gcs] uploaded in {fmt_min(time.time() - t0)}")
+    return gs_uri
+
+
 def plan_chunks(duration_sec: int, chunk_duration_sec: int) -> list[ChunkWindow]:
     chunks = []
     cursor = 0
@@ -148,20 +206,22 @@ def render_chunk_prompt(template: str, vars: dict, chunk: ChunkWindow) -> str:
 def run_one_chunk_prompt(
     client: genai.Client,
     model: str,
-    uploaded_file,
+    file_uri: str,
     prompt_path: Path,
     schema: dict,
     vars: dict,
     chunk: ChunkWindow,
     media_resolution: gtypes.MediaResolution,
 ) -> dict:
-    """Run one prompt against a single virtual chunk of the uploaded video."""
+    """Run one prompt against a single virtual chunk of the uploaded video.
+    `file_uri` is either an AI-Studio Files API URI (https://...) or a
+    Cloud Storage URI (gs://...). FileData accepts both."""
     template = prompt_path.read_text(encoding="utf-8")
     prompt = render_chunk_prompt(template, vars, chunk)
 
     video_part = gtypes.Part(
         file_data=gtypes.FileData(
-            file_uri=uploaded_file.uri,
+            file_uri=file_uri,
             mime_type="video/mp4",
         ),
         video_metadata=gtypes.VideoMetadata(
@@ -334,29 +394,42 @@ def main() -> int:
     chunks = plan_chunks(duration, args.chunk_duration_sec)
     print(f"[{args.model}] video duration {duration}s -> {len(chunks)} chunks of <= {args.chunk_duration_sec}s")
 
-    # Upload once
-    print(f"[{args.model}] uploading video (one-time, {video_path.stat().st_size / 1024 / 1024:.0f} MB)...")
-    t_up = time.time()
-    uploaded = client.files.upload(
-        file=str(video_path),
-        config=gtypes.UploadFileConfig(mime_type="video/mp4", display_name=f"bench v2 {bench_key}"),
-    )
-    print(f"[{args.model}] uploaded in {fmt_min(time.time() - t_up)} -> {uploaded.uri}")
-
-    # Wait for processing
-    print(f"[{args.model}] waiting for Gemini file processing...")
-    t_proc = time.time()
-    while True:
-        f = client.files.get(name=uploaded.name)
-        state = f.state.name if hasattr(f.state, "name") else str(f.state)
-        if state == "ACTIVE":
-            uploaded = f
-            break
-        if state == "FAILED":
-            print(f"File processing failed: {state}", file=sys.stderr); return 1
-        sys.stdout.write("."); sys.stdout.flush()
-        time.sleep(10)
-    print(f"\n[{args.model}] file ACTIVE in {fmt_min(time.time() - t_proc)}")
+    # Get a video URI the model can read. Path differs by backend:
+    #   - AI Studio: Files API upload, wait for ACTIVE state, use the file URI
+    #   - Vertex AI: GCS upload (Files API not supported), use gs:// URI
+    # Both paths return a string URI passed to FileData.file_uri downstream.
+    file_uri: str
+    uploaded_handle = None  # AI-Studio only; needed for cleanup
+    if args.use_vertex:
+        bucket = os.environ.get("GCS_TRAINING_BUCKET")
+        if not bucket:
+            print("GCS_TRAINING_BUCKET missing in .env.local (required for --use-vertex)", file=sys.stderr)
+            return 1
+        print(f"[{args.model}] resolving video in GCS bucket {bucket}...")
+        file_uri = ensure_video_in_gcs(video_path, bucket)
+    else:
+        print(f"[{args.model}] uploading via Files API (one-time, {video_path.stat().st_size / 1024 / 1024:.0f} MB)...")
+        t_up = time.time()
+        uploaded_handle = client.files.upload(
+            file=str(video_path),
+            config=gtypes.UploadFileConfig(mime_type="video/mp4", display_name=f"bench v2 {bench_key}"),
+        )
+        print(f"[{args.model}] uploaded in {fmt_min(time.time() - t_up)} -> {uploaded_handle.uri}")
+        # Wait for ACTIVE state — only required on AI Studio Files API
+        print(f"[{args.model}] waiting for Gemini file processing...")
+        t_proc = time.time()
+        while True:
+            f = client.files.get(name=uploaded_handle.name)
+            state = f.state.name if hasattr(f.state, "name") else str(f.state)
+            if state == "ACTIVE":
+                uploaded_handle = f
+                break
+            if state == "FAILED":
+                print(f"File processing failed: {state}", file=sys.stderr); return 1
+            sys.stdout.write("."); sys.stdout.flush()
+            time.sleep(10)
+        print(f"\n[{args.model}] file ACTIVE in {fmt_min(time.time() - t_proc)}")
+        file_uri = uploaded_handle.uri
 
     template_vars = load_template_vars(Path(args.vars_json).resolve() if args.vars_json else None)
 
@@ -378,7 +451,7 @@ def main() -> int:
         for chunk in chunks:
             print(f"[{args.model}] chunk {chunk.index} ({chunk.start_sec}-{chunk.end_sec}s) {section}...")
             cr = run_one_chunk_prompt(
-                client, args.model, uploaded, ppath, schema, template_vars, chunk, media_resolution
+                client, args.model, file_uri, ppath, schema, template_vars, chunk, media_resolution
             )
             n = len((cr.get("parsed") or {}).get(SECTION_TO_LISTKEY[section], []) or [])
             print(f"  -> {n} events in {cr['elapsed_sec']}s")
@@ -446,12 +519,14 @@ def main() -> int:
     except Exception as e:
         print(f"[{args.model}] reconciliation failed: {e}", file=sys.stderr)
 
-    # Cleanup uploaded file to avoid stale Files quota usage
-    try:
-        client.files.delete(name=uploaded.name)
-        print(f"[{args.model}] deleted Files API entry")
-    except Exception:
-        pass
+    # Cleanup uploaded Files API entry (AI Studio only). GCS objects we keep
+    # so future bench runs hit the cache.
+    if uploaded_handle is not None:
+        try:
+            client.files.delete(name=uploaded_handle.name)
+            print(f"[{args.model}] deleted Files API entry")
+        except Exception:
+            pass
 
     return 0
 
