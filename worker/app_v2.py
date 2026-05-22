@@ -354,9 +354,15 @@ def _plan_chunks(duration_sec: int, chunk_duration_sec: int = 300) -> list:
 # ============================================================================
 
 def _init_gcp_credentials():
-    """Write GOOGLE_APPLICATION_CREDENTIALS_JSON to a temp file and point
-    GOOGLE_APPLICATION_CREDENTIALS at it. Both google.cloud.storage and
-    google.genai then auto-detect via ADC."""
+    """Parse GOOGLE_APPLICATION_CREDENTIALS_JSON, re-serialize canonically,
+    write to a temp file, and point GOOGLE_APPLICATION_CREDENTIALS at it.
+
+    Re-serialization is important: pastes through web UIs (Modal dashboard)
+    can introduce stray whitespace, BOM markers, or escape inconsistencies
+    that break downstream credential parsers. Round-tripping through json
+    normalises all that. If parsing fails, raise with a useful debug
+    snippet so we can fix the secret without ssh-ing into a container.
+    """
     import tempfile
     if os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") and \
        os.path.exists(os.environ["GOOGLE_APPLICATION_CREDENTIALS"]):
@@ -364,10 +370,28 @@ def _init_gcp_credentials():
     raw = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
     if not raw:
         raise RuntimeError("GOOGLE_APPLICATION_CREDENTIALS_JSON missing in Modal secret")
-    f = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False)
-    f.write(raw)
+    try:
+        creds = json.loads(raw)
+    except json.JSONDecodeError as e:
+        # Surface enough context to diagnose without exposing secrets.
+        head = raw[:80].replace("\n", "\\n").replace("\r", "\\r")
+        tail = raw[-40:].replace("\n", "\\n").replace("\r", "\\r")
+        raise RuntimeError(
+            f"GOOGLE_APPLICATION_CREDENTIALS_JSON does not parse: {e}. "
+            f"length={len(raw)}, head={head!r}, tail={tail!r}. "
+            f"Expected a JSON object starting with '{{\"type\": \"service_account\", ...'. "
+            f"Re-paste the full contents of .gcp-key.json into the Modal secret value."
+        )
+    if not isinstance(creds, dict) or creds.get("type") != "service_account":
+        raise RuntimeError(
+            f"GOOGLE_APPLICATION_CREDENTIALS_JSON parsed but is not a service-account dict. "
+            f"keys={list(creds.keys()) if isinstance(creds, dict) else type(creds).__name__}"
+        )
+    f = tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8")
+    json.dump(creds, f)
     f.close()
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = f.name
+    print(f"[gcp] credentials written ({len(raw)} bytes raw, sa={creds.get('client_email')})", flush=True)
 
 
 def _ensure_video_in_gcs(local_path: str, job_id: str) -> str:
