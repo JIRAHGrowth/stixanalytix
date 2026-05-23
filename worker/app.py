@@ -299,12 +299,50 @@ def _reconcile_events(goals: list, saves: list, distribution: list) -> tuple:
     goals = [g for g in (goals or []) if _evidence_count(g) >= 2]
     d_dropped = n0_goals_d - len(goals)
 
+    # === E: distribution dedupe by (trigger, direction) within 30s ===
+    # Phase 2.5 — validated 2026-05-22 across 3 bench matches: cut ~99 FPs
+    # at the cost of 2 TPs. F1 improves on every match where it fires.
+    # The model annotates rapid GK touches as separate events (backpass left,
+    # 6s later same play tagged again); this collapses them. Highest-confidence
+    # event in each cluster wins.
+    CONF_RANK = {"high": 3, "medium": 2, "low": 1}
+    n0_dist_e = len(distribution or [])
+    keyed = sorted(
+        (d for d in (distribution or []) if isinstance(d.get("timestamp_seconds"), (int, float))),
+        key=lambda d: d["timestamp_seconds"],
+    )
+    deduped = []
+    for d in keyed:
+        key = (str(d.get("trigger") or "").lower(), str(d.get("direction") or "").lower())
+        ts = d["timestamp_seconds"]
+        clash = None
+        for k in deduped:
+            if str(k.get("trigger") or "").lower() == key[0] and \
+               str(k.get("direction") or "").lower() == key[1] and \
+               abs(k["timestamp_seconds"] - ts) <= 30:
+                clash = k
+                break
+        if clash is None:
+            deduped.append(d)
+            continue
+        d_rank = CONF_RANK.get(str(d.get("confidence") or "").lower(), 0)
+        c_rank = CONF_RANK.get(str(clash.get("confidence") or "").lower(), 0)
+        if d_rank > c_rank:
+            deduped.remove(clash)
+            deduped.append(d)
+        # else: clash already has equal/higher confidence; drop d
+    # Re-attach any events that had no timestamp (preserved as-is)
+    deduped.extend([d for d in (distribution or []) if not isinstance(d.get("timestamp_seconds"), (int, float))])
+    distribution = deduped
+    e_dropped = n0_dist_e - len(distribution)
+
     print(
         f"[reconcile] A:{a_dropped} dist (low/med conf) "
         f"| C:{c_dropped} goals (scoreboard unchanged) "
         f"| D:{d_dropped} goals (evidence count <2) "
         f"| B1:{b1_dropped} saves (Goal-action near a goal) "
-        f"| B2:{b2_dropped} dist (near a save or goal)",
+        f"| B2:{b2_dropped} dist (near a save or goal) "
+        f"| E:{e_dropped} dist (dupe trigger+direction within 30s)",
         flush=True,
     )
     return goals, saves, distribution

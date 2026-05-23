@@ -259,12 +259,47 @@ def _reconcile_events(goals: list, saves: list, distribution: list) -> tuple:
     goals = [g for g in (goals or []) if _evidence_count(g) >= 2]
     d_dropped = n0d - len(goals)
 
+    # E: distribution dedupe by (trigger, direction) within 30s — Phase 2.5
+    # Validated 2026-05-22: cuts ~99 dist FPs across 3 bench matches with
+    # only -2 TPs. The model annotates the same GK touch sequence as
+    # multiple separate events; this collapses by trigger+direction key
+    # within a 30s window. Highest-confidence wins.
+    CONF_RANK = {"high": 3, "medium": 2, "low": 1}
+    n0_dist_e = len(distribution or [])
+    keyed = sorted(
+        (d for d in (distribution or []) if isinstance(d.get("timestamp_seconds"), (int, float))),
+        key=lambda d: d["timestamp_seconds"],
+    )
+    deduped = []
+    for d in keyed:
+        trig = str(d.get("trigger") or "").lower()
+        dirn = str(d.get("direction") or "").lower()
+        ts = d["timestamp_seconds"]
+        clash = None
+        for k in deduped:
+            if str(k.get("trigger") or "").lower() == trig and \
+               str(k.get("direction") or "").lower() == dirn and \
+               abs(k["timestamp_seconds"] - ts) <= 30:
+                clash = k
+                break
+        if clash is None:
+            deduped.append(d)
+            continue
+        if CONF_RANK.get(str(d.get("confidence") or "").lower(), 0) > \
+           CONF_RANK.get(str(clash.get("confidence") or "").lower(), 0):
+            deduped.remove(clash)
+            deduped.append(d)
+    deduped.extend([d for d in (distribution or []) if not isinstance(d.get("timestamp_seconds"), (int, float))])
+    distribution = deduped
+    e_dropped = n0_dist_e - len(distribution)
+
     print(
         f"[reconcile] A:{a_dropped} dist (low conf) "
         f"| C:{c_dropped} goals (sb unchanged) "
         f"| D:{d_dropped} goals (evidence<2) "
         f"| B1:{b1_dropped} saves (Goal-action near goal) "
-        f"| B2:{b2_dropped} dist (near save/goal)",
+        f"| B2:{b2_dropped} dist (near save/goal) "
+        f"| E:{e_dropped} dist (dupe trigger+dir within 30s)",
         flush=True,
     )
     return goals, saves, distribution
