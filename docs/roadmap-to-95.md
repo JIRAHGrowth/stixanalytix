@@ -29,8 +29,15 @@ Four stages. Each stage has a quantitative ceiling, a verification protocol, and
 ### Stage 1 — Tighten what we have (no new model, no new data)
 **Window:** 2026-05-23 → 2026-06-06 (Weeks 1-2)
 **Levers:** reconciliation rule re-tune, voting pass tuning, prompt v3, confidence-band measurement
-**Target floor (must hit to proceed to Stage 2):** Goals 40% recall / Saves 35% / Dist 35%, FP rate cut ≥ 30% on each
-**Target ceiling (best case):** Goals 55% / Saves 45% / Dist 45%
+**Target floor (originally set):** Goals 40% recall / Saves 35% / Dist 35%, FP rate cut ≥ 30% on each
+**Target ceiling (originally set):** Goals 55% / Saves 45% / Dist 45%
+
+**REVISED CEILING (2026-05-22, after Rule E shipped):**
+Empirical finding from `scripts/reconciliation-lab.py` across 3 bench matches: **field-level reconciliation rules cannot meaningfully shift goals or saves accuracy on base `gemini-2.5-flash`.** Every FP carries identical fields (conf=high, evidence affirmative, real shot_type, on_target=yes) to every TP. This is the model behavior; rules can't bridge it. Confirmed across canary + a0877aa3 + cf939885.
+
+Distribution is the only event type where rules help — Rule E cuts FPs ~47% with marginal recall loss. That's now in production (both `worker/app.py` and `worker/app_v2.py`, commit `3b5db96`).
+
+**The Stage 1 honest read:** rules ship distribution improvements only. Goals and saves wait for Stage 2 (SFT). This SHARPENS the focus on Stage 2 rather than diluting it — we don't waste another week trying to engineer rules that the data has already proven won't work.
 
 ### Stage 2 — First fine-tune pass
 **Window:** 2026-06-07 → 2026-06-27 (Weeks 3-5)
@@ -62,9 +69,9 @@ This is the part you check back against weekly. Each row has: who, what, by-when
 ### Week 1 — 2026-05-23 → 2026-05-29
 | # | Who | What | Success criterion | Status |
 |---|---|---|---|---|
-| 1 | Claude | Re-tune cross-event reconciliation rules for chunked Flash output | FP rate on the 4 ground-truth matches drops ≥ 30% on at least one event type with no recall loss | ☐ |
-| 2 | Claude | Run 3-5 more Vertex canary jobs on existing TEST job IDs to characterize per-match variance | Per-match scorecard variance documented; baseline is N=4+ not N=1 | ☐ |
-| 3 | Claude | Build `coach_corrections` → SFT JSONL converter (begins Stage 2 prep) | Converter script in repo, validated on existing ~600 correction rows | ☐ |
+| 1 | Claude | Re-tune cross-event reconciliation rules for chunked Flash output | FP rate on the 4 ground-truth matches drops ≥ 30% on at least one event type with no recall loss | ✅ **DONE 2026-05-22 (commit `3b5db96`)** — Rule E shipped: dist FPs cut by **47%** on canary (114→67), -1 TP. Validated across 3 matches: 99 FPs eliminated total. Goal + save FPs proved field-indistinguishable from TPs → SFT required, rules can't help there. |
+| 2 | Claude | Run 3-5 more Vertex canary jobs on existing TEST job IDs to characterize per-match variance | Per-match scorecard variance documented; baseline is N=4+ not N=1 | ⏸ Deferred — natural matches will accumulate as Joshua's peer-match flow lands; manual canary runs add little marginal info |
+| 3 | Claude | Build SFT training-data JSONL converter (Stage 2 prep) | Converter script in repo; produces Vertex-format JSONL from curated ground-truth files + GCS-resident videos | ✅ **DONE 2026-05-22** — `scripts/build-sft-training-data.py`. Built first corpus (87 rows from 3 matches) — Vertex format verified. 52 of 87 rows have empty event arrays (these directly counter the FP-hallucination ceiling Item #1 found). 4th match blocked on its source video being uploaded to GCS (any worker run on `bc00c75c` auto-fixes). Once Joshua's 200 matches arrive: ~5800 training rows = well above Vertex's 500 minimum. |
 | 4 | Joshua | Reach out to peer coaches: line up match-video sources for 200 total matches by week 8 | Verbal commitments from ≥ 3 peer coaches | ☐ |
 | 5 | Joshua | Identify 1 review helper (paid, trade, or co-coach) | Helper identified + onboarded to review screen by end of week 2 | ☐ |
 

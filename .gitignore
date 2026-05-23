@@ -52,3 +52,7 @@ scripts/bench-results/*
 .gcp-key.json
 *.gcp-key.json
 *-credentials.json
+
+# SFT training corpus — regenerable via scripts/build-sft-training-data.py.
+# Keep .stats.json (audit trail of what was built) but not the JSONL itself.
+training/*.jsonl

@@ -1,0 +1,50 @@
+{
+  "input_truth_files": 4,
+  "skip_reasons": [
+    {
+      "match": "judah-2026-05-02.json",
+      "reason": "video not in GCS at gs://stix-training-stixanalytix-prod/match-videos/bc00c75c-ffe8-4584-85e2-29f9aa492fa9.mp4 \u2014 run worker on this job once or upload manually"
+    }
+  ],
+  "per_match": [
+    {
+      "match": "judah-2026-04-25.json",
+      "video_job_id": "60cfa445-6364-4147-9830-0d1ddeffcb37",
+      "chunks": 11,
+      "rows_added": {
+        "goals": 11,
+        "saves": 11,
+        "distribution": 11
+      }
+    },
+    {
+      "match": "judah-2026-05-16-oufc-sosc.json",
+      "video_job_id": "cf939885-f9ff-4d7b-bc2e-3d0815f40cb5",
+      "chunks": 9,
+      "rows_added": {
+        "goals": 9,
+        "saves": 9,
+        "distribution": 9
+      }
+    },
+    {
+      "match": "judah-2026-05-16-oufc.json",
+      "video_job_id": "a0877aa3-b47c-4077-84a7-8f3bced97ac4",
+      "chunks": 9,
+      "rows_added": {
+        "goals": 9,
+        "saves": 9,
+        "distribution": 9
+      }
+    }
+  ],
+  "per_section_rows": {
+    "goals": 29,
+    "saves": 29,
+    "distribution": 29
+  },
+  "total_rows": 87,
+  "media_resolution": "MEDIA_RESOLUTION_MEDIUM",
+  "chunk_duration_sec": 300,
+  "bucket": "stix-training-stixanalytix-prod"
+}
