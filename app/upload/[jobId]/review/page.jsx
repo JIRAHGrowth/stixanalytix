@@ -52,6 +52,12 @@ export default function ReviewPage() {
   const [savedAt, setSavedAt] = useState(null);
   const draftKey = `stix-review-draft-${jobId}`;
 
+  // Phase A2 — keyboard navigation. activeFocus tracks the currently
+  // highlighted event so K/X/arrows can act on it. Section cycle:
+  // goals -> saves -> distribution -> goals.
+  const [activeFocus, setActiveFocus] = useState({ section: "goals", index: 0 });
+  const [showShortcuts, setShowShortcuts] = useState(false);
+
   useEffect(() => {
     if (!user) return;
     let mounted = true;
@@ -228,6 +234,120 @@ export default function ReviewPage() {
 
   const updateCand = (id, patch) => setCandidates(cs => cs.map(c => c._id === id ? { ...c, ...patch } : c));
 
+  // ---- Phase A2 keyboard navigation ----
+  // Map sections to their current event list + setter so handlers can act
+  // on whichever section is focused.
+  const sectionRefs = useMemo(() => ({
+    goals: { rows: candidates, setRows: setCandidates, count: candidates.length },
+    saves: { rows: saveRows, setRows: setSaveRows, count: saveRows.length },
+    distribution: { rows: distRows, setRows: setDistRows, count: distRows.length },
+  }), [candidates, saveRows, distRows]);
+
+  // Clamp activeFocus.index when its section count changes (events added/removed)
+  useEffect(() => {
+    const max = sectionRefs[activeFocus.section]?.count || 0;
+    if (max === 0) return;
+    if (activeFocus.index >= max) {
+      setActiveFocus({ ...activeFocus, index: max - 1 });
+    }
+  }, [sectionRefs, activeFocus]);
+
+  const activeId = useMemo(() => {
+    const sec = sectionRefs[activeFocus.section];
+    if (!sec || !sec.rows.length) return null;
+    const row = sec.rows[Math.max(0, Math.min(activeFocus.index, sec.rows.length - 1))];
+    return row?._id;
+  }, [sectionRefs, activeFocus]);
+
+  useEffect(() => {
+    if (loading || error || publishedMatchId) return;
+    const onKey = (e) => {
+      // Don't hijack typing in form fields
+      const tag = (e.target?.tagName || "").toUpperCase();
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || e.target?.isContentEditable) {
+        if (e.key === "Escape") e.target?.blur();
+        return;
+      }
+      const sectionOrder = ["goals", "saves", "distribution"];
+      const sec = sectionRefs[activeFocus.section];
+      if (!sec) return;
+
+      // Help overlay
+      if (e.key === "?" || (e.shiftKey && e.key === "/")) {
+        e.preventDefault();
+        setShowShortcuts(s => !s);
+        return;
+      }
+      if (e.key === "Escape") {
+        if (showShortcuts) setShowShortcuts(false);
+        return;
+      }
+
+      // Navigation
+      if (e.key === "ArrowDown" || e.key === "j") {
+        e.preventDefault();
+        setActiveFocus(f => ({ ...f, index: Math.min((sectionRefs[f.section]?.count || 1) - 1, f.index + 1) }));
+        return;
+      }
+      if (e.key === "ArrowUp" || e.key === "k") {
+        e.preventDefault();
+        setActiveFocus(f => ({ ...f, index: Math.max(0, f.index - 1) }));
+        return;
+      }
+      if (e.key === "Tab") {
+        e.preventDefault();
+        const dir = e.shiftKey ? -1 : 1;
+        const idx = sectionOrder.indexOf(activeFocus.section);
+        const next = sectionOrder[(idx + dir + sectionOrder.length) % sectionOrder.length];
+        setActiveFocus({ section: next, index: 0 });
+        return;
+      }
+
+      // Toggle keep on focused event
+      if (activeId && (e.key === "y" || e.key === "Y")) {
+        e.preventDefault();
+        sec.setRows(rows => rows.map(r => r._id === activeId ? { ...r, keep: true } : r));
+        return;
+      }
+      if (activeId && (e.key === "n" || e.key === "N" || e.key === "x" || e.key === "X")) {
+        e.preventDefault();
+        sec.setRows(rows => rows.map(r => r._id === activeId ? { ...r, keep: false } : r));
+        return;
+      }
+      if (activeId && e.key === " ") {
+        e.preventDefault();
+        sec.setRows(rows => rows.map(r => r._id === activeId ? { ...r, keep: !r.keep } : r));
+        return;
+      }
+
+      // Bulk actions on current section
+      if (e.shiftKey && (e.key === "A" || e.key === "a")) {
+        e.preventDefault();
+        sec.setRows(rows => rows.map(r => ({ ...r, keep: true })));
+        return;
+      }
+      if (e.shiftKey && (e.key === "R" || e.key === "r")) {
+        e.preventDefault();
+        sec.setRows(rows => rows.map(r => ({ ...r, keep: false })));
+        return;
+      }
+      if (e.shiftKey && (e.key === "H" || e.key === "h")) {
+        e.preventDefault();
+        sec.setRows(rows => rows.map(r => (r.gemini?.confidence === "high" ? { ...r, keep: true } : r)));
+        return;
+      }
+      if (e.shiftKey && (e.key === "L" || e.key === "l")) {
+        e.preventDefault();
+        sec.setRows(rows => rows.map(r => (r.gemini?.confidence === "low" ? { ...r, keep: false } : r)));
+        return;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [loading, error, publishedMatchId, sectionRefs, activeFocus, activeId, showShortcuts]);
+  // ---- end Phase A2 keyboard navigation ----
+
+
   const publish = async () => {
     setError("");
 
@@ -403,8 +523,61 @@ export default function ReviewPage() {
     <div style={{ minHeight: "100vh", background: t.bg, fontFamily: font, color: t.text }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px", borderBottom: `1px solid ${t.border}`, maxWidth: 1100, margin: "0 auto" }}>
         <Link href="/upload" style={{ textDecoration: "none", color: t.bright, fontWeight: 700, fontSize: 16 }}>← Back to uploads</Link>
-        <div style={{ fontSize: 12, color: t.dim }}>Review &amp; publish</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <button
+            type="button"
+            onClick={() => setShowShortcuts(s => !s)}
+            style={{ background: "transparent", border: `1px solid ${t.border}`, borderRadius: 6, color: t.dim, fontSize: 11, padding: "4px 8px", cursor: "pointer", fontFamily: font }}
+            title="Show keyboard shortcuts (?)"
+          >
+            ⌨ shortcuts (?)
+          </button>
+          <div style={{ fontSize: 12, color: t.dim }}>Review &amp; publish</div>
+        </div>
       </div>
+
+      {/* Shortcuts overlay */}
+      {showShortcuts && (
+        <div onClick={() => setShowShortcuts(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: t.card, border: `1px solid ${t.border}`, borderRadius: 12, padding: 24, maxWidth: 520, fontSize: 13, color: t.text }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: t.bright }}>Keyboard shortcuts</div>
+              <button type="button" onClick={() => setShowShortcuts(false)} style={{ background: "transparent", border: "none", color: t.dim, fontSize: 18, cursor: "pointer" }}>✕</button>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: "8px 14px", fontFamily: "monospace", fontSize: 12 }}>
+              <div style={{ color: t.accent }}>↑ / ↓ / j / k</div><div>Navigate events in current section</div>
+              <div style={{ color: t.accent }}>Tab</div><div>Move to next section (goals → saves → distribution)</div>
+              <div style={{ color: t.accent }}>Shift + Tab</div><div>Move to previous section</div>
+              <div style={{ color: t.accent }}>y</div><div>Keep focused event</div>
+              <div style={{ color: t.accent }}>n / x</div><div>Reject focused event</div>
+              <div style={{ color: t.accent }}>Space</div><div>Toggle keep/reject on focused event</div>
+              <div style={{ color: t.accent }}>Shift + A</div><div>Accept ALL in current section</div>
+              <div style={{ color: t.accent }}>Shift + R</div><div>Reject ALL in current section</div>
+              <div style={{ color: t.accent }}>Shift + H</div><div>Accept all high-confidence in current section</div>
+              <div style={{ color: t.accent }}>Shift + L</div><div>Reject all low-confidence in current section</div>
+              <div style={{ color: t.accent }}>?</div><div>Toggle this help</div>
+              <div style={{ color: t.accent }}>Esc</div><div>Close help / blur a text field</div>
+            </div>
+            <div style={{ fontSize: 11, color: t.dim, marginTop: 14, fontStyle: "italic" }}>
+              Shortcuts are disabled while typing in text fields. Press Esc inside a text field to blur it.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Active-section indicator (sticky) */}
+      {!loading && !error && !publishedMatchId && (
+        <div style={{ position: "sticky", top: 0, zIndex: 50, background: t.bg, borderBottom: `1px solid ${t.border}`, padding: "6px 20px", maxWidth: 1100, margin: "0 auto", display: "flex", alignItems: "center", gap: 12, fontSize: 11, color: t.dim, fontFamily: "monospace" }}>
+          <span>focus:</span>
+          <span style={{ color: activeFocus.section === 'goals' ? t.accent : t.dim, fontWeight: activeFocus.section === 'goals' ? 700 : 400 }}>goals</span>
+          <span>·</span>
+          <span style={{ color: activeFocus.section === 'saves' ? t.accent : t.dim, fontWeight: activeFocus.section === 'saves' ? 700 : 400 }}>saves</span>
+          <span>·</span>
+          <span style={{ color: activeFocus.section === 'distribution' ? t.accent : t.dim, fontWeight: activeFocus.section === 'distribution' ? 700 : 400 }}>distribution</span>
+          <span style={{ marginLeft: 12 }}>· event {sectionRefs[activeFocus.section]?.count > 0 ? `${activeFocus.index + 1}/${sectionRefs[activeFocus.section].count}` : '—'}</span>
+          <span style={{ marginLeft: "auto", color: t.dim }}>↑↓ navigate · y/n keep/reject · Tab switch section · ? for full shortcuts</span>
+        </div>
+      )}
 
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "20px 16px" }}>
         {/* PUBLISHED BANNER (if applicable) */}
@@ -458,7 +631,19 @@ export default function ReviewPage() {
           </div>
         )}
         {candidates.map((c) => (
-          <div key={c._id} style={{ background: t.card, border: `1px solid ${c.keep ? t.border : t.border + "44"}`, opacity: c.keep ? 1 : 0.55, borderRadius: 12, padding: 14, marginBottom: 12 }}>
+          <div
+            key={c._id}
+            data-row-id={c._id}
+            style={{
+              background: t.card,
+              border: `${activeId === c._id ? '2px' : '1px'} solid ${activeId === c._id ? t.accent : (c.keep ? t.border : t.border + '44')}`,
+              opacity: c.keep ? 1 : 0.55,
+              borderRadius: 12,
+              padding: 14,
+              marginBottom: 12,
+              boxShadow: activeId === c._id ? `0 0 0 3px ${t.accent}22` : 'none',
+            }}
+          >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, color: t.bright, fontWeight: 600 }}>
@@ -563,10 +748,10 @@ export default function ReviewPage() {
         </div>
 
         {/* SAVES TABLE — Phase 2.1 */}
-        <SavesTable rows={saveRows} onChange={setSaveRows} t={t} font={font} />
+        <SavesTable rows={saveRows} onChange={setSaveRows} t={t} font={font} activeId={activeFocus.section === 'saves' ? activeId : null} />
 
         {/* DISTRIBUTION TABLE — Phase 2.2 */}
-        <DistributionTable rows={distRows} onChange={setDistRows} t={t} font={font} />
+        <DistributionTable rows={distRows} onChange={setDistRows} t={t} font={font} activeId={activeFocus.section === 'distribution' ? activeId : null} />
 
         {/* PUBLISH */}
         {error && <div style={{ color: t.red, fontSize: 12, marginBottom: 12 }}>{error}</div>}
@@ -612,7 +797,7 @@ function ConcessionField({ label, value, options, optionLabels, onChange }) {
   );
 }
 
-function SavesTable({ rows, onChange, t, font }) {
+function SavesTable({ rows, onChange, t, font, activeId }) {
   const [expanded, setExpanded] = useState({});
   const toggleExpanded = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
   const update = (id, patch) => onChange(rows.map(r => r._id === id ? { ...r, ...patch } : r));
@@ -738,7 +923,7 @@ function SavesTable({ rows, onChange, t, font }) {
                 : t.yellow;
               return (
                 <Fragment key={r._id}>
-                  <tr style={{ opacity: dim ? 0.45 : 1, background: r.coach_added ? t.accent + "08" : "transparent" }}>
+                  <tr style={{ opacity: dim ? 0.45 : 1, background: activeId === r._id ? t.accent + "22" : (r.coach_added ? t.accent + "08" : "transparent"), boxShadow: activeId === r._id ? `inset 3px 0 0 ${t.accent}` : "none" }}>
                     <td style={{ ...cellStyle, textAlign: "center" }}>
                       <button type="button" onClick={() => toggleExpanded(r._id)} style={{ background: "none", border: "none", color: r.notes ? t.accent : t.dim, cursor: "pointer", fontSize: 12 }} title={isExpanded ? "Collapse notes" : "Add coach notes"}>
                         {isExpanded ? "▼" : (r.notes ? "✎" : "✎")}
@@ -886,7 +1071,7 @@ function SavesTable({ rows, onChange, t, font }) {
 // Phase 2.2 — distribution candidates review. Mirrors the SavesTable pattern:
 // Gemini-tagged rows are accepted by default, coach can reject false positives,
 // add missed events, and edit fields inline. Only kept rows persist.
-function DistributionTable({ rows, onChange, t, font }) {
+function DistributionTable({ rows, onChange, t, font, activeId }) {
   const [expanded, setExpanded] = useState({});
   const toggleExpanded = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
   const update = (id, patch) => onChange(rows.map(r => r._id === id ? { ...r, ...patch } : r));
@@ -1009,7 +1194,7 @@ function DistributionTable({ rows, onChange, t, font }) {
                 : t.yellow;
               return (
                 <Fragment key={r._id}>
-                  <tr style={{ opacity: dim ? 0.45 : 1, background: r.coach_added ? t.accent + "08" : "transparent" }}>
+                  <tr style={{ opacity: dim ? 0.45 : 1, background: activeId === r._id ? t.accent + "22" : (r.coach_added ? t.accent + "08" : "transparent"), boxShadow: activeId === r._id ? `inset 3px 0 0 ${t.accent}` : "none" }}>
                     <td style={{ ...cellStyle, textAlign: "center" }}>
                       <button type="button" onClick={() => toggleExpanded(r._id)} style={{ background: "none", border: "none", color: r.notes ? t.accent : t.dim, cursor: "pointer", fontSize: 12 }} title={isExpanded ? "Collapse details" : "Edit details"}>
                         {isExpanded ? "▼" : "✎"}
