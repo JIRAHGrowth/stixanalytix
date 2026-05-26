@@ -83,6 +83,8 @@ GOALS_RESPONSE_SCHEMA = {
                     "evidence_kickoff_after": {"type": "STRING"},
                     "evidence_celebration": {"type": "STRING"},
                     "evidence_scoreboard": {"type": "STRING"},
+                    # Phase 2.6 — direct shooter-kit observation (mirrors worker/app.py).
+                    "evidence_shooter_color": {"type": "STRING"},
                     "confidence": {"type": "STRING"},
                 },
                 "required": [
@@ -92,6 +94,7 @@ GOALS_RESPONSE_SCHEMA = {
                     "goal_placement_height", "goal_placement_side",
                     "gk_observations",
                     "evidence_kickoff_after", "evidence_celebration", "evidence_scoreboard",
+                    "evidence_shooter_color",
                     "confidence",
                 ],
             },
@@ -120,6 +123,8 @@ SAVES_RESPONSE_SCHEMA = {
                     "goal_placement_height": {"type": "STRING"},
                     "goal_placement_side": {"type": "STRING"},
                     "shot_description": {"type": "STRING"},
+                    # Phase 2.6 — antecedent-attack requirement (mirrors worker/app.py).
+                    "preceding_attack": {"type": "STRING"},
                     "gk_observations": {"type": "STRING"},
                     "confidence": {"type": "STRING"},
                 },
@@ -127,7 +132,7 @@ SAVES_RESPONSE_SCHEMA = {
                     "timestamp_seconds", "match_clock", "shot_origin", "shot_type",
                     "on_target", "gk_action", "gk_visible", "outcome",
                     "body_distance_zone", "goal_placement_height", "goal_placement_side",
-                    "shot_description", "gk_observations", "confidence",
+                    "shot_description", "preceding_attack", "gk_observations", "confidence",
                 ],
             },
         }
@@ -293,13 +298,69 @@ def _reconcile_events(goals: list, saves: list, distribution: list) -> tuple:
     distribution = deduped
     e_dropped = n0_dist_e - len(distribution)
 
+    # F: saves antecedent-attack filter — Phase 2.6 (mirrors worker/app.py)
+    SHOT_LANGUAGE = (
+        "shot", "strike", "struck", "drive", "driven", "header", "headed",
+        "volley", "curled", "chipped", "tap-in", "blast", "rocket", "lob",
+        "finish", "effort", "attempt", "deflection",
+    )
+    GENERIC_ATTACK_PHRASES = (
+        "", "opposition attacked", "opposition attack", "they attacked",
+        "the opposition", "attack on goal", "not_visible", "unclear",
+        "no attack visible", "attack not visible",
+    )
+    def _has_real_attack_description(s):
+        a = str(s.get("preceding_attack") or "").strip().lower()
+        if not a or a in GENERIC_ATTACK_PHRASES or len(a) < 30:
+            return False
+        return True
+    def _has_shot_language(s):
+        desc = str(s.get("shot_description") or "").lower()
+        return any(w in desc for w in SHOT_LANGUAGE)
+    def _is_invented_save(s):
+        if str(s.get("gk_visible") or "").strip().lower() == "no" \
+           and str(s.get("outcome") or "").strip().lower() == "held" \
+           and not _has_shot_language(s):
+            return True
+        if not _has_real_attack_description(s):
+            return True
+        return False
+    n0_saves_f = len(saves or [])
+    saves = [s for s in (saves or []) if not _is_invented_save(s)]
+    f_dropped = n0_saves_f - len(saves)
+
+    # G: distribution opposition-GK filter — Phase 2.6 (mirrors worker/app.py)
+    GOAL_KICK_TYPES = {"pass", "gk_long", "gk_short"}
+    def _is_opposition_gk_action(d):
+        return (
+            str(d.get("receiver") or "").lower() == "opponent"
+            and str(d.get("successful") or "").lower() == "false"
+            and str(d.get("direction") or "").lower() == "backwards"
+        )
+    def _is_trigger_type_mismatch(d):
+        trig = str(d.get("trigger") or "").lower()
+        typ = str(d.get("type") or "").lower()
+        if trig == "goal_kick" and typ and typ not in GOAL_KICK_TYPES:
+            return True
+        if trig == "throw_in_to_gk" and typ == "throw":
+            return True
+        return False
+    n0_dist_g = len(distribution or [])
+    distribution = [
+        d for d in (distribution or [])
+        if not (_is_opposition_gk_action(d) or _is_trigger_type_mismatch(d))
+    ]
+    g_dropped = n0_dist_g - len(distribution)
+
     print(
         f"[reconcile] A:{a_dropped} dist (low conf) "
         f"| C:{c_dropped} goals (sb unchanged) "
         f"| D:{d_dropped} goals (evidence<2) "
         f"| B1:{b1_dropped} saves (Goal-action near goal) "
         f"| B2:{b2_dropped} dist (near save/goal) "
-        f"| E:{e_dropped} dist (dupe trigger+dir within 30s)",
+        f"| E:{e_dropped} dist (dupe trigger+dir within 30s) "
+        f"| F:{f_dropped} saves (no antecedent attack or invented) "
+        f"| G:{g_dropped} dist (opposition GK or trigger/type mismatch)",
         flush=True,
     )
     return goals, saves, distribution

@@ -62,6 +62,10 @@ GOALS_RESPONSE_SCHEMA = {
                     "evidence_kickoff_after": {"type": "STRING"},     # "kickoff at MM:SS" or "not_observed"
                     "evidence_celebration": {"type": "STRING"},       # description of celebration or "not_observed"
                     "evidence_scoreboard": {"type": "STRING"},        # "X-Y -> X-Y+1" or "scoreboard_not_visible" or "scoreboard_unchanged"
+                    # Phase 2.6 — direct observation of the shooter's kit colour at the moment
+                    # of contact. Breaks the "infer scoring_team from celebration/kickoff"
+                    # failure mode that produced 6/14 wrong-team flips on judah-2026-05-23-pfc.
+                    "evidence_shooter_color": {"type": "STRING"},     # plain description of observed shooter kit, or "shooter_not_visible"
                     "confidence": {"type": "STRING"},
                 },
                 "required": [
@@ -71,6 +75,7 @@ GOALS_RESPONSE_SCHEMA = {
                     "goal_placement_height", "goal_placement_side",
                     "gk_observations",
                     "evidence_kickoff_after", "evidence_celebration", "evidence_scoreboard",
+                    "evidence_shooter_color",
                     "confidence",
                 ],
             },
@@ -102,6 +107,11 @@ SAVES_RESPONSE_SCHEMA = {
                     "goal_placement_height": {"type": "STRING"},  # top / mid / low / unclear (where the shot WOULD have gone if not saved)
                     "goal_placement_side": {"type": "STRING"},    # left_third / centre / right_third / unclear (GK perspective)
                     "shot_description": {"type": "STRING"},
+                    # Phase 2.6 — antecedent-attack requirement. Drives Rule F:
+                    # without a describable opposition attack, the event is a GK
+                    # touch, not a save. Targets the 92.7% FP rate seen on the
+                    # judah-2026-05-23-pfc dominant-win match.
+                    "preceding_attack": {"type": "STRING"},
                     "gk_observations": {"type": "STRING"},
                     "confidence": {"type": "STRING"},       # high / medium / low
                 },
@@ -109,7 +119,7 @@ SAVES_RESPONSE_SCHEMA = {
                     "timestamp_seconds", "match_clock", "shot_origin", "shot_type",
                     "on_target", "gk_action", "gk_visible", "outcome",
                     "body_distance_zone", "goal_placement_height", "goal_placement_side",
-                    "shot_description", "gk_observations", "confidence",
+                    "shot_description", "preceding_attack", "gk_observations", "confidence",
                 ],
             },
         }
@@ -336,13 +346,86 @@ def _reconcile_events(goals: list, saves: list, distribution: list) -> tuple:
     distribution = deduped
     e_dropped = n0_dist_e - len(distribution)
 
+    # === F: saves antecedent-attack filter (Phase 2.6) ===
+    # Drop saves where the model failed to describe an opposition attack sequence
+    # OR where gk_visible="no" AND outcome="held" AND shot_description has no
+    # shot-language. These are the dominant FP class on lopsided matches
+    # (judah-2026-05-23-pfc: 51 of 55 saves were inventions of this kind).
+    SHOT_LANGUAGE = (
+        "shot", "strike", "struck", "drive", "driven", "header", "headed",
+        "volley", "curled", "chipped", "tap-in", "blast", "rocket", "lob",
+        "finish", "effort", "attempt", "deflection",
+    )
+    GENERIC_ATTACK_PHRASES = (
+        "", "opposition attacked", "opposition attack", "they attacked",
+        "the opposition", "attack on goal", "not_visible", "unclear",
+        "no attack visible", "attack not visible",
+    )
+    def _has_real_attack_description(s):
+        a = str(s.get("preceding_attack") or "").strip().lower()
+        if not a:
+            return False
+        if a in GENERIC_ATTACK_PHRASES:
+            return False
+        # Must be longer than a generic stub and reference at least one concrete
+        # observable: a position, a number, a body part, or a possession verb.
+        if len(a) < 30:
+            return False
+        return True
+    def _has_shot_language(s):
+        desc = str(s.get("shot_description") or "").lower()
+        return any(w in desc for w in SHOT_LANGUAGE)
+    def _is_invented_save(s):
+        # Hardest filter: gk_visible=no AND outcome=held AND no shot language → invention
+        if str(s.get("gk_visible") or "").strip().lower() == "no" \
+           and str(s.get("outcome") or "").strip().lower() == "held" \
+           and not _has_shot_language(s):
+            return True
+        # Softer filter: no antecedent attack description
+        if not _has_real_attack_description(s):
+            return True
+        return False
+
+    n0_saves_f = len(saves or [])
+    saves = [s for s in (saves or []) if not _is_invented_save(s)]
+    f_dropped = n0_saves_f - len(saves)
+
+    # === G: distribution opposition-GK filter (Phase 2.6) ===
+    # The clearest signature of an opposition-GK action mistakenly logged as ours:
+    # receiver=opponent AND successful=false AND direction=backwards.
+    # Also drop trigger/type contradictions (goal_kick must be pass/gk_long/gk_short).
+    GOAL_KICK_TYPES = {"pass", "gk_long", "gk_short"}
+    def _is_opposition_gk_action(d):
+        recv = str(d.get("receiver") or "").lower()
+        succ = str(d.get("successful") or "").lower()
+        dirn = str(d.get("direction") or "").lower()
+        return recv == "opponent" and succ == "false" and dirn == "backwards"
+    def _is_trigger_type_mismatch(d):
+        trig = str(d.get("trigger") or "").lower()
+        typ = str(d.get("type") or "").lower()
+        if trig == "goal_kick" and typ and typ not in GOAL_KICK_TYPES:
+            return True
+        if trig == "throw_in_to_gk" and typ == "throw":
+            # GK can't throw a throw-in to themselves — this is a self-tag glitch
+            return True
+        return False
+
+    n0_dist_g = len(distribution or [])
+    distribution = [
+        d for d in (distribution or [])
+        if not (_is_opposition_gk_action(d) or _is_trigger_type_mismatch(d))
+    ]
+    g_dropped = n0_dist_g - len(distribution)
+
     print(
         f"[reconcile] A:{a_dropped} dist (low/med conf) "
         f"| C:{c_dropped} goals (scoreboard unchanged) "
         f"| D:{d_dropped} goals (evidence count <2) "
         f"| B1:{b1_dropped} saves (Goal-action near a goal) "
         f"| B2:{b2_dropped} dist (near a save or goal) "
-        f"| E:{e_dropped} dist (dupe trigger+direction within 30s)",
+        f"| E:{e_dropped} dist (dupe trigger+direction within 30s) "
+        f"| F:{f_dropped} saves (no antecedent attack or invented) "
+        f"| G:{g_dropped} dist (opposition GK or trigger/type mismatch)",
         flush=True,
     )
     return goals, saves, distribution

@@ -11,7 +11,16 @@ You are tracking what the {{my_keeper_color}} goalkeeper does with the ball when
 
 # How to work — step by step
 
-1. **Anchor on possession.** Distribution events happen ONLY when the {{my_keeper_color}} GK has the ball in their hands or at their feet, and is choosing to release it back into play. If the ball is in flight from the opposition or at the feet of an outfield player, it is not yet a distribution event.
+1. **Anchor on possession AND release motion.** Distribution events happen ONLY when:
+   - The {{my_keeper_color}} GK has the ball in their hands or at their feet, AND
+   - The GK then releases it via a clear kicking, throwing, or rolling action, AND
+   - **The ball travels at least 5 yards from the GK in a single clean release.**
+   
+   A 1-yard shuffle, a touch to set the ball before a real release, or a stationary hold is NOT a distribution event. **Multiple GK touches in the same possession are ONE distribution event** — at the timestamp of the RELEASE, not the receive. Do not log the receive, the set-up touch, AND the release as three separate events; log only the release.
+
+   If the ball is in flight from the opposition or at the feet of an outfield player, it is not yet a distribution event.
+
+   **Opposition GK filter.** If you see a goalkeeper distributing the ball but they are wearing colours that do NOT match {{my_keeper_color}}, that is the OPPOSITION GK — do not log it. Color-check every GK release.
 
 2. **Walk the full duration of the video** — first half, then explicitly continue into the second half. Distribution events are the most evenly distributed event type across a match (less front-loaded than saves can appear). If your output has all events in the first 15 minutes, you have not finished.
 
@@ -70,12 +79,33 @@ Two keepers with identical completion rates can have very different value to a t
 - **clearance_under_pressure** — forced to hoof the ball away under high press. Often goes out of play or to opposition. Not strictly a "selection" but worth tagging.
 - **drilled_into_channel** — flat, fast pass into a specific channel for a forward to chase. Modern progressive play.
 
+# Worked anti-examples — what NOT to log
+
+## Anti-example A — receive + touch + release is ONE event
+
+> 30:11 — A defender plays a backpass to the {{my_keeper_color}} GK. The GK collects with the right foot at 30:12, takes one settling touch to the left at 30:13, then passes 18 yards to the left back at 30:14.
+
+**Log ONE event at 30:14** with `trigger: backpass`, `type: pass`, `direction: left`. Do NOT log the receive at 30:11 OR the settling touch at 30:13. The distribution event is the release only.
+
+## Anti-example B — short shuffle is NOT a release
+
+> 45:02 — The {{my_keeper_color}} GK collects a loose ball at the edge of the six-yard box, walks the ball back to the goal line, places it for a goal kick. The placement at 45:08 is preparation, not a distribution.
+
+**Log ONE event at 45:14** when the GK actually strikes the goal kick. The walk-back and placement are not separate events.
+
+## Anti-example C — opposition GK is not yours
+
+> 12:33 — A goalkeeper takes a goal kick. The goalkeeper is wearing red. {{my_keeper_color}} is orange.
+
+**Log NOTHING.** That is the opposition GK. Re-verify the GK kit colour on every event before logging.
+
 # HARD RULES
 
 - DO NOT name any player.
 - DO NOT name the teams. Use the colour labels from MATCH CONTEXT exactly.
-- DO NOT count opposition team goal kicks or distributions — only the {{my_keeper_color}} GK.
+- DO NOT count opposition team goal kicks or distributions — only the {{my_keeper_color}} GK. Verify kit colour at the moment of release.
 - DO NOT count the moment the GK CATCHES the ball. The distribution event is the RELEASE — when the ball leaves the GK's possession back into play.
+- DO NOT log settling touches or position adjustments as separate events. Multiple touches in one possession = ONE event at the release timestamp.
 - For matches with high possession dominance one way, distribution counts will be skewed. Tag what you see; the totals will reflect the match shape.
 
 # Per-event fields
