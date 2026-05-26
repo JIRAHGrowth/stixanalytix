@@ -264,13 +264,16 @@ def main():
 
     # Resolve truth files
     if args.truth:
-        truth_paths = [Path(t) for t in args.truth]
+        truth_paths = [Path(t).resolve() for t in args.truth]
     else:
         truth_paths = sorted(Path(p) for p in glob.glob(str(ROOT / "scripts" / "ground-truth" / "*.json")))
     truth_paths = [p for p in truth_paths if p.is_file()]
     print(f"Truth files: {len(truth_paths)}")
     for p in truth_paths:
-        print(f"  - {p.relative_to(ROOT)}")
+        try:
+            print(f"  - {p.relative_to(ROOT)}")
+        except ValueError:
+            print(f"  - {p}")
 
     # Load prompt templates
     prompt_texts = {}

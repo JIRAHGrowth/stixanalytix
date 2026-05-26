@@ -38,6 +38,11 @@ scripts/results/
 # not source.
 scripts/ground-truth/*.json
 
+# ground-truth-corrections: auto-generated from coach_corrections + published
+# tables by scripts/build-truth-from-corrections.py. The Supabase tables ARE
+# the source of truth; checked-in JSON would drift instantly.
+scripts/ground-truth-corrections/*.json
+
 # eval reports — produced by scripts/eval-match.js with --save-report
 scripts/eval-reports/
 
