@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs on the same branch when a new push arrives.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regression:
+    name: Prompt + schema + reconciliation regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      # The regression suite imports from worker/app.py which transitively
+      # imports modal + supabase + google-generativeai. We don't need to
+      # actually call those — only the module-level constants — so we install
+      # the absolute minimum. python-dotenv is needed by build-truth-from-corrections.
+      - name: Install minimal deps
+        run: |
+          pip install --quiet modal supabase google-generativeai requests python-dotenv
+
+      - name: Run regression suite
+        env:
+          PYTHONUTF8: "1"
+        run: python -m unittest tests.test_regression -v
+
+      # Sanity-check: the SFT corpus orchestrator parses + validates without
+      # needing GCS or Supabase credentials (validate-mode short-circuits the
+      # remote calls when env is missing). This protects against syntax-only
+      # regressions on the orchestrator.
+      - name: Lint-check SFT orchestrator
+        run: python -c "import ast; ast.parse(open('scripts/build-sft-corpus.py').read()); print('OK')"
+
+  prompts-changelog:
+    name: prompts/README.md changelog updated
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # If any prompts/*.md (other than README) changed in this PR, the
+      # changelog must have changed too. This enforces the rule in CLAUDE.md:
+      # "When editing a prompt, log the edit in prompts/README.md changelog."
+      - name: Verify prompts/README.md updated when a prompt changed
+        run: |
+          set -euo pipefail
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          changed=$(git diff --name-only "$base" "$head" -- 'prompts/*.md' | grep -v 'prompts/README.md' || true)
+          if [ -z "$changed" ]; then
+            echo "No prompt files changed; skipping changelog check."
+            exit 0
+          fi
+          echo "Changed prompt files:"; echo "$changed"
+          if git diff --name-only "$base" "$head" -- prompts/README.md | grep -q .; then
+            echo "prompts/README.md updated — OK"
+          else
+            echo "ERROR: prompt files changed but prompts/README.md changelog was not updated."
+            echo "See CLAUDE.md: 'When editing a prompt, log the edit in prompts/README.md changelog.'"
+            exit 1
+          fi
