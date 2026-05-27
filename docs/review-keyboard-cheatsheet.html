@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>StixAnalytix — Review Keyboard Cheat Sheet</title>
+<style>
+  @page {
+    size: letter;
+    margin: 0.5in;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #1a1a1a;
+    background: #fafafa;
+  }
+  body {
+    max-width: 720px;
+    margin: 24px auto;
+    padding: 0 20px;
+  }
+  .sheet {
+    background: white;
+    border: 1px solid #ddd;
+    padding: 32px 36px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+  h1 {
+    font-size: 18px;
+    margin: 0 0 4px 0;
+    letter-spacing: 0.5px;
+    color: #111;
+    text-transform: uppercase;
+  }
+  .subtitle {
+    font-size: 12px;
+    color: #666;
+    margin: 0 0 24px 0;
+  }
+  h2 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #888;
+    border-bottom: 1px solid #e0e0e0;
+    padding-bottom: 4px;
+    margin: 22px 0 10px 0;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+  td {
+    padding: 6px 0;
+    vertical-align: middle;
+  }
+  td.key {
+    white-space: nowrap;
+    padding-right: 18px;
+    width: 110px;
+  }
+  td.desc {
+    font-size: 13px;
+    color: #333;
+  }
+  kbd {
+    display: inline-block;
+    padding: 3px 8px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 12px;
+    font-weight: 700;
+    background: #f4f4f4;
+    border: 1px solid #c8c8c8;
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    color: #111;
+    min-width: 18px;
+    text-align: center;
+  }
+  kbd + kbd {
+    margin-left: 4px;
+  }
+  .star {
+    background: #fff8e0;
+    border-color: #e0c060;
+  }
+  .star-row td.desc {
+    font-weight: 600;
+  }
+  .tips {
+    background: #f7f9fa;
+    border-left: 3px solid #3070d0;
+    padding: 12px 16px;
+    margin-top: 20px;
+    font-size: 12px;
+    color: #444;
+  }
+  .tips strong {
+    color: #111;
+  }
+  .footer {
+    margin-top: 22px;
+    padding-top: 12px;
+    border-top: 1px solid #eee;
+    font-size: 10px;
+    color: #999;
+    text-align: center;
+  }
+  /* Print-specific: hide page chrome, ink-friendly */
+  @media print {
+    html, body {
+      background: white;
+      margin: 0;
+    }
+    body {
+      max-width: none;
+      padding: 0;
+    }
+    .sheet {
+      border: none;
+      box-shadow: none;
+      padding: 0;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+<h1>StixAnalytix — Review Keyboard Shortcuts</h1>
+<p class="subtitle">Tape this beside your keyboard. The four starred keys do 95% of the work.</p>
+
+<h2>The 4 keys you'll actually use</h2>
+<table>
+  <tr class="star-row">
+    <td class="key"><kbd class="star">&gt;</kbd></td>
+    <td class="desc">★ Jump to next event <em>in time</em>, across all sections. The video-following key.</td>
+  </tr>
+  <tr class="star-row">
+    <td class="key"><kbd class="star">y</kbd></td>
+    <td class="desc">★ Keep the focused event (it was real)</td>
+  </tr>
+  <tr class="star-row">
+    <td class="key"><kbd class="star">n</kbd></td>
+    <td class="desc">★ Reject the focused event (false positive)</td>
+  </tr>
+  <tr class="star-row">
+    <td class="key"><kbd class="star">?</kbd></td>
+    <td class="desc">★ Pop up the full shortcuts overlay</td>
+  </tr>
+</table>
+
+<h2>Navigation</h2>
+<table>
+  <tr>
+    <td class="key"><kbd>&gt;</kbd></td>
+    <td class="desc">Next event in time (across all sections)</td>
+  </tr>
+  <tr>
+    <td class="key"><kbd>&lt;</kbd></td>
+    <td class="desc">Previous event in time</td>
+  </tr>
+  <tr>
+    <td class="key"><kbd>↓</kbd> or <kbd>j</kbd></td>
+    <td class="desc">Next event in current section</td>
+  </tr>
+  <tr>
+    <td class="key"><kbd>↑</kbd> or <kbd>k</kbd></td>
+    <td class="desc">Previous event in current section</td>
+  </tr>
+  <tr>
+    <td class="key"><kbd>Tab</kbd></td>
+    <td class="desc">Switch to next section (goals → saves → distribution)</td>
+  </tr>
+  <tr>
+    <td class="key"><kbd>⇧</kbd>+<kbd>Tab</kbd></td>
+    <td class="desc">Switch to previous section</td>
+  </tr>
+</table>
+
+<h2>Mark the focused event</h2>
+<table>
+  <tr>
+    <td class="key"><kbd>y</kbd></td>
+    <td class="desc">Keep (the event was real)</td>
+  </tr>
+  <tr>
+    <td class="key"><kbd>n</kbd> or <kbd>x</kbd></td>
+    <td class="desc">Reject (false positive — Gemini was wrong)</td>
+  </tr>
+  <tr>
+    <td class="key"><kbd>Space</kbd></td>
+    <td class="desc">Toggle keep / reject</td>
+  </tr>
+</table>
+
+<h2>Bulk actions (apply to the entire current section)</h2>
+<table>
+  <tr>
+    <td class="key"><kbd>⇧</kbd>+<kbd>A</kbd></td>
+    <td class="desc">Accept <strong>all</strong> events in this section</td>
+  </tr>
+  <tr>
+    <td class="key"><kbd>⇧</kbd>+<kbd>R</kbd></td>
+    <td class="desc">Reject <strong>all</strong> events in this section</td>
+  </tr>
+  <tr>
+    <td class="key"><kbd>⇧</kbd>+<kbd>H</kbd></td>
+    <td class="desc">Accept all <strong>high-confidence</strong> events</td>
+  </tr>
+  <tr>
+    <td class="key"><kbd>⇧</kbd>+<kbd>L</kbd></td>
+    <td class="desc">Reject all <strong>low-confidence</strong> events</td>
+  </tr>
+</table>
+
+<h2>Misc</h2>
+<table>
+  <tr>
+    <td class="key"><kbd>?</kbd></td>
+    <td class="desc">Show / hide shortcuts overlay</td>
+  </tr>
+  <tr>
+    <td class="key"><kbd>Esc</kbd></td>
+    <td class="desc">Close overlay, or step out of a text field to re-enable shortcuts</td>
+  </tr>
+</table>
+
+<div class="tips">
+<strong>How to practice (5 minutes):</strong><br>
+1. Open any published match's review page.<br>
+2. Find the focus glow (the highlighted event). Press <kbd>&gt;</kbd> a few times — watch it jump across sections in time order.<br>
+3. Press <kbd>y</kbd> on one, <kbd>n</kbd> on another. Watch the checkboxes tick on / off.<br>
+4. Press <kbd>?</kbd> to see the full overlay any time you forget a key.<br>
+5. When typing in a notes field, shortcuts pause automatically. Press <kbd>Esc</kbd> to step out and re-enable them.<br><br>
+<strong>The goal:</strong> review one match using only the keyboard. The four starred keys above are 95% of what you'll actually press.
+</div>
+
+<div class="footer">
+StixAnalytix Review Cheat Sheet · v1 · 2026-05-27
+</div>
+
+</div>
+</body>
+</html>
