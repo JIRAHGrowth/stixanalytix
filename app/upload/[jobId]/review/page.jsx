@@ -259,6 +259,52 @@ export default function ReviewPage() {
     return row?._id;
   }, [sectionRefs, activeFocus]);
 
+  // Resolve the timestamp for any row regardless of section. Goal candidates
+  // read from `gemini.timestamp_seconds` (Gemini-detected) or null (coach-added
+  // extras live in extraGoals, not candidates). Saves/distribution rows have
+  // `timestamp_seconds` directly, OR a coach-typed `timestamp_str` we parse.
+  const getRowTimestamp = (section, row) => {
+    if (!row) return null;
+    if (section === "goals") {
+      return row.gemini?.timestamp_seconds ?? null;
+    }
+    if (row.coach_added && row.timestamp_str) return tsStrToSeconds(row.timestamp_str);
+    return row.timestamp_seconds ?? null;
+  };
+
+  // Build a single chronologically-sorted view across all 3 sections. Phase A2.1
+  // (2026-05-27) — `>` and `<` use this to jump to the next/prev event in TIME,
+  // not by section. Matches the way coaches actually watch the video: forward
+  // through time, processing whatever event happened next.
+  const chronological = useMemo(() => {
+    const flat = [];
+    for (const section of ["goals", "saves", "distribution"]) {
+      const rows = sectionRefs[section]?.rows || [];
+      rows.forEach((row, index) => {
+        const ts = getRowTimestamp(section, row);
+        if (typeof ts === "number" && !Number.isNaN(ts)) {
+          flat.push({ section, index, ts, id: row._id });
+        }
+      });
+    }
+    flat.sort((a, b) => a.ts - b.ts);
+    return flat;
+  }, [sectionRefs]);
+
+  const findChronological = (direction) => {
+    if (!chronological.length) return null;
+    const pos = chronological.findIndex(
+      x => x.section === activeFocus.section && x.index === activeFocus.index
+    );
+    if (pos === -1) {
+      // Current focus has no timestamp; jump to the first/last in time.
+      return direction > 0 ? chronological[0] : chronological[chronological.length - 1];
+    }
+    const target = pos + direction;
+    if (target < 0 || target >= chronological.length) return null; // at boundary, stay put
+    return chronological[target];
+  };
+
   useEffect(() => {
     if (loading || error || publishedMatchId) return;
     const onKey = (e) => {
@@ -303,6 +349,21 @@ export default function ReviewPage() {
         return;
       }
 
+      // Phase A2.1: chronological navigation across all 3 sections.
+      // > = next event in time, < = previous. Matches video-review flow.
+      if (e.key === ">") {
+        e.preventDefault();
+        const next = findChronological(1);
+        if (next) setActiveFocus({ section: next.section, index: next.index });
+        return;
+      }
+      if (e.key === "<") {
+        e.preventDefault();
+        const prev = findChronological(-1);
+        if (prev) setActiveFocus({ section: prev.section, index: prev.index });
+        return;
+      }
+
       // Toggle keep on focused event
       if (activeId && (e.key === "y" || e.key === "Y")) {
         e.preventDefault();
@@ -344,7 +405,19 @@ export default function ReviewPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [loading, error, publishedMatchId, sectionRefs, activeFocus, activeId, showShortcuts]);
+  }, [loading, error, publishedMatchId, sectionRefs, activeFocus, activeId, showShortcuts, chronological]);
+
+  // Scroll-into-view: whenever the active event changes (via any key — arrows,
+  // Tab, > / <), bring the focused row into the viewport so the coach can
+  // actually see it. Important when navigating across sections (the target
+  // section may be far down the page).
+  useEffect(() => {
+    if (!activeId) return;
+    const el = document.querySelector(`[data-row-id="${activeId}"]`);
+    if (el && typeof el.scrollIntoView === "function") {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [activeId]);
   // ---- end Phase A2 keyboard navigation ----
 
 
@@ -546,6 +619,8 @@ export default function ReviewPage() {
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: "8px 14px", fontFamily: "monospace", fontSize: 12 }}>
               <div style={{ color: t.accent }}>↑ / ↓ / j / k</div><div>Navigate events in current section</div>
+              <div style={{ color: t.accent, fontWeight: 700 }}>&gt;</div><div><strong>Jump to NEXT event in time</strong> (across all sections — matches video flow)</div>
+              <div style={{ color: t.accent, fontWeight: 700 }}>&lt;</div><div><strong>Jump to PREVIOUS event in time</strong> (across all sections)</div>
               <div style={{ color: t.accent }}>Tab</div><div>Move to next section (goals → saves → distribution)</div>
               <div style={{ color: t.accent }}>Shift + Tab</div><div>Move to previous section</div>
               <div style={{ color: t.accent }}>y</div><div>Keep focused event</div>
@@ -575,7 +650,7 @@ export default function ReviewPage() {
           <span>·</span>
           <span style={{ color: activeFocus.section === 'distribution' ? t.accent : t.dim, fontWeight: activeFocus.section === 'distribution' ? 700 : 400 }}>distribution</span>
           <span style={{ marginLeft: 12 }}>· event {sectionRefs[activeFocus.section]?.count > 0 ? `${activeFocus.index + 1}/${sectionRefs[activeFocus.section].count}` : '—'}</span>
-          <span style={{ marginLeft: "auto", color: t.dim }}>↑↓ navigate · y/n keep/reject · Tab switch section · ? for full shortcuts</span>
+          <span style={{ marginLeft: "auto", color: t.dim }}>↑↓ within · &gt; next-in-time · y/n keep/reject · Tab switch · ? full shortcuts</span>
         </div>
       )}
 
@@ -923,7 +998,7 @@ function SavesTable({ rows, onChange, t, font, activeId }) {
                 : t.yellow;
               return (
                 <Fragment key={r._id}>
-                  <tr style={{ opacity: dim ? 0.45 : 1, background: activeId === r._id ? t.accent + "22" : (r.coach_added ? t.accent + "08" : "transparent"), boxShadow: activeId === r._id ? `inset 3px 0 0 ${t.accent}` : "none" }}>
+                  <tr data-row-id={r._id} style={{ opacity: dim ? 0.45 : 1, background: activeId === r._id ? t.accent + "22" : (r.coach_added ? t.accent + "08" : "transparent"), boxShadow: activeId === r._id ? `inset 3px 0 0 ${t.accent}` : "none" }}>
                     <td style={{ ...cellStyle, textAlign: "center" }}>
                       <button type="button" onClick={() => toggleExpanded(r._id)} style={{ background: "none", border: "none", color: r.notes ? t.accent : t.dim, cursor: "pointer", fontSize: 12 }} title={isExpanded ? "Collapse notes" : "Add coach notes"}>
                         {isExpanded ? "▼" : (r.notes ? "✎" : "✎")}
@@ -1194,7 +1269,7 @@ function DistributionTable({ rows, onChange, t, font, activeId }) {
                 : t.yellow;
               return (
                 <Fragment key={r._id}>
-                  <tr style={{ opacity: dim ? 0.45 : 1, background: activeId === r._id ? t.accent + "22" : (r.coach_added ? t.accent + "08" : "transparent"), boxShadow: activeId === r._id ? `inset 3px 0 0 ${t.accent}` : "none" }}>
+                  <tr data-row-id={r._id} style={{ opacity: dim ? 0.45 : 1, background: activeId === r._id ? t.accent + "22" : (r.coach_added ? t.accent + "08" : "transparent"), boxShadow: activeId === r._id ? `inset 3px 0 0 ${t.accent}` : "none" }}>
                     <td style={{ ...cellStyle, textAlign: "center" }}>
                       <button type="button" onClick={() => toggleExpanded(r._id)} style={{ background: "none", border: "none", color: r.notes ? t.accent : t.dim, cursor: "pointer", fontSize: 12 }} title={isExpanded ? "Collapse details" : "Edit details"}>
                         {isExpanded ? "▼" : "✎"}
