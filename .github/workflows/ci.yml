@@ -31,7 +31,9 @@ jobs:
       # the absolute minimum. python-dotenv is needed by build-truth-from-corrections.
       - name: Install minimal deps
         run: |
-          pip install --quiet modal supabase google-generativeai requests python-dotenv
+          pip install --quiet modal supabase google-generativeai requests python-dotenv "fastapi[standard]"
+        # fastapi is imported at module scope in worker/app.py (the
+        # @modal.fastapi_endpoint decorator needs it at import time).
 
       - name: Run regression suite
         env:

@@ -1,0 +1,254 @@
+
+============================================================
+BENCH judah-2026-04-25 (60cfa445-6364-4147-9830-0d1ddeffcb37)
+============================================================
+  -> 7 events in 26.8s (cached_tok=84901)
+[gemini-2.5-flash] chunk 9: creating cache (2700-3000s, ttl=600s)...
+  -> cache=2331632707278209024 created in 35.2s
+[gemini-2.5-flash] chunk 9 goals.md cache=2331632707278209024...
+  -> 2 events in 27.9s (cached_tok=84901)
+[gemini-2.5-flash] chunk 9 saves.md cache=2331632707278209024...
+  -> 2 events in 24.5s (cached_tok=84901)
+[gemini-2.5-flash] chunk 9 distribution.md cache=2331632707278209024...
+  -> 5 events in 30.0s (cached_tok=84901)
+[gemini-2.5-flash] chunk 10: creating cache (3000-3144s, ttl=600s)...
+  -> cache=1168578103509778432 created in 14.2s
+[gemini-2.5-flash] chunk 10 goals.md cache=1168578103509778432...
+  -> 0 events in 12.5s (cached_tok=40495)
+[gemini-2.5-flash] chunk 10 saves.md cache=1168578103509778432...
+  -> 1 events in 17.8s (cached_tok=40495)
+[gemini-2.5-flash] chunk 10 distribution.md cache=1168578103509778432...
+  -> 2 events in 12.6s (cached_tok=40495)
+[gemini-2.5-flash] saved -> scripts\bench-results\judah-2026-04-25\gemini-2.5-flash.v3-prompts.json  (25.5 min total)
+[reconcile] A:0 dist (low/med conf) | C:0 goals (scoreboard unchanged) | D:0 goals (evidence count <2) | B1:2 saves (Goal-action near a goal) | B2:7 dist (near a save or goal) | E:48 dist (dupe trigger+direction within 30s) | F:0 saves (no antecedent attack or invented) | G:0 dist (opposition GK or trigger/type mismatch)
+[gemini-2.5-flash] reconciled variant -> scripts\bench-results\judah-2026-04-25\gemini-2.5-flash.v3-prompts.reconciled.json
+  --- eval ---
+  32:02   pass (loose_ball)  (high confidence)
+  33:02   pass (loose_ball)  (high confidence)
+  33:50   pass (loose_ball)  (high confidence)
+  35:23   pass (backpass)  (high confidence)
+  35:55   pass (after_save)  (high confidence)
+  36:53   pass (after_save)  (high confidence)
+  38:44   pass (after_save)  (high confidence)
+  40:15   gk_long (after_save)  (high confidence)
+  40:44   pass (goal_kick)  (high confidence)
+  42:06   pass (goal_kick)  (high confidence)
+  42:58   pass (goal_kick)  (high confidence)
+  45:05   throw (after_save)  (high confidence)
+  45:19   pass (loose_ball)  (high confidence)
+  45:29   pass (backpass)  (high confidence)
+  45:58   throw (after_save)  (high confidence)
+  48:38   pass (backpass)  (high confidence)
+  49:02   pass (backpass)  (high confidence)
+  49:37   pass (backpass)  (high confidence)
+  50:15   pass (backpass)  (high confidence)
+  50:32   pass (backpass)  (high confidence)
+
+type accuracy on matched distributions: 4/13  (30.8%)
+trigger accuracy on matched distributions: 5/13  (38.5%)
+
+__BENCH_JSON__{"source":"scripts\\bench-results\\judah-2026-04-25\\gemini-2.5-flash.v3-prompts.json","truth":"scripts/ground-truth/judah-2026-04-25.json","tolerance":10,"sections":{"goals":{"truth_count":5,"pred_count":6,"tp":1,"fp":5,"fn":4,"precision":0.16666666666666666,"recall":0.2,"timestamp_mae_sec":5},"saves":{"truth_count":11,"pred_count":20,"tp":3,"fp":17,"fn":8,"precision":0.15,"recall":0.2727272727272727,"timestamp_mae_sec":2.3333333333333335},"distribution":{"truth_count":16,"pred_count":145,"tp":13,"fp":132,"fn":3,"precision":0.0896551724137931,"recall":0.8125,"timestamp_mae_sec":2.769230769230769}}}
+
+============================================================
+BENCH judah-2026-05-02 (bc00c75c-ffe8-4584-85e2-29f9aa492fa9)
+============================================================
+  -> cache=3405952324638605312 created in 37.7s
+[gemini-2.5-flash] chunk 10 goals.md cache=3405952324638605312...
+  -> 2 events in 41.8s (cached_tok=84901)
+[gemini-2.5-flash] chunk 10 saves.md cache=3405952324638605312...
+  -> 2 events in 47.0s (cached_tok=84901)
+[gemini-2.5-flash] chunk 10 distribution.md cache=3405952324638605312...
+  -> 13 events in 34.7s (cached_tok=84901)
+[gemini-2.5-flash] chunk 11: creating cache (3300-3329s, ttl=600s)...
+  -> cache=4592087876497309696 created in 7.2s
+[gemini-2.5-flash] chunk 11 goals.md cache=4592087876497309696...
+  -> 0 events in 7.3s (cached_tok=8208)
+[gemini-2.5-flash] chunk 11 saves.md cache=4592087876497309696...
+  -> 0 events in 6.9s (cached_tok=8208)
+[gemini-2.5-flash] chunk 11 distribution.md cache=4592087876497309696...
+  -> 0 events in 6.5s (cached_tok=8208)
+[saves-filter] dropped 1 low-signal events (off-target + no GK action)
+[gemini-2.5-flash] saves: 21 -> 20 after low-signal filter
+[gemini-2.5-flash] saved -> scripts\bench-results\judah-2026-05-02\gemini-2.5-flash.v3-prompts.json  (34.8 min total)
+[reconcile] A:0 dist (low/med conf) | C:0 goals (scoreboard unchanged) | D:0 goals (evidence count <2) | B1:2 saves (Goal-action near a goal) | B2:13 dist (near a save or goal) | E:116 dist (dupe trigger+direction within 30s) | F:0 saves (no antecedent attack or invented) | G:0 dist (opposition GK or trigger/type mismatch)
+[gemini-2.5-flash] reconciled variant -> scripts\bench-results\judah-2026-05-02\gemini-2.5-flash.v3-prompts.reconciled.json
+  --- eval ---
+  53:02   pass (backpass)  (high confidence)
+  53:37   pass (backpass)  (high confidence)
+  53:55   gk_short (after_save)  (high confidence)
+  54:17   throw (after_save)  (high confidence)
+
+type accuracy on matched distributions: 7/24  (29.2%)
+trigger accuracy on matched distributions: 2/24  (8.3%)
+
+═══ CROSSES ═══
+Truth:      5
+Gemini:     0
+Matched:    0
+Missed:     5  (Gemini didn't catch)
+False pos:  0  (Gemini reported but not in truth)
+Precision:  0.0%   (of what Gemini reported, — were real)
+Recall:     0.0%   (of real events, 0.0% were caught)
+
+Missed by Gemini (false negatives):
+  5:15    right → catch (held) — Ball swung in off of a kick-in. GK handles the ball cleanly.
+  34:14   right → catch (held) — Ball swung in off of a kick-in. GK handles the ball cleanly.
+  37:14   right → catch (held) — Ball was heading out and player kicks it over their own head. Small deflection by grey and picked up easily by the GK.
+  40:47   left → catch (held) — Awkward unintentional ball from the wing, GK calls for it and holds the ball.
+  41:04   right → punch (punched_away) — Not a full punch, but a touch to put the striker off balance.
+
+__BENCH_JSON__{"source":"scripts\\bench-results\\judah-2026-05-02\\gemini-2.5-flash.v3-prompts.json","truth":"scripts/ground-truth/judah-2026-05-02.json","tolerance":10,"sections":{"goals":{"truth_count":3,"pred_count":10,"tp":0,"fp":10,"fn":3,"precision":0,"recall":0,"timestamp_mae_sec":null},"saves":{"truth_count":16,"pred_count":20,"tp":3,"fp":17,"fn":13,"precision":0.15,"recall":0.1875,"timestamp_mae_sec":3},"distribution":{"truth_count":27,"pred_count":247,"tp":24,"fp":223,"fn":3,"precision":0.09716599190283401,"recall":0.8888888888888888,"timestamp_mae_sec":2.8333333333333335},"crosses":{"truth_count":5,"pred_count":0,"tp":0,"fp":0,"fn":5,"precision":0,"recall":0,"timestamp_mae_sec":null}}}
+
+============================================================
+BENCH judah-2026-05-16-oufc (a0877aa3-b47c-4077-84a7-8f3bced97ac4)
+============================================================
+  -> cache=1846018003708149760 created in 59.4s
+[gemini-2.5-flash] chunk 7 goals.md cache=1846018003708149760...
+  -> 1 events in 22.6s (cached_tok=84926)
+[gemini-2.5-flash] chunk 7 saves.md cache=1846018003708149760...
+  -> 6 events in 32.2s (cached_tok=84926)
+[gemini-2.5-flash] chunk 7 distribution.md cache=1846018003708149760...
+  -> 18 events in 32.4s (cached_tok=84926)
+[gemini-2.5-flash] chunk 8: creating cache (2400-2453s, ttl=600s)...
+  -> cache=2734915980160401408 created in 8.7s
+[gemini-2.5-flash] chunk 8 goals.md cache=2734915980160401408...
+  -> 0 events in 6.8s (cached_tok=15025)
+[gemini-2.5-flash] chunk 8 saves.md cache=2734915980160401408...
+  -> 2 events in 10.3s (cached_tok=15025)
+[gemini-2.5-flash] chunk 8 distribution.md cache=2734915980160401408...
+  -> 2 events in 7.8s (cached_tok=15025)
+[saves-filter] dropped 2 low-signal events (off-target + no GK action)
+[gemini-2.5-flash] saves: 26 -> 24 after low-signal filter
+[gemini-2.5-flash] saved -> scripts\bench-results\judah-2026-05-16-oufc\gemini-2.5-flash.v3-prompts.json  (18.7 min total)
+[reconcile] A:0 dist (low/med conf) | C:0 goals (scoreboard unchanged) | D:1 goals (evidence count <2) | B1:3 saves (Goal-action near a goal) | B2:12 dist (near a save or goal) | E:35 dist (dupe trigger+direction within 30s) | F:0 saves (no antecedent attack or invented) | G:0 dist (opposition GK or trigger/type mismatch)
+[gemini-2.5-flash] reconciled variant -> scripts\bench-results\judah-2026-05-16-oufc\gemini-2.5-flash.v3-prompts.reconciled.json
+  --- eval ---
+  35:15   pass (backpass)  (high confidence)
+  35:23   throw (loose_ball)  (high confidence)
+  35:38   throw (after_save)  (high confidence)
+  35:54   pass (backpass)  (high confidence)
+  36:23   pass (loose_ball)  (high confidence)
+  36:32   pass (backpass)  (high confidence)
+  37:00   throw (loose_ball)  (high confidence)
+  37:25   pass (backpass)  (high confidence)
+  37:36   throw (loose_ball)  (high confidence)
+  37:49   pass (backpass)  (high confidence)
+  38:02   pass (backpass)  (high confidence)
+  38:16   pass (backpass)  (high confidence)
+  38:24   throw (loose_ball)  (high confidence)
+  38:38   pass (backpass)  (high confidence)
+  38:54   throw (loose_ball)  (high confidence)
+  39:12   throw (loose_ball)  (high confidence)
+  39:32   pass (backpass)  (high confidence)
+  39:46   throw (loose_ball)  (high confidence)
+  40:01   pass (loose_ball)  (high confidence)
+  40:44   throw (after_save)  (high confidence)
+
+type accuracy on matched distributions: 2/8  (25.0%)
+trigger accuracy on matched distributions: 3/8  (37.5%)
+
+__BENCH_JSON__{"source":"scripts\\bench-results\\judah-2026-05-16-oufc\\gemini-2.5-flash.v3-prompts.json","truth":"scripts/ground-truth/judah-2026-05-16-oufc.json","tolerance":10,"sections":{"goals":{"truth_count":3,"pred_count":6,"tp":1,"fp":5,"fn":2,"precision":0.16666666666666666,"recall":0.3333333333333333,"timestamp_mae_sec":1},"saves":{"truth_count":5,"pred_count":24,"tp":1,"fp":23,"fn":4,"precision":0.041666666666666664,"recall":0.2,"timestamp_mae_sec":1},"distribution":{"truth_count":11,"pred_count":119,"tp":8,"fp":111,"fn":3,"precision":0.06722689075630252,"recall":0.7272727272727273,"timestamp_mae_sec":3.125}}}
+
+============================================================
+BENCH judah-2026-05-16-oufc-sosc (cf939885-f9ff-4d7b-bc2e-3d0815f40cb5)
+============================================================
+  -> cache=6841354415392161792 created in 42.8s
+[gemini-2.5-flash] chunk 6 goals.md cache=6841354415392161792...
+  -> 3 events in 33.0s (cached_tok=84901)
+[gemini-2.5-flash] chunk 6 saves.md cache=6841354415392161792...
+  -> 5 events in 27.8s (cached_tok=84901)
+[gemini-2.5-flash] chunk 6 distribution.md cache=6841354415392161792...
+  -> 11 events in 69.6s (cached_tok=84901)
+[gemini-2.5-flash] chunk 7: creating cache (2100-2289s, ttl=600s)...
+  -> cache=1495581657703383040 created in 51.8s
+[gemini-2.5-flash] chunk 7 goals.md cache=1495581657703383040...
+  -> 1 events in 23.0s (cached_tok=53488)
+[gemini-2.5-flash] chunk 7 saves.md cache=1495581657703383040...
+  -> 2 events in 18.7s (cached_tok=53488)
+[gemini-2.5-flash] chunk 7 distribution.md cache=1495581657703383040...
+  -> 7 events in 22.2s (cached_tok=53488)
+[saves-filter] dropped 11 low-signal events (off-target + no GK action)
+[gemini-2.5-flash] saves: 55 -> 44 after low-signal filter
+[gemini-2.5-flash] saved -> scripts\bench-results\judah-2026-05-16-oufc-sosc\gemini-2.5-flash.v3-prompts.json  (19.3 min total)
+[reconcile] A:0 dist (low/med conf) | C:0 goals (scoreboard unchanged) | D:2 goals (evidence count <2) | B1:2 saves (Goal-action near a goal) | B2:13 dist (near a save or goal) | E:18 dist (dupe trigger+direction within 30s) | F:0 saves (no antecedent attack or invented) | G:0 dist (opposition GK or trigger/type mismatch)
+[gemini-2.5-flash] reconciled variant -> scripts\bench-results\judah-2026-05-16-oufc-sosc\gemini-2.5-flash.v3-prompts.reconciled.json
+  --- eval ---
+  29:28   pass (backpass)  (high confidence)
+  29:37   pass (backpass)  (high confidence)
+  29:46   pass (backpass)  (high confidence)
+  30:15   pass (backpass)  (high confidence)
+  30:23   pass (backpass)  (high confidence)
+  30:38   pass (backpass)  (high confidence)
+  30:52   pass (backpass)  (high confidence)
+  31:06   pass (backpass)  (high confidence)
+  31:53   pass (backpass)  (high confidence)
+  32:17   pass (backpass)  (high confidence)
+  32:27   throw (after_save)  (high confidence)
+  32:49   pass (backpass)  (high confidence)
+  32:58   pass (backpass)  (high confidence)
+  33:56   pass (backpass)  (high confidence)
+  35:01   pass (loose_ball)  (high confidence)
+  35:23   pass (loose_ball)  (high confidence)
+  35:46   pass (loose_ball)  (high confidence)
+  36:53   pass (loose_ball)  (high confidence)
+  37:20   pass (loose_ball)  (high confidence)
+  37:58   pass (loose_ball)  (high confidence)
+
+type accuracy on matched distributions: 2/2  (100.0%)
+trigger accuracy on matched distributions: 0/2  (0.0%)
+
+__BENCH_JSON__{"source":"scripts\\bench-results\\judah-2026-05-16-oufc-sosc\\gemini-2.5-flash.v3-prompts.json","truth":"scripts/ground-truth/judah-2026-05-16-oufc-sosc.json","tolerance":10,"sections":{"goals":{"truth_count":2,"pred_count":13,"tp":1,"fp":12,"fn":1,"precision":0.07692307692307693,"recall":0.5,"timestamp_mae_sec":0},"saves":{"truth_count":0,"pred_count":44,"tp":0,"fp":44,"fn":0,"precision":0,"recall":0,"timestamp_mae_sec":null},"distribution":{"truth_count":4,"pred_count":96,"tp":2,"fp":94,"fn":2,"precision":0.020833333333333332,"recall":0.5,"timestamp_mae_sec":4}}}
+
+============================================================
+BENCH judah-2026-05-23-pfc (573c54fc-38f3-4a9e-9341-ef821e91405e)
+============================================================
+  -> 3 events in 28.1s (cached_tok=84926)
+[gemini-2.5-flash] chunk 11: creating cache (3300-3600s, ttl=600s)...
+  -> cache=4216881732542005248 created in 26.3s
+[gemini-2.5-flash] chunk 11 goals.md cache=4216881732542005248...
+  -> 0 events in 28.0s (cached_tok=84901)
+[gemini-2.5-flash] chunk 11 saves.md cache=4216881732542005248...
+  -> 1 events in 22.7s (cached_tok=84901)
+[gemini-2.5-flash] chunk 11 distribution.md cache=4216881732542005248...
+  -> 23 events in 31.4s (cached_tok=84901)
+[gemini-2.5-flash] chunk 12: creating cache (3600-3663s, ttl=600s)...
+  -> cache=2874246093632176128 created in 13.0s
+[gemini-2.5-flash] chunk 12 goals.md cache=2874246093632176128...
+  -> 0 events in 8.3s (cached_tok=17830)
+[gemini-2.5-flash] chunk 12 saves.md cache=2874246093632176128...
+  -> 1 events in 10.7s (cached_tok=17830)
+[gemini-2.5-flash] chunk 12 distribution.md cache=2874246093632176128...
+  -> 3 events in 44.3s (cached_tok=17830)
+[gemini-2.5-flash] saved -> scripts\bench-results\judah-2026-05-23-pfc\gemini-2.5-flash.v3-prompts.json  (26.9 min total)
+[reconcile] A:0 dist (low/med conf) | C:0 goals (scoreboard unchanged) | D:0 goals (evidence count <2) | B1:0 saves (Goal-action near a goal) | B2:4 dist (near a save or goal) | E:32 dist (dupe trigger+direction within 30s) | F:0 saves (no antecedent attack or invented) | G:0 dist (opposition GK or trigger/type mismatch)
+[gemini-2.5-flash] reconciled variant -> scripts\bench-results\judah-2026-05-23-pfc\gemini-2.5-flash.v3-prompts.reconciled.json
+  --- eval ---
+  56:11   pass (backpass)  (high confidence)
+  56:23   pass (backpass)  (high confidence)
+  56:36   pass (backpass)  (high confidence)
+  56:49   pass (backpass)  (high confidence)
+  57:02   pass (backpass)  (high confidence)
+  57:13   pass (backpass)  (high confidence)
+  57:25   pass (backpass)  (high confidence)
+  57:36   pass (backpass)  (high confidence)
+  57:49   pass (backpass)  (high confidence)
+  57:58   pass (backpass)  (high confidence)
+  58:10   pass (backpass)  (high confidence)
+  58:24   pass (backpass)  (high confidence)
+  58:38   pass (backpass)  (high confidence)
+  58:52   pass (backpass)  (high confidence)
+  59:05   pass (backpass)  (high confidence)
+  59:17   pass (backpass)  (high confidence)
+  59:29   pass (backpass)  (high confidence)
+  59:41   pass (backpass)  (high confidence)
+  60:12   pass (loose_ball)  (high confidence)
+  60:52   pass (loose_ball)  (high confidence)
+
+type accuracy on matched distributions: 2/4  (50.0%)
+trigger accuracy on matched distributions: 1/4  (25.0%)
+
+__BENCH_JSON__{"source":"scripts\\bench-results\\judah-2026-05-23-pfc\\gemini-2.5-flash.v3-prompts.json","truth":"scripts/ground-truth/judah-2026-05-23-pfc.json","tolerance":10,"sections":{"goals":{"truth_count":15,"pred_count":0,"tp":0,"fp":0,"fn":15,"precision":0,"recall":0,"timestamp_mae_sec":null},"saves":{"truth_count":4,"pred_count":7,"tp":0,"fp":7,"fn":4,"precision":0,"recall":0,"timestamp_mae_sec":null},"distribution":{"truth_count":15,"pred_count":96,"tp":4,"fp":92,"fn":11,"precision":0.041666666666666664,"recall":0.26666666666666666,"timestamp_mae_sec":2.25}}}
+
+============================================================
+BENCH COMPLETE in 125m 48s
+============================================================

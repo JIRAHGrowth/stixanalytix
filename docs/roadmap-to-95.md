@@ -79,7 +79,7 @@ This is the part you check back against weekly. Each row has: who, what, by-when
 | # | Who | What | Success criterion | Status |
 |---|---|---|---|---|
 | 6 | Claude | Stage 1 wrap: prompt v3 for chunked extraction + confidence-band measurement | Bench score shows Stage 1 floor hit (Goals 40% R / Saves 35% R / Dist 35% R; FP rate down 30%) | ☐ |
-| 7 | Claude | Fast-review UI v1: keyboard shortcuts, bulk-accept keys, pre-filled defaults from Gemini | Time-to-review one match: 60 min → 15 min (measured) | ☐ |
+| 7 | Claude | Fast-review UI v1: keyboard shortcuts, bulk-accept keys, pre-filled defaults from Gemini | Time-to-review one match: 60 min → 15 min (measured) | ✅ **DONE 2026-05-22 (commit `418b680`)** — Full keyboard navigation across goals/saves/distribution. ↑↓ navigate, y/n keep/reject, Tab to switch section, Shift+A/R/H/L for bulk actions, ? for shortcuts help. Active-row visual highlight + sticky status bar showing current section + index. Disables in form fields. Build passes. Joshua to validate the 15-min/match target on real match review. |
 | 8 | Joshua | First peer matches start arriving — upload through existing flow | ≥ 5 new matches in `video_jobs` by end of week | ☐ |
 | 9 | Joshua + helper | Review the new matches via fast-review UI | ≥ 10 matches in `coach_corrections` by end of week | ☐ |
 
