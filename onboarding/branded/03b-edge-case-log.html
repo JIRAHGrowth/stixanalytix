@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>03b · Edge Case Log — StixAnalytix Training</title>
+<link rel="stylesheet" href="../_design/template/stixanalytix-doc.css">
+</head>
+<body class="is-screen">
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 1 — COVER
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page cover">
+
+  <div class="cover-rail">
+    <div class="rail-block">
+      <span class="rail-label">StixAnalytix</span>
+      <span class="rail-value">Training Series</span>
+    </div>
+    <div class="rail-block center">
+      <span class="rail-label">Part 03b / 07</span>
+      <span class="rail-value">Living document</span>
+    </div>
+    <div class="rail-block right">
+      <span class="rail-label">v1.0 · 2026</span>
+      <span class="rail-value">Internal · Confidential</span>
+    </div>
+  </div>
+
+  <div class="cover-doc-id">03b</div>
+
+  <div class="cover-frame-wrap">
+    <svg width="640" height="220" viewBox="0 0 800 280" xmlns="http://www.w3.org/2000/svg">
+      <g stroke="var(--net-stroke)" stroke-width="1.1" stroke-opacity="var(--net-opacity)" stroke-linecap="square">
+        <line x1="10"  y1="10" x2="10"  y2="280"/><line x1="76"  y1="10" x2="76"  y2="280"/><line x1="142" y1="10" x2="142" y2="280"/><line x1="208" y1="10" x2="208" y2="280"/><line x1="274" y1="10" x2="274" y2="280"/><line x1="340" y1="10" x2="340" y2="280"/><line x1="406" y1="10" x2="406" y2="280"/><line x1="472" y1="10" x2="472" y2="280"/><line x1="538" y1="10" x2="538" y2="280"/><line x1="604" y1="10" x2="604" y2="280"/><line x1="670" y1="10" x2="670" y2="280"/><line x1="736" y1="10" x2="736" y2="280"/><line x1="790" y1="10" x2="790" y2="280"/>
+        <line x1="10" y1="10"  x2="790" y2="10"/><line x1="10" y1="66"  x2="790" y2="66"/><line x1="10" y1="122" x2="790" y2="122"/><line x1="10" y1="178" x2="790" y2="178"/><line x1="10" y1="234" x2="790" y2="234"/>
+      </g>
+      <polyline points="10,280 10,10 790,10 790,280" fill="none" stroke="var(--net-stroke)" stroke-width="6" stroke-linecap="square"/>
+      <text x="400" y="140" font-family="'Outfit',sans-serif" font-weight="800" font-size="78" fill="var(--accent)" text-anchor="middle" letter-spacing="-3">EDGE CASE</text>
+      <text x="400" y="210" font-family="'Outfit',sans-serif" font-weight="800" font-size="78" fill="var(--accent)" text-anchor="middle" letter-spacing="-3">LOG</text>
+    </svg>
+  </div>
+
+  <div class="cover-subtitle">Living document · grows with every gray-area ruling</div>
+
+  <div class="cover-foot">
+    <div class="cover-foot-block">
+      <strong>Status</strong>
+      Living — updated continuously. Seed entries below; real entries replace them as the project starts.
+    </div>
+    <div class="cover-foot-block">
+      <strong>Audience</strong>
+      Active labelers. Add every gray area you encounter. Don't quietly rule and move on.
+    </div>
+    <div class="cover-foot-block">
+      <strong>How it grows</strong>
+      You flag → reviewer rules → entry added → rubric inherits if general enough → next labeler benefits.
+    </div>
+  </div>
+
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 2 — PURPOSE + ENTRY FORMAT
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page">
+  <div class="inner">
+    <aside class="rail">
+      <div class="rail-doc-num">03b</div>
+      <div class="rail-doc-label">Edge Case Log</div>
+
+      <div class="rail-section">
+        <div class="rail-section-label">The most important field</div>
+        <div class="rail-section-body"><strong>Going forward.</strong> A ruling on one clip saves ten minutes; a general rule extracted from that ruling saves a hundred labels.</div>
+      </div>
+
+      <div class="rail-nav">
+        <div class="rail-nav-item is-current"><span>Purpose</span><span class="num">01</span></div>
+        <div class="rail-nav-item"><span>Seed entries</span><span class="num">02</span></div>
+      </div>
+
+      <div class="rail-pagenum">
+        <div class="rail-pagenum-big">02</div>
+        <div class="rail-pagenum-total">of 04</div>
+      </div>
+    </aside>
+
+    <main class="main">
+
+      <div class="section-strip">
+        <svg viewBox="0 0 1000 48" preserveAspectRatio="none">
+          <g stroke="var(--net-stroke)" stroke-width="1.1" stroke-opacity="var(--net-opacity)" stroke-linecap="square">
+            <line x1="0" y1="6" x2="0" y2="48"/><line x1="66" y1="6" x2="66" y2="48"/><line x1="132" y1="6" x2="132" y2="48"/><line x1="198" y1="6" x2="198" y2="48"/><line x1="264" y1="6" x2="264" y2="48"/><line x1="330" y1="6" x2="330" y2="48"/><line x1="396" y1="6" x2="396" y2="48"/><line x1="462" y1="6" x2="462" y2="48"/><line x1="528" y1="6" x2="528" y2="48"/><line x1="594" y1="6" x2="594" y2="48"/><line x1="660" y1="6" x2="660" y2="48"/><line x1="726" y1="6" x2="726" y2="48"/><line x1="792" y1="6" x2="792" y2="48"/><line x1="858" y1="6" x2="858" y2="48"/><line x1="924" y1="6" x2="924" y2="48"/><line x1="990" y1="6" x2="990" y2="48"/><line x1="1000" y1="6" x2="1000" y2="48"/>
+            <line x1="0" y1="6" x2="1000" y2="6"/>
+          </g>
+          <polyline points="0,48 0,6 1000,6 1000,48" fill="none" stroke="var(--net-stroke)" stroke-width="4" stroke-linecap="square"/>
+        </svg>
+        <span class="label">01 · Purpose &amp; entry format</span>
+      </div>
+
+      <h1 class="h-chapter">This document grows.</h1>
+      <p class="h-deck">The rubric covers the cases that have a clear answer. This document covers the cases where two reasonable labelers could disagree — and the ruling we've made so the next labeler doesn't have to re-litigate it.</p>
+
+      <h2 class="h-section">When you hit a gray area</h2>
+
+      <div class="step-block">
+        <div class="step-num">01</div>
+        <div class="step-body">
+          <h3>Don't quietly make a ruling</h3>
+          <p>A silent ruling becomes drift; drift becomes inconsistency in the training set. Every gray area you skip-past is a future calibration disagreement.</p>
+        </div>
+      </div>
+
+      <div class="step-block">
+        <div class="step-num">02</div>
+        <div class="step-body">
+          <h3>Add an entry to this log</h3>
+          <p>Use the entry format on the right. Describe what you saw, what you ruled (best guess), why, and the general rule going forward if any.</p>
+        </div>
+      </div>
+
+      <div class="step-block">
+        <div class="step-num">03</div>
+        <div class="step-body">
+          <h3>Flag it to the reviewer</h3>
+          <p>Currently Joshua. The ruling becomes canon once accepted — typically within the day.</p>
+        </div>
+      </div>
+
+      <div class="step-block">
+        <div class="step-num">04</div>
+        <div class="step-body">
+          <h3>The rubric inherits</h3>
+          <p>If the edge case is general enough to be a rule, it graduates into <code>03a Labeling Rubric</code>. The log keeps the original ruling as provenance.</p>
+        </div>
+      </div>
+
+      <div class="bigquote" style="margin-top:24px">
+        <p class="q">A ruling on a single clip is worth ten minutes saved. <em>A general rule extracted from that ruling is worth a hundred labels stayed consistent.</em></p>
+        <p class="a">Why "Going forward" is the most important field</p>
+      </div>
+
+    </main>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 3 — SEED ENTRIES (PART 1)
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page">
+  <div class="inner">
+    <aside class="rail">
+      <div class="rail-doc-num">03b</div>
+      <div class="rail-doc-label">Edge Case Log</div>
+
+      <div class="rail-section">
+        <div class="rail-section-label">Format</div>
+        <div class="rail-section-body">
+          Date · Title
+          <strong>Match</strong>
+          <strong>What I saw</strong>
+          <strong>The question</strong>
+          <strong>Ruling</strong>
+          <strong>Why</strong>
+          <strong>Going forward</strong>
+          <strong>Ruled by</strong>
+        </div>
+      </div>
+
+      <div class="rail-pagenum">
+        <div class="rail-pagenum-big">03</div>
+        <div class="rail-pagenum-total">of 04</div>
+      </div>
+    </aside>
+
+    <main class="main">
+
+      <div class="section-strip">
+        <svg viewBox="0 0 1000 48" preserveAspectRatio="none">
+          <g stroke="var(--net-stroke)" stroke-width="1.1" stroke-opacity="var(--net-opacity)" stroke-linecap="square">
+            <line x1="0" y1="6" x2="0" y2="48"/><line x1="66" y1="6" x2="66" y2="48"/><line x1="132" y1="6" x2="132" y2="48"/><line x1="198" y1="6" x2="198" y2="48"/><line x1="264" y1="6" x2="264" y2="48"/><line x1="330" y1="6" x2="330" y2="48"/><line x1="396" y1="6" x2="396" y2="48"/><line x1="462" y1="6" x2="462" y2="48"/><line x1="528" y1="6" x2="528" y2="48"/><line x1="594" y1="6" x2="594" y2="48"/><line x1="660" y1="6" x2="660" y2="48"/><line x1="726" y1="6" x2="726" y2="48"/><line x1="792" y1="6" x2="792" y2="48"/><line x1="858" y1="6" x2="858" y2="48"/><line x1="924" y1="6" x2="924" y2="48"/><line x1="990" y1="6" x2="990" y2="48"/><line x1="1000" y1="6" x2="1000" y2="48"/>
+            <line x1="0" y1="6" x2="1000" y2="6"/>
+          </g>
+          <polyline points="0,48 0,6 1000,6 1000,48" fill="none" stroke="var(--net-stroke)" stroke-width="4" stroke-linecap="square"/>
+        </svg>
+        <span class="label">02 · Seed entries</span>
+      </div>
+
+      <h1 class="h-chapter">Illustrative format · real entries replace these.</h1>
+      <p class="h-deck">Four seed entries showing the format and the kinds of decisions that get logged. These will be archived once real rulings exist.</p>
+
+      <div class="entry-card">
+        <div class="entry-header">
+          <span class="date">2026-05-27</span>Backpass collected without distribution within 5s
+        </div>
+        <div class="entry-grid">
+          <div class="entry-label">Match / clip</div>
+          <div class="entry-value">Illustrative example</div>
+          <div class="entry-label">What I saw</div>
+          <div class="entry-value">A defender plays the ball back to the keeper. The keeper picks it up, holds it for 4 seconds while pointing teammates into position, then is whistled for the 6-second rule and gives away an indirect free kick.</div>
+          <div class="entry-label">The question</div>
+          <div class="entry-value">This isn't a save (no opposition shot). It also isn't a complete distribution event (no release ≥ 5 yards). Where does it go?</div>
+          <div class="entry-label">Ruling</div>
+          <div class="entry-value"><strong>Don't log it</strong> on the Distribution sheet (no release). Don't log on Saves (no shot). Note in the match's Metadata <code>notes</code> field if it affected the score; otherwise drop it.</div>
+          <div class="entry-label">Why</div>
+          <div class="entry-value">A keeper holding the ball is a non-event unless it leads to a release (Distribution) or a penalty (note in metadata for now).</div>
+          <div class="entry-label">Going forward</div>
+          <div class="entry-value"><strong>Distribution requires both a possession AND a release ≥ 5 yards.</strong> Non-release possessions are non-events.</div>
+        </div>
+        <div class="entry-foot">Ruled by Joshua Marshall — illustrative example</div>
+      </div>
+
+      <div class="entry-card">
+        <div class="entry-header">
+          <span class="date">2026-05-27</span>Shot deflects off a defender en route to goal
+        </div>
+        <div class="entry-grid">
+          <div class="entry-label">Match / clip</div>
+          <div class="entry-value">Illustrative example</div>
+          <div class="entry-label">What I saw</div>
+          <div class="entry-value">Opposition <code>#9</code> strikes from the edge of the box; the ball deflects off a defender's knee and changes direction, looping toward the goal. Keeper adjusts late, parries over the bar.</div>
+          <div class="entry-label">The question</div>
+          <div class="entry-value">Was this a save? Was the deflection by the defender or by the keeper? What <code>Shot type</code> applies?</div>
+          <div class="entry-label">Ruling</div>
+          <div class="entry-value">Yes, it's a save event. The save is on the <strong>deflected</strong> trajectory, which is what the keeper actually had to deal with. <code>Shot type: Deflection</code>. <code>GK action: Parry</code> (keeper redirected over the bar with intent). Play description notes the deflection: <em>"Strike from outside the box deflected off a defender's knee and looped toward the top-right corner."</em></div>
+          <div class="entry-label">Why</div>
+          <div class="entry-value">The save is whatever the keeper had to deal with. A deflection that becomes a goal-bound shot becomes the shot of record.</div>
+          <div class="entry-label">Going forward</div>
+          <div class="entry-value"><strong>When a defender deflects a shot and the keeper saves the resulting trajectory, log as one save event with <code>Shot type: Deflection</code>.</strong> Don't log the original strike as a separate save.</div>
+        </div>
+        <div class="entry-foot">Ruled by Joshua Marshall — illustrative example</div>
+      </div>
+
+    </main>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 4 — SEED ENTRIES (PART 2)
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page">
+  <div class="inner">
+    <aside class="rail">
+      <div class="rail-doc-num">03b</div>
+      <div class="rail-doc-label">Edge Case Log</div>
+
+      <div class="rail-section">
+        <div class="rail-section-label">After seed entries</div>
+        <div class="rail-section-body">Real entries start to accumulate during the first calibration round. Expect ~20 within the first 10 matches labeled.</div>
+      </div>
+
+      <div class="rail-section">
+        <div class="rail-section-label">Most recent first</div>
+        <div class="rail-section-body">New entries go at the top. The seed entries below stay at the bottom as historical reference.</div>
+      </div>
+
+      <div class="rail-pagenum">
+        <div class="rail-pagenum-big">04</div>
+        <div class="rail-pagenum-total">of 04</div>
+      </div>
+    </aside>
+
+    <main class="main">
+
+      <div class="section-strip">
+        <svg viewBox="0 0 1000 48" preserveAspectRatio="none">
+          <g stroke="var(--net-stroke)" stroke-width="1.1" stroke-opacity="var(--net-opacity)" stroke-linecap="square">
+            <line x1="0" y1="6" x2="0" y2="48"/><line x1="66" y1="6" x2="66" y2="48"/><line x1="132" y1="6" x2="132" y2="48"/><line x1="198" y1="6" x2="198" y2="48"/><line x1="264" y1="6" x2="264" y2="48"/><line x1="330" y1="6" x2="330" y2="48"/><line x1="396" y1="6" x2="396" y2="48"/><line x1="462" y1="6" x2="462" y2="48"/><line x1="528" y1="6" x2="528" y2="48"/><line x1="594" y1="6" x2="594" y2="48"/><line x1="660" y1="6" x2="660" y2="48"/><line x1="726" y1="6" x2="726" y2="48"/><line x1="792" y1="6" x2="792" y2="48"/><line x1="858" y1="6" x2="858" y2="48"/><line x1="924" y1="6" x2="924" y2="48"/><line x1="990" y1="6" x2="990" y2="48"/><line x1="1000" y1="6" x2="1000" y2="48"/>
+            <line x1="0" y1="6" x2="1000" y2="6"/>
+          </g>
+          <polyline points="0,48 0,6 1000,6 1000,48" fill="none" stroke="var(--net-stroke)" stroke-width="4" stroke-linecap="square"/>
+        </svg>
+        <span class="label">02b · Seed entries (continued)</span>
+      </div>
+
+      <div class="entry-card">
+        <div class="entry-header">
+          <span class="date">2026-05-27</span>Penalty kick saved
+        </div>
+        <div class="entry-grid">
+          <div class="entry-label">Match / clip</div>
+          <div class="entry-value">Illustrative example</div>
+          <div class="entry-label">What I saw</div>
+          <div class="entry-value">Penalty awarded; opposition <code>#10</code> strikes low to the keeper's right; keeper dives and parries the ball wide for a corner.</div>
+          <div class="entry-label">The question</div>
+          <div class="entry-value">Where does the penalty go? Goals sheet (it didn't score)? Saves sheet? Both?</div>
+          <div class="entry-label">Ruling</div>
+          <div class="entry-value"><strong>Saves sheet only.</strong> <code>Shot origin: 6yard</code>, <code>Shot type: Foot</code>, <code>On target: Yes</code>, <code>GK action: Parry</code>, <code>Outcome: Corner</code>, <code>Body zone: C</code>. Play description: <em>"Penalty kick following a foul in the box."</em> The Goals sheet stays empty for this event.</div>
+          <div class="entry-label">Going forward</div>
+          <div class="entry-value"><strong>Saved penalties → Saves sheet only. Scored penalties → both Goals AND Saves.</strong> The Goals sheet's <code>Attack type: Penalty</code> covers the goal-side classification.</div>
+        </div>
+        <div class="entry-foot">Ruled by Joshua Marshall — illustrative example</div>
+      </div>
+
+      <div class="entry-card">
+        <div class="entry-header">
+          <span class="date">2026-05-27</span>Keeper drop-kick that goes 22 yards
+        </div>
+        <div class="entry-grid">
+          <div class="entry-label">Match / clip</div>
+          <div class="entry-value">Illustrative example</div>
+          <div class="entry-label">What I saw</div>
+          <div class="entry-value">Keeper releases the ball from their hands, lets it bounce once on the ground, then strikes the rising ball with the laces. Travels ~22 yards to a midfielder.</div>
+          <div class="entry-label">The question</div>
+          <div class="entry-value">Travel distance is under 25 yards (would suggest <code>GK Short Kick</code>). But the motion was a half-volley off the bounce — not a hand-drop-and-strike.</div>
+          <div class="entry-label">Ruling</div>
+          <div class="entry-value"><code>Type: Drop-kick</code>. The <code>GK Short Kick</code> / <code>GK Long Kick</code> types apply only to <strong>volleys</strong> (struck before the ball touches ground). Anything off a bounce is <code>Drop-kick</code> regardless of distance.</div>
+          <div class="entry-label">Why</div>
+          <div class="entry-value">The distribution-type decision tree is <em>release motion → distance</em>, not <em>distance → type</em>. Motion is the first cut.</div>
+          <div class="entry-label">Going forward</div>
+          <div class="entry-value"><strong>Drop-kicks can be short or long; distance does NOT promote them to <code>GK Long</code>.</strong> Volleys can be short or long; the motion (drop-from-hand, struck before ground contact) is the test.</div>
+        </div>
+        <div class="entry-foot">Ruled by Joshua Marshall — illustrative example</div>
+      </div>
+
+      <p style="margin-top:32px;font-style:italic;color:var(--fg-mid);font-size:13px;text-align:center;border-top:1px solid var(--rule);padding-top:18px">— New entries are added above this line. Most recent first. —</p>
+
+    </main>
+  </div>
+</section>
+
+</body>
+</html>

@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>04 · Tool Walkthrough — StixAnalytix Training</title>
+<link rel="stylesheet" href="../_design/template/stixanalytix-doc.css">
+</head>
+<body class="is-screen">
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 1 — COVER
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page cover">
+
+  <div class="cover-rail">
+    <div class="rail-block">
+      <span class="rail-label">StixAnalytix</span>
+      <span class="rail-value">Training Series</span>
+    </div>
+    <div class="rail-block center">
+      <span class="rail-label">Part 04 / 07</span>
+      <span class="rail-value">Mechanics &amp; workflow</span>
+    </div>
+    <div class="rail-block right">
+      <span class="rail-label">v1.0 · 2026</span>
+      <span class="rail-value">Internal · Confidential</span>
+    </div>
+  </div>
+
+  <div class="cover-doc-id">04</div>
+
+  <div class="cover-frame-wrap">
+    <svg width="640" height="220" viewBox="0 0 800 280" xmlns="http://www.w3.org/2000/svg">
+      <g stroke="var(--net-stroke)" stroke-width="1.1" stroke-opacity="var(--net-opacity)" stroke-linecap="square">
+        <line x1="10"  y1="10" x2="10"  y2="280"/><line x1="76"  y1="10" x2="76"  y2="280"/><line x1="142" y1="10" x2="142" y2="280"/><line x1="208" y1="10" x2="208" y2="280"/><line x1="274" y1="10" x2="274" y2="280"/><line x1="340" y1="10" x2="340" y2="280"/><line x1="406" y1="10" x2="406" y2="280"/><line x1="472" y1="10" x2="472" y2="280"/><line x1="538" y1="10" x2="538" y2="280"/><line x1="604" y1="10" x2="604" y2="280"/><line x1="670" y1="10" x2="670" y2="280"/><line x1="736" y1="10" x2="736" y2="280"/><line x1="790" y1="10" x2="790" y2="280"/>
+        <line x1="10" y1="10"  x2="790" y2="10"/><line x1="10" y1="66"  x2="790" y2="66"/><line x1="10" y1="122" x2="790" y2="122"/><line x1="10" y1="178" x2="790" y2="178"/><line x1="10" y1="234" x2="790" y2="234"/>
+      </g>
+      <polyline points="10,280 10,10 790,10 790,280" fill="none" stroke="var(--net-stroke)" stroke-width="6" stroke-linecap="square"/>
+      <text x="400" y="140" font-family="'Outfit',sans-serif" font-weight="800" font-size="78" fill="var(--accent)" text-anchor="middle" letter-spacing="-3">TOOL</text>
+      <text x="400" y="210" font-family="'Outfit',sans-serif" font-weight="800" font-size="78" fill="var(--accent)" text-anchor="middle" letter-spacing="-3">WALKTHROUGH</text>
+    </svg>
+  </div>
+
+  <div class="cover-subtitle">Mechanics &amp; workflow · end to end</div>
+
+  <div class="cover-foot">
+    <div class="cover-foot-block">
+      <strong>Read time</strong>
+      20 minutes plus 2 Loom videos when recorded
+    </div>
+    <div class="cover-foot-block">
+      <strong>Audience</strong>
+      Active labelers. The "how to actually do it" companion to <strong>03a Rubric</strong>.
+    </div>
+    <div class="cover-foot-block">
+      <strong>Pairs with</strong>
+      Open this alongside <strong>03a Rubric</strong> during your first 5 labeling sessions.
+    </div>
+  </div>
+
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 2 — WHAT YOU NEED
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page">
+  <div class="inner">
+    <aside class="rail">
+      <div class="rail-doc-num">04</div>
+      <div class="rail-doc-label">Tool Walkthrough</div>
+
+      <div class="rail-section">
+        <div class="rail-section-label">In this part</div>
+        <div class="rail-section-body">Setup, workflow, known Gemini failure modes, Loom shot lists, shortcuts.</div>
+      </div>
+
+      <div class="rail-nav">
+        <div class="rail-nav-item is-current"><span>What you need</span><span class="num">01</span></div>
+        <div class="rail-nav-item"><span>The 5-step flow</span><span class="num">02</span></div>
+        <div class="rail-nav-item"><span>Gemini traps</span><span class="num">03</span></div>
+        <div class="rail-nav-item"><span>Loom shot list</span><span class="num">04</span></div>
+        <div class="rail-nav-item"><span>Shortcuts</span><span class="num">05</span></div>
+      </div>
+
+      <div class="rail-pagenum">
+        <div class="rail-pagenum-big">02</div>
+        <div class="rail-pagenum-total">of 06</div>
+      </div>
+    </aside>
+
+    <main class="main">
+
+      <div class="section-strip">
+        <svg viewBox="0 0 1000 48" preserveAspectRatio="none">
+          <g stroke="var(--net-stroke)" stroke-width="1.1" stroke-opacity="var(--net-opacity)" stroke-linecap="square">
+            <line x1="0" y1="6" x2="0" y2="48"/><line x1="66" y1="6" x2="66" y2="48"/><line x1="132" y1="6" x2="132" y2="48"/><line x1="198" y1="6" x2="198" y2="48"/><line x1="264" y1="6" x2="264" y2="48"/><line x1="330" y1="6" x2="330" y2="48"/><line x1="396" y1="6" x2="396" y2="48"/><line x1="462" y1="6" x2="462" y2="48"/><line x1="528" y1="6" x2="528" y2="48"/><line x1="594" y1="6" x2="594" y2="48"/><line x1="660" y1="6" x2="660" y2="48"/><line x1="726" y1="6" x2="726" y2="48"/><line x1="792" y1="6" x2="792" y2="48"/><line x1="858" y1="6" x2="858" y2="48"/><line x1="924" y1="6" x2="924" y2="48"/><line x1="990" y1="6" x2="990" y2="48"/><line x1="1000" y1="6" x2="1000" y2="48"/>
+            <line x1="0" y1="6" x2="1000" y2="6"/>
+          </g>
+          <polyline points="0,48 0,6 1000,6 1000,48" fill="none" stroke="var(--net-stroke)" stroke-width="4" stroke-linecap="square"/>
+        </svg>
+        <span class="label">01 · What you'll need</span>
+      </div>
+
+      <h1 class="h-chapter">Before you start your first match.</h1>
+      <p class="h-deck">Set up once. Reuse for every match after.</p>
+
+      <ul>
+        <li><strong>The match video</strong> — mp4 or shared link from Joshua.</li>
+        <li><strong>The match metadata</strong> — jersey colours, opponent, date, <code>video_job_id</code>. Usually one message.</li>
+        <li><strong>A video player that supports frame-by-frame.</strong> VLC works: <code>E</code> = next frame, <code>D</code> = previous frame. Browser players usually do not.</li>
+        <li><strong>Excel</strong> (or Google Sheets / LibreOffice — Excel preserves the dropdowns best).</li>
+        <li><strong>A local clone of the repo</strong>, or read access to <code>scripts/ground-truth/_template.xlsx</code>.</li>
+        <li><strong>Node.js</strong> if you'll run the converter yourself; otherwise hand the <code>.xlsx</code> to Joshua.</li>
+      </ul>
+
+      <div class="body-cols">
+        <div class="col-main">
+          <h2 class="h-section">Time budget</h2>
+          <p>A typical match takes 60–90 minutes of labeling for ~50 minutes of video. The <strong>first match you label will take longer</strong> — expect 2-3 hours. By match 10 you'll be at the typical rate.</p>
+
+          <p>If you're billing per match, the rate is calibrated to ~1.5× experienced-labeler time. So a senior labeler earns a premium on speed. New labelers are expected to be slower — that's normal.</p>
+        </div>
+        <div class="col-side">
+          <div class="side-label">Recommended setup</div>
+          <div class="side-body">
+            <strong>Two monitors or wide screen</strong>
+            Video on one side, Excel on the other. Single-monitor labelers tend to mis-timestamp.
+            <strong>Hotkey for pause</strong>
+            Set it at the home row. You'll use it constantly.
+            <strong>VLC frame-step</strong>
+            E = next frame, D = previous frame.
+            <strong>VLC playback speed</strong>
+            + = faster, – = slower. 1.5× is comfortable for review passes; 0.5× for save classification.
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 3 — THE 5-STEP WORKFLOW
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page">
+  <div class="inner">
+    <aside class="rail">
+      <div class="rail-doc-num">04</div>
+      <div class="rail-doc-label">Tool Walkthrough</div>
+
+      <div class="rail-section">
+        <div class="rail-section-label">Blind first</div>
+        <div class="rail-section-body">The most important rule. Reading Gemini's output before labeling will anchor you on its errors. 10-15 extra minutes; worth every one.</div>
+      </div>
+
+      <div class="rail-pagenum">
+        <div class="rail-pagenum-big">03</div>
+        <div class="rail-pagenum-total">of 06</div>
+      </div>
+    </aside>
+
+    <main class="main">
+
+      <div class="section-strip">
+        <svg viewBox="0 0 1000 48" preserveAspectRatio="none">
+          <g stroke="var(--net-stroke)" stroke-width="1.1" stroke-opacity="var(--net-opacity)" stroke-linecap="square">
+            <line x1="0" y1="6" x2="0" y2="48"/><line x1="66" y1="6" x2="66" y2="48"/><line x1="132" y1="6" x2="132" y2="48"/><line x1="198" y1="6" x2="198" y2="48"/><line x1="264" y1="6" x2="264" y2="48"/><line x1="330" y1="6" x2="330" y2="48"/><line x1="396" y1="6" x2="396" y2="48"/><line x1="462" y1="6" x2="462" y2="48"/><line x1="528" y1="6" x2="528" y2="48"/><line x1="594" y1="6" x2="594" y2="48"/><line x1="660" y1="6" x2="660" y2="48"/><line x1="726" y1="6" x2="726" y2="48"/><line x1="792" y1="6" x2="792" y2="48"/><line x1="858" y1="6" x2="858" y2="48"/><line x1="924" y1="6" x2="924" y2="48"/><line x1="990" y1="6" x2="990" y2="48"/><line x1="1000" y1="6" x2="1000" y2="48"/>
+            <line x1="0" y1="6" x2="1000" y2="6"/>
+          </g>
+          <polyline points="0,48 0,6 1000,6 1000,48" fill="none" stroke="var(--net-stroke)" stroke-width="4" stroke-linecap="square"/>
+        </svg>
+        <span class="label">02 · The end-to-end workflow</span>
+      </div>
+
+      <h1 class="h-chapter">Same five steps, every match.</h1>
+
+      <div class="step-block">
+        <div class="step-num">01</div>
+        <div class="step-body">
+          <h3>Set up the workbook</h3>
+          <p>Copy <code>scripts/ground-truth/_template.xlsx</code> to <code>scripts/ground-truth/&lt;match-name&gt;.xlsx</code>. Naming: <code>&lt;keeper&gt;-vs-&lt;opponent&gt;-YYYY-MM-DD.xlsx</code>. Open in Excel. <strong>Fill Metadata sheet first.</strong> Confirm colours match the analyzer config (ask Joshua if unclear).</p>
+        </div>
+      </div>
+
+      <div class="step-block">
+        <div class="step-num">02</div>
+        <div class="step-body">
+          <h3>Blind pass on the video</h3>
+          <p>Open the video. Note duration on Metadata. Play. When something happens, pause and log. Use frame-by-frame (VLC: <code>E</code> / <code>D</code>) to confirm exact strike timestamp, shooter's jersey colour at contact, keeper's hand shape if visible. <strong>After halftime, explicitly check you're still labeling.</strong></p>
+        </div>
+      </div>
+
+      <div class="step-block">
+        <div class="step-num">03</div>
+        <div class="step-body">
+          <h3>Compare against the Gemini output</h3>
+          <p>Once blind pass is complete, get the Gemini JSON from Joshua / the queue. Side-by-side. Events Gemini found that you missed: verify on tape, ADD if real, skip if phantom. Events you found that Gemini missed: keep — these are the training-leverage cases. Disagreements on classification: rubric wins. <strong>Do NOT just copy Gemini's labels.</strong></p>
+        </div>
+      </div>
+
+      <div class="step-block">
+        <div class="step-num">04</div>
+        <div class="step-body">
+          <h3>Self-check</h3>
+          <p>Run the checklist from <strong>03a Rubric §09</strong>. Don't skip. Two minutes here prevents an hour of back-and-forth.</p>
+        </div>
+      </div>
+
+      <div class="step-block">
+        <div class="step-num">05</div>
+        <div class="step-body">
+          <h3>Convert and submit</h3>
+          <p>Run <code>node scripts/excel-to-ground-truth.js scripts/ground-truth/&lt;match-name&gt;.xlsx</code>. Eyeball the JSON. Goal count matches? Saves array looks right? Commit both files, or hand off to Joshua if you don't have repo write access.</p>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 4 — GEMINI FAILURE MODES
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page">
+  <div class="inner">
+    <aside class="rail">
+      <div class="rail-doc-num">04</div>
+      <div class="rail-doc-label">Tool Walkthrough</div>
+
+      <div class="rail-section">
+        <div class="rail-section-label">Spot the phantom</div>
+        <div class="rail-section-body">If Gemini's <code>preceding_attack</code> field is vague or absent on a save event, the save is invented. Drop it from your labels.</div>
+      </div>
+
+      <div class="rail-pagenum">
+        <div class="rail-pagenum-big">04</div>
+        <div class="rail-pagenum-total">of 06</div>
+      </div>
+    </aside>
+
+    <main class="main">
+
+      <div class="section-strip">
+        <svg viewBox="0 0 1000 48" preserveAspectRatio="none">
+          <g stroke="var(--net-stroke)" stroke-width="1.1" stroke-opacity="var(--net-opacity)" stroke-linecap="square">
+            <line x1="0" y1="6" x2="0" y2="48"/><line x1="66" y1="6" x2="66" y2="48"/><line x1="132" y1="6" x2="132" y2="48"/><line x1="198" y1="6" x2="198" y2="48"/><line x1="264" y1="6" x2="264" y2="48"/><line x1="330" y1="6" x2="330" y2="48"/><line x1="396" y1="6" x2="396" y2="48"/><line x1="462" y1="6" x2="462" y2="48"/><line x1="528" y1="6" x2="528" y2="48"/><line x1="594" y1="6" x2="594" y2="48"/><line x1="660" y1="6" x2="660" y2="48"/><line x1="726" y1="6" x2="726" y2="48"/><line x1="792" y1="6" x2="792" y2="48"/><line x1="858" y1="6" x2="858" y2="48"/><line x1="924" y1="6" x2="924" y2="48"/><line x1="990" y1="6" x2="990" y2="48"/><line x1="1000" y1="6" x2="1000" y2="48"/>
+            <line x1="0" y1="6" x2="1000" y2="6"/>
+          </g>
+          <polyline points="0,48 0,6 1000,6 1000,48" fill="none" stroke="var(--net-stroke)" stroke-width="4" stroke-linecap="square"/>
+        </svg>
+        <span class="label">03 · Known Gemini failure modes</span>
+      </div>
+
+      <h1 class="h-chapter">Five documented mistakes to spot.</h1>
+      <p class="h-deck">From the changelog in <code>prompts/README.md</code>. Knowing these helps you recognize phantoms when comparing against the Gemini output.</p>
+
+      <div class="tbl-caption">Table 03.1 · Gemini failure modes &amp; how to spot them</div>
+      <table class="gktable">
+        <thead>
+          <tr><th style="width:6%">#</th><th style="width:32%">Failure mode</th><th>Your defence</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="lbl">01</span></td>
+            <td><strong>Inventing saves on dominant-win matches.</strong> 50+ saves reported for a match with 4 actual shots.</td>
+            <td>Apply the antecedent-attack test. If <code>preceding_attack</code> is vague, the save is invented.</td>
+          </tr>
+          <tr>
+            <td><span class="lbl">02</span></td>
+            <td><strong>Flipping the scoring team.</strong> 100% wrong historically when reporting "analyzed team conceded"; 50% wrong on opposition.</td>
+            <td>Always verify by the shooter's kit colour at the moment of strike. Compare to <code>evidence_shooter_color</code> field.</td>
+          </tr>
+          <tr>
+            <td><span class="lbl">03</span></td>
+            <td><strong>Drifting timestamps.</strong> Reported events at the wrong time, or events that don't exist at all.</td>
+            <td>Always use your own video-offset timestamp from frame-stepping. Never copy Gemini's timestamps.</td>
+          </tr>
+          <tr>
+            <td><span class="lbl">04</span></td>
+            <td><strong>Logging opposition keeper distributions.</strong> When our keeper is off-camera, sometimes attributes opposition releases to us.</td>
+            <td>Colour-check every distribution. The keeper kit colour at the moment of release is the test.</td>
+          </tr>
+          <tr>
+            <td><span class="lbl">05</span></td>
+            <td><strong>Conflating distance with kick type.</strong> "GK Long Kick" labels on goal kicks; "Throw" labels on 40-yard balls.</td>
+            <td>Use the release-motion decision tree (see <strong>03a §05b</strong>). Distance is the LAST step, not the first.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="bigquote" style="margin-top:24px">
+        <p class="q">We are not measuring <em>"how well a human agrees with Gemini."</em> We are measuring ground truth. The model is wrong; your job is to be right.</p>
+        <p class="a">The core principle</p>
+      </div>
+
+    </main>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 5 — LOOM SHOT LISTS
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page">
+  <div class="inner">
+    <aside class="rail">
+      <div class="rail-doc-num">04</div>
+      <div class="rail-doc-label">Tool Walkthrough</div>
+
+      <div class="rail-section">
+        <div class="rail-section-label">Status</div>
+        <div class="rail-section-body">Videos not yet recorded. These shot lists are the script — use them when recording.</div>
+      </div>
+
+      <div class="rail-section">
+        <div class="rail-section-label">Recommended source</div>
+        <div class="rail-section-body">Use the <code>judah-2026-05-23-pfc</code> match — known edge cases, real disagreements, makes for honest demonstration.</div>
+      </div>
+
+      <div class="rail-pagenum">
+        <div class="rail-pagenum-big">05</div>
+        <div class="rail-pagenum-total">of 06</div>
+      </div>
+    </aside>
+
+    <main class="main">
+
+      <div class="section-strip">
+        <svg viewBox="0 0 1000 48" preserveAspectRatio="none">
+          <g stroke="var(--net-stroke)" stroke-width="1.1" stroke-opacity="var(--net-opacity)" stroke-linecap="square">
+            <line x1="0" y1="6" x2="0" y2="48"/><line x1="66" y1="6" x2="66" y2="48"/><line x1="132" y1="6" x2="132" y2="48"/><line x1="198" y1="6" x2="198" y2="48"/><line x1="264" y1="6" x2="264" y2="48"/><line x1="330" y1="6" x2="330" y2="48"/><line x1="396" y1="6" x2="396" y2="48"/><line x1="462" y1="6" x2="462" y2="48"/><line x1="528" y1="6" x2="528" y2="48"/><line x1="594" y1="6" x2="594" y2="48"/><line x1="660" y1="6" x2="660" y2="48"/><line x1="726" y1="6" x2="726" y2="48"/><line x1="792" y1="6" x2="792" y2="48"/><line x1="858" y1="6" x2="858" y2="48"/><line x1="924" y1="6" x2="924" y2="48"/><line x1="990" y1="6" x2="990" y2="48"/><line x1="1000" y1="6" x2="1000" y2="48"/>
+            <line x1="0" y1="6" x2="1000" y2="6"/>
+          </g>
+          <polyline points="0,48 0,6 1000,6 1000,48" fill="none" stroke="var(--net-stroke)" stroke-width="4" stroke-linecap="square"/>
+        </svg>
+        <span class="label">04 · Loom video shot lists</span>
+      </div>
+
+      <h1 class="h-chapter">Two videos, ten minutes each.</h1>
+      <p class="h-deck">When recorded, these will live in this section. Until then, the shot lists below are the script.</p>
+
+      <div class="body-cols">
+        <div class="col-main">
+          <h2 class="h-section">Video 1 — "Filling in a ground truth doc from scratch"</h2>
+          <p><strong>Target length:</strong> 10-12 minutes</p>
+          <ul>
+            <li><strong>0:00</strong> Open the template, save-as with the match slug.</li>
+            <li><strong>1:00</strong> Fill Metadata while talking through where each value comes from.</li>
+            <li><strong>2:30</strong> Open the video, note duration on Metadata.</li>
+            <li><strong>3:00</strong> Walk through 3-4 events in real time: one goal (with frame-stepping for shooter colour), one save (showing antecedent-attack test), one distribution (release-motion decision), one "I cannot tell" moment.</li>
+            <li><strong>10:00</strong> Run the converter, eyeball the JSON, commit.</li>
+          </ul>
+        </div>
+        <div class="col-side">
+          <div class="side-label">Recording notes</div>
+          <div class="side-body">
+            Don't script rigidly. Talking through real decisions on real tape is more useful than a polished script.
+            <br><br>
+            Use a recent labeled match where you remember the gray areas. Show the labeler the moment of doubt and explain how you ruled.
+            <br><br>
+            Keep the camera off your face — screen recording only. Voice over.
+          </div>
+        </div>
+      </div>
+
+      <h2 class="h-section">Video 2 — "Reviewing the Gemini output as a second check"</h2>
+      <p><strong>Target length:</strong> 10 minutes</p>
+      <ul>
+        <li><strong>0:00</strong> Show the Gemini JSON side-by-side with your labeled JSON.</li>
+        <li><strong>1:00</strong> Walk through three disagreements: one where Gemini was right and you missed it; one where Gemini was wrong (a phantom save) — verify and skip; one classified differently — explain rubric reasoning.</li>
+        <li><strong>6:00</strong> Show the 5 known failure modes from the previous page with real examples.</li>
+        <li><strong>9:00</strong> Submit + final checklist.</li>
+      </ul>
+
+    </main>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 6 — TOOLS, SHORTCUTS, WHEN STUCK
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page">
+  <div class="inner">
+    <aside class="rail">
+      <div class="rail-doc-num">04</div>
+      <div class="rail-doc-label">Tool Walkthrough</div>
+
+      <div class="rail-section">
+        <div class="rail-section-label">If you've watched 3×</div>
+        <div class="rail-section-body">Mark <code>Unclear</code> and move on. Don't burn 5 minutes on one event. Reviewers prefer 10 Unclear to 5 confidently-wrong.</div>
+      </div>
+
+      <div class="rail-section">
+        <div class="rail-section-label">Next</div>
+        <div class="rail-section-body">
+          05 Calibration Process — the cohort onboarding flow that gets you to "production-ready."
+        </div>
+      </div>
+
+      <div class="rail-pagenum">
+        <div class="rail-pagenum-big">06</div>
+        <div class="rail-pagenum-total">of 06</div>
+      </div>
+    </aside>
+
+    <main class="main">
+
+      <div class="section-strip">
+        <svg viewBox="0 0 1000 48" preserveAspectRatio="none">
+          <g stroke="var(--net-stroke)" stroke-width="1.1" stroke-opacity="var(--net-opacity)" stroke-linecap="square">
+            <line x1="0" y1="6" x2="0" y2="48"/><line x1="66" y1="6" x2="66" y2="48"/><line x1="132" y1="6" x2="132" y2="48"/><line x1="198" y1="6" x2="198" y2="48"/><line x1="264" y1="6" x2="264" y2="48"/><line x1="330" y1="6" x2="330" y2="48"/><line x1="396" y1="6" x2="396" y2="48"/><line x1="462" y1="6" x2="462" y2="48"/><line x1="528" y1="6" x2="528" y2="48"/><line x1="594" y1="6" x2="594" y2="48"/><line x1="660" y1="6" x2="660" y2="48"/><line x1="726" y1="6" x2="726" y2="48"/><line x1="792" y1="6" x2="792" y2="48"/><line x1="858" y1="6" x2="858" y2="48"/><line x1="924" y1="6" x2="924" y2="48"/><line x1="990" y1="6" x2="990" y2="48"/><line x1="1000" y1="6" x2="1000" y2="48"/>
+            <line x1="0" y1="6" x2="1000" y2="6"/>
+          </g>
+          <polyline points="0,48 0,6 1000,6 1000,48" fill="none" stroke="var(--net-stroke)" stroke-width="4" stroke-linecap="square"/>
+        </svg>
+        <span class="label">05 · Shortcuts &amp; when stuck</span>
+      </div>
+
+      <h1 class="h-chapter">Tools and shortcuts that pay back fast.</h1>
+
+      <div class="tbl-caption">Table 05.1 · The shortcuts that matter</div>
+      <table class="gktable">
+        <thead><tr><th style="width:30%">Tool / shortcut</th><th>Why it pays</th></tr></thead>
+        <tbody>
+          <tr><td><strong>VLC frame-step</strong> · <code>E</code> next, <code>D</code> previous</td><td>Lock the strike timestamp to the exact frame. Use this constantly.</td></tr>
+          <tr><td><strong>VLC playback speed</strong> · <code>+</code> faster, <code>-</code> slower</td><td>1.5× for review passes; 0.5× for save classification.</td></tr>
+          <tr><td><strong>Excel "Fill down"</strong></td><td>When 6 backpasses in a row are all <code>Pass / Short to defender / Defender</code>, drag the fill handle. Saves minutes per match.</td></tr>
+          <tr><td><strong>Dual monitor</strong></td><td>Video on one side, Excel on the other. Single-monitor labelers tend to mis-timestamp.</td></tr>
+          <tr><td><strong>Pause hotkey at home row</strong></td><td>Don't reach for spacebar. Use a hotkey close to your typing position.</td></tr>
+        </tbody>
+      </table>
+
+      <h2 class="h-section">When you're stuck</h2>
+
+      <div class="body-cols">
+        <div class="col-main">
+          <p>If you've watched a moment three times and still can't classify it, <strong>mark it <code>Unclear</code> and move on.</strong> Don't burn 5 minutes on one event. The reviewer would rather see 10 Unclear rows than 5 confidently-wrong rows.</p>
+
+          <p>If you're stuck on something philosophical ("does this count as a save?"), <strong>add it to the Edge-Case Log (03b)</strong> with what you saw, what you ruled (best guess), and flag it for review. It gets resolved within the day and becomes canon for future labelers.</p>
+        </div>
+        <div class="col-side">
+          <div class="side-label">Three habits good labelers share</div>
+          <div class="side-body">
+            <strong>Default to Unclear</strong>
+            Honest beats confident.
+            <strong>Describe, don't infer</strong>
+            Observable beats imagined.
+            <strong>Add edge cases to the log</strong>
+            Your gray area is the next labeler's clear rule.
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</section>
+
+</body>
+</html>

@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>05 · Calibration Process — StixAnalytix Training</title>
+<link rel="stylesheet" href="../_design/template/stixanalytix-doc.css">
+</head>
+<body class="is-screen">
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 1 — COVER
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page cover">
+
+  <div class="cover-rail">
+    <div class="rail-block">
+      <span class="rail-label">StixAnalytix</span>
+      <span class="rail-value">Training Series</span>
+    </div>
+    <div class="rail-block center">
+      <span class="rail-label">Part 05 / 07</span>
+      <span class="rail-value">Cohort onboarding</span>
+    </div>
+    <div class="rail-block right">
+      <span class="rail-label">v1.0 · 2026</span>
+      <span class="rail-value">Internal · Confidential</span>
+    </div>
+  </div>
+
+  <div class="cover-doc-id">05</div>
+
+  <div class="cover-frame-wrap">
+    <svg width="640" height="220" viewBox="0 0 800 280" xmlns="http://www.w3.org/2000/svg">
+      <g stroke="var(--net-stroke)" stroke-width="1.1" stroke-opacity="var(--net-opacity)" stroke-linecap="square">
+        <line x1="10"  y1="10" x2="10"  y2="280"/><line x1="76"  y1="10" x2="76"  y2="280"/><line x1="142" y1="10" x2="142" y2="280"/><line x1="208" y1="10" x2="208" y2="280"/><line x1="274" y1="10" x2="274" y2="280"/><line x1="340" y1="10" x2="340" y2="280"/><line x1="406" y1="10" x2="406" y2="280"/><line x1="472" y1="10" x2="472" y2="280"/><line x1="538" y1="10" x2="538" y2="280"/><line x1="604" y1="10" x2="604" y2="280"/><line x1="670" y1="10" x2="670" y2="280"/><line x1="736" y1="10" x2="736" y2="280"/><line x1="790" y1="10" x2="790" y2="280"/>
+        <line x1="10" y1="10"  x2="790" y2="10"/><line x1="10" y1="66"  x2="790" y2="66"/><line x1="10" y1="122" x2="790" y2="122"/><line x1="10" y1="178" x2="790" y2="178"/><line x1="10" y1="234" x2="790" y2="234"/>
+      </g>
+      <polyline points="10,280 10,10 790,10 790,280" fill="none" stroke="var(--net-stroke)" stroke-width="6" stroke-linecap="square"/>
+      <text x="400" y="140" font-family="'Outfit',sans-serif" font-weight="800" font-size="78" fill="var(--accent)" text-anchor="middle" letter-spacing="-3">CALIBRATION</text>
+      <text x="400" y="210" font-family="'Outfit',sans-serif" font-weight="800" font-size="78" fill="var(--accent)" text-anchor="middle" letter-spacing="-3">PROCESS</text>
+    </svg>
+  </div>
+
+  <div class="cover-subtitle">Cohort onboarding · inter-annotator agreement · graduation</div>
+
+  <div class="cover-foot">
+    <div class="cover-foot-block">
+      <strong>Read time</strong>
+      15 minutes
+    </div>
+    <div class="cover-foot-block">
+      <strong>Audience</strong>
+      First cohort labelers and reviewers. The process between "read the rubric" and "label at scale."
+    </div>
+    <div class="cover-foot-block">
+      <strong>Why it exists</strong>
+      A rubric is a contract written in words. Words are ambiguous. Calibration measures the divergence and surfaces gray areas before they corrupt the training set.
+    </div>
+  </div>
+
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 2 — WHY + WHEN
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page">
+  <div class="inner">
+    <aside class="rail">
+      <div class="rail-doc-num">05</div>
+      <div class="rail-doc-label">Calibration</div>
+
+      <div class="rail-section">
+        <div class="rail-section-label">In this part</div>
+        <div class="rail-section-body">Why calibration exists, the cohort, match selection, the 4-round process, graduation, ongoing QA, pay model.</div>
+      </div>
+
+      <div class="rail-nav">
+        <div class="rail-nav-item is-current"><span>Why &amp; when</span><span class="num">01</span></div>
+        <div class="rail-nav-item"><span>Cohort &amp; matches</span><span class="num">02</span></div>
+        <div class="rail-nav-item"><span>The 4 rounds</span><span class="num">03</span></div>
+        <div class="rail-nav-item"><span>IAA thresholds</span><span class="num">04</span></div>
+        <div class="rail-nav-item"><span>Graduation &amp; QA</span><span class="num">05</span></div>
+        <div class="rail-nav-item"><span>Pay &amp; scaling</span><span class="num">06</span></div>
+      </div>
+
+      <div class="rail-pagenum">
+        <div class="rail-pagenum-big">02</div>
+        <div class="rail-pagenum-total">of 06</div>
+      </div>
+    </aside>
+
+    <main class="main">
+
+      <div class="section-strip">
+        <svg viewBox="0 0 1000 48" preserveAspectRatio="none">
+          <g stroke="var(--net-stroke)" stroke-width="1.1" stroke-opacity="var(--net-opacity)" stroke-linecap="square">
+            <line x1="0" y1="6" x2="0" y2="48"/><line x1="66" y1="6" x2="66" y2="48"/><line x1="132" y1="6" x2="132" y2="48"/><line x1="198" y1="6" x2="198" y2="48"/><line x1="264" y1="6" x2="264" y2="48"/><line x1="330" y1="6" x2="330" y2="48"/><line x1="396" y1="6" x2="396" y2="48"/><line x1="462" y1="6" x2="462" y2="48"/><line x1="528" y1="6" x2="528" y2="48"/><line x1="594" y1="6" x2="594" y2="48"/><line x1="660" y1="6" x2="660" y2="48"/><line x1="726" y1="6" x2="726" y2="48"/><line x1="792" y1="6" x2="792" y2="48"/><line x1="858" y1="6" x2="858" y2="48"/><line x1="924" y1="6" x2="924" y2="48"/><line x1="990" y1="6" x2="990" y2="48"/><line x1="1000" y1="6" x2="1000" y2="48"/>
+            <line x1="0" y1="6" x2="1000" y2="6"/>
+          </g>
+          <polyline points="0,48 0,6 1000,6 1000,48" fill="none" stroke="var(--net-stroke)" stroke-width="4" stroke-linecap="square"/>
+        </svg>
+        <span class="label">01 · Why calibration</span>
+      </div>
+
+      <h1 class="h-chapter">A rubric is a contract written in words.</h1>
+      <p class="h-deck">Two careful labelers reading the same rubric will diverge on the gray areas. The rubric can't anticipate every edge case; only labeling does.</p>
+
+      <p>Calibration measures the divergence, surfaces the gray areas, and updates the rubric <strong>before</strong> the labelers scale to production. Without it, you don't have one consistent dataset — you have N datasets, one per labeler.</p>
+
+      <h2 class="h-section">When to run it</h2>
+
+      <ul>
+        <li>Every time a new labeler joins.</li>
+        <li>Every time the rubric changes materially — new event type, new classification, changed definition.</li>
+        <li>Every quarter, as a drift check on existing labelers.</li>
+      </ul>
+
+      <div class="bigquote">
+        <p class="q">If you skip calibration, you don't have <em>one dataset</em>. You have N datasets, one per labeler — and the model can't learn from the contradiction.</p>
+        <p class="a">First principle</p>
+      </div>
+
+      <h2 class="h-section">The cohort</h2>
+      <p>The cohort is the new labeler <strong>plus at least one experienced labeler</strong>. Three is better than two — disagreement between two people is hard to break ties on.</p>
+
+      <p>For the very first cohort (the one this onboarding package is built for), the experienced labeler is Joshua. New labelers calibrate against his rulings until at least one other labeler has been promoted past calibration; then he steps back from being the sole standard.</p>
+
+    </main>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 3 — CALIBRATION MATCH MIX
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page">
+  <div class="inner">
+    <aside class="rail">
+      <div class="rail-doc-num">05</div>
+      <div class="rail-doc-label">Calibration</div>
+
+      <div class="rail-section">
+        <div class="rail-section-label">Use real matches</div>
+        <div class="rail-section-body">Pick from <code>scripts/ground-truth/</code> where possible — calibration data then feeds the training set rather than being throwaway.</div>
+      </div>
+
+      <div class="rail-pagenum">
+        <div class="rail-pagenum-big">03</div>
+        <div class="rail-pagenum-total">of 06</div>
+      </div>
+    </aside>
+
+    <main class="main">
+
+      <div class="section-strip">
+        <svg viewBox="0 0 1000 48" preserveAspectRatio="none">
+          <g stroke="var(--net-stroke)" stroke-width="1.1" stroke-opacity="var(--net-opacity)" stroke-linecap="square">
+            <line x1="0" y1="6" x2="0" y2="48"/><line x1="66" y1="6" x2="66" y2="48"/><line x1="132" y1="6" x2="132" y2="48"/><line x1="198" y1="6" x2="198" y2="48"/><line x1="264" y1="6" x2="264" y2="48"/><line x1="330" y1="6" x2="330" y2="48"/><line x1="396" y1="6" x2="396" y2="48"/><line x1="462" y1="6" x2="462" y2="48"/><line x1="528" y1="6" x2="528" y2="48"/><line x1="594" y1="6" x2="594" y2="48"/><line x1="660" y1="6" x2="660" y2="48"/><line x1="726" y1="6" x2="726" y2="48"/><line x1="792" y1="6" x2="792" y2="48"/><line x1="858" y1="6" x2="858" y2="48"/><line x1="924" y1="6" x2="924" y2="48"/><line x1="990" y1="6" x2="990" y2="48"/><line x1="1000" y1="6" x2="1000" y2="48"/>
+            <line x1="0" y1="6" x2="1000" y2="6"/>
+          </g>
+          <polyline points="0,48 0,6 1000,6 1000,48" fill="none" stroke="var(--net-stroke)" stroke-width="4" stroke-linecap="square"/>
+        </svg>
+        <span class="label">02 · The calibration match mix</span>
+      </div>
+
+      <h1 class="h-chapter">Pick 5–8 matches that cover the variety.</h1>
+      <p class="h-deck">Don't all-pick easy matches. Each characteristic stress-tests a different part of the rubric. Cover the spectrum or you'll only discover the failures after you've shipped.</p>
+
+      <div class="tbl-caption">Table 02.1 · Calibration set composition</div>
+      <table class="gktable">
+        <thead>
+          <tr>
+            <th style="width:32%">Match characteristic</th>
+            <th style="width:48%">Why it matters</th>
+            <th>Count</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Standard competitive</strong> (3-2 ish, both teams attack)</td>
+            <td>Bread and butter. Many save events, normal distribution rates.</td>
+            <td><span class="lbl">2</span></td>
+          </tr>
+          <tr>
+            <td><strong>One-sided win</strong> for analyzed team (5-0 ish)</td>
+            <td>Tests whether labelers correctly produce a LOW save count instead of inventing saves to fill a quota.</td>
+            <td><span class="lbl">1–2</span></td>
+          </tr>
+          <tr>
+            <td><strong>One-sided loss</strong> for analyzed team (0-5 ish)</td>
+            <td>High save volume, many goals. Tests endurance and the rebound-asymmetry rule.</td>
+            <td><span class="lbl">1</span></td>
+          </tr>
+          <tr>
+            <td><strong>Low-quality video</strong> (phone, angled, no scoreboard)</td>
+            <td>Tests honest use of <code>Unclear</code> and <code>GK visible: No</code>.</td>
+            <td><span class="lbl">1</span></td>
+          </tr>
+          <tr>
+            <td><strong>Match with a GK error leading to a goal</strong></td>
+            <td>Tests <code>Missed/Misjudged</code> classification.</td>
+            <td><span class="lbl">1</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p style="margin-top:24px;font-style:italic;color:var(--fg-mid);font-size:13.5px">The judah-vs-pfc-2026-05-23 match (15-0 win for analyzed team) is essential. It's the one Gemini hallucinated 51 of 55 saves on. If a labeler correctly produces 4 saves, they're calibrated. If they produce 30, they're chasing the model's output.</p>
+
+    </main>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 4 — THE 4-ROUND PROCESS
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page">
+  <div class="inner">
+    <aside class="rail">
+      <div class="rail-doc-num">05</div>
+      <div class="rail-doc-label">Calibration</div>
+
+      <div class="rail-section">
+        <div class="rail-section-label">Don't shortcut Round 3</div>
+        <div class="rail-section-body">The disagreement walkthrough is the highest-value session. Most rubrics live or die in this room. Edit the rubric in real time.</div>
+      </div>
+
+      <div class="rail-pagenum">
+        <div class="rail-pagenum-big">04</div>
+        <div class="rail-pagenum-total">of 06</div>
+      </div>
+    </aside>
+
+    <main class="main">
+
+      <div class="section-strip">
+        <svg viewBox="0 0 1000 48" preserveAspectRatio="none">
+          <g stroke="var(--net-stroke)" stroke-width="1.1" stroke-opacity="var(--net-opacity)" stroke-linecap="square">
+            <line x1="0" y1="6" x2="0" y2="48"/><line x1="66" y1="6" x2="66" y2="48"/><line x1="132" y1="6" x2="132" y2="48"/><line x1="198" y1="6" x2="198" y2="48"/><line x1="264" y1="6" x2="264" y2="48"/><line x1="330" y1="6" x2="330" y2="48"/><line x1="396" y1="6" x2="396" y2="48"/><line x1="462" y1="6" x2="462" y2="48"/><line x1="528" y1="6" x2="528" y2="48"/><line x1="594" y1="6" x2="594" y2="48"/><line x1="660" y1="6" x2="660" y2="48"/><line x1="726" y1="6" x2="726" y2="48"/><line x1="792" y1="6" x2="792" y2="48"/><line x1="858" y1="6" x2="858" y2="48"/><line x1="924" y1="6" x2="924" y2="48"/><line x1="990" y1="6" x2="990" y2="48"/><line x1="1000" y1="6" x2="1000" y2="48"/>
+            <line x1="0" y1="6" x2="1000" y2="6"/>
+          </g>
+          <polyline points="0,48 0,6 1000,6 1000,48" fill="none" stroke="var(--net-stroke)" stroke-width="4" stroke-linecap="square"/>
+        </svg>
+        <span class="label">03 · The 4-round process</span>
+      </div>
+
+      <h1 class="h-chapter">A learning loop, not a test.</h1>
+      <p class="h-deck">The first calibration match almost never hits the IAA thresholds. That's the whole point — calibration is iterative.</p>
+
+      <div class="step-block">
+        <div class="step-num">00</div>
+        <div class="step-body">
+          <h3>Pre-reading</h3>
+          <p>Before touching a match, the new labeler reads <code>01 Mission &amp; Why</code>, <code>02 Domain Primer</code>, and <code>03a Rubric</code>. Skim <code>03b Edge Case Log</code> — they'll add to it during calibration.</p>
+        </div>
+      </div>
+
+      <div class="step-block">
+        <div class="step-num">01</div>
+        <div class="step-body">
+          <h3>Independent labels on match 1</h3>
+          <p>Both labelers label the same match <strong>independently</strong>. No conferring. No looking at each other's spreadsheets. Time-box: 24 hours from receiving the match to submission. Submit as <code>&lt;match-name&gt;__labeler-&lt;initials&gt;.json</code>.</p>
+        </div>
+      </div>
+
+      <div class="step-block">
+        <div class="step-num">02</div>
+        <div class="step-body">
+          <h3>Agreement measurement</h3>
+          <p>Run the comparison. Measure inter-annotator agreement on event recall, classification, timestamps, and Unclear usage. Thresholds on the next page.</p>
+        </div>
+      </div>
+
+      <div class="step-block">
+        <div class="step-num">03</div>
+        <div class="step-body">
+          <h3>Disagreement walkthrough</h3>
+          <p>Working session, 1–2 hours per calibration match. Open the video together. For each disagreement: both labelers explain what they saw, the experienced labeler makes the canonical ruling, the ruling goes into <code>03b</code> immediately. <strong>Edit the rubric in the same session</strong> if the disagreement exposes a gap.</p>
+        </div>
+      </div>
+
+      <div class="step-block">
+        <div class="step-num">04</div>
+        <div class="step-body">
+          <h3>Re-label match 1</h3>
+          <p>The new labeler re-labels match 1 from scratch using the updated rubric. Goal: at least 90% agreement against the gold-standard version. If they hit it, move to the next calibration match. If they don't, identify which dimension they're failing and target the next match's coaching there.</p>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 5 — IAA THRESHOLDS + GRADUATION
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page">
+  <div class="inner">
+    <aside class="rail">
+      <div class="rail-doc-num">05</div>
+      <div class="rail-doc-label">Calibration</div>
+
+      <div class="rail-section">
+        <div class="rail-section-label">If they keep failing</div>
+        <div class="rail-section-body">Most labelers graduate within 3-5 matches. If they're still failing after 6+, the problem is the rubric, not the labeler. Fix the rubric and retest.</div>
+      </div>
+
+      <div class="rail-pagenum">
+        <div class="rail-pagenum-big">05</div>
+        <div class="rail-pagenum-total">of 06</div>
+      </div>
+    </aside>
+
+    <main class="main">
+
+      <div class="section-strip">
+        <svg viewBox="0 0 1000 48" preserveAspectRatio="none">
+          <g stroke="var(--net-stroke)" stroke-width="1.1" stroke-opacity="var(--net-opacity)" stroke-linecap="square">
+            <line x1="0" y1="6" x2="0" y2="48"/><line x1="66" y1="6" x2="66" y2="48"/><line x1="132" y1="6" x2="132" y2="48"/><line x1="198" y1="6" x2="198" y2="48"/><line x1="264" y1="6" x2="264" y2="48"/><line x1="330" y1="6" x2="330" y2="48"/><line x1="396" y1="6" x2="396" y2="48"/><line x1="462" y1="6" x2="462" y2="48"/><line x1="528" y1="6" x2="528" y2="48"/><line x1="594" y1="6" x2="594" y2="48"/><line x1="660" y1="6" x2="660" y2="48"/><line x1="726" y1="6" x2="726" y2="48"/><line x1="792" y1="6" x2="792" y2="48"/><line x1="858" y1="6" x2="858" y2="48"/><line x1="924" y1="6" x2="924" y2="48"/><line x1="990" y1="6" x2="990" y2="48"/><line x1="1000" y1="6" x2="1000" y2="48"/>
+            <line x1="0" y1="6" x2="1000" y2="6"/>
+          </g>
+          <polyline points="0,48 0,6 1000,6 1000,48" fill="none" stroke="var(--net-stroke)" stroke-width="4" stroke-linecap="square"/>
+        </svg>
+        <span class="label">04 · IAA thresholds &amp; graduation</span>
+      </div>
+
+      <h1 class="h-chapter">Inter-annotator agreement — the production bar.</h1>
+      <p class="h-deck">A labeler is promoted from "calibrating" to "production-ready" when, on a fresh calibration match they have never seen, they hit all four thresholds.</p>
+
+      <div class="tbl-caption">Table 04.1 · Production thresholds</div>
+      <table class="gktable">
+        <thead>
+          <tr><th style="width:30%">Dimension</th><th style="width:40%">What it measures</th><th>Threshold</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Event recall</strong></td>
+            <td>Did both labelers find the same events?</td>
+            <td><span class="lbl">≥ 90%</span></td>
+          </tr>
+          <tr>
+            <td><strong>Event count by type</strong></td>
+            <td>Same number of goals / saves / distributions logged?</td>
+            <td><span class="lbl">within ±2</span></td>
+          </tr>
+          <tr>
+            <td><strong>Classification agreement</strong></td>
+            <td>When both found the same event, did they classify it the same way?</td>
+            <td><span class="lbl">≥ 85%</span> on GK action, <span class="lbl">≥ 90%</span> on scoring team</td>
+          </tr>
+          <tr>
+            <td><strong>Timestamp agreement</strong></td>
+            <td>When both found the same event, were timestamps within 5 seconds?</td>
+            <td><span class="lbl">≥ 95%</span> within ±5s</td>
+          </tr>
+          <tr>
+            <td><strong>Unclear usage</strong></td>
+            <td>Is one labeler over-confident and the other under-confident?</td>
+            <td>both at <span class="lbl">10–25%</span> on borderline classifications</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2 class="h-section">Graduation criteria</h2>
+      <p>On a fresh calibration match the labeler has never seen, all of:</p>
+      <ul class="checklist">
+        <li>Event recall ≥ 90%</li>
+        <li>Classification agreement on GK action ≥ 85%</li>
+        <li>Timestamp agreement ≥ 95% within ±5s</li>
+        <li>Zero false positives on the antecedent-attack rule (no save events with vague Play description)</li>
+      </ul>
+
+    </main>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 6 — POST-GRADUATION + PAY MODEL
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page">
+  <div class="inner">
+    <aside class="rail">
+      <div class="rail-doc-num">05</div>
+      <div class="rail-doc-label">Calibration</div>
+
+      <div class="rail-section">
+        <div class="rail-section-label">What "ready to scale" looks like</div>
+        <div class="rail-section-body">2+ labelers graduated · independent re-labels hit IAA on first try · edge-case log has 20+ rulings · rubric had 1-3 updates · Loom videos recorded.</div>
+      </div>
+
+      <div class="rail-pagenum">
+        <div class="rail-pagenum-big">06</div>
+        <div class="rail-pagenum-total">of 06</div>
+      </div>
+    </aside>
+
+    <main class="main">
+
+      <div class="section-strip">
+        <svg viewBox="0 0 1000 48" preserveAspectRatio="none">
+          <g stroke="var(--net-stroke)" stroke-width="1.1" stroke-opacity="var(--net-opacity)" stroke-linecap="square">
+            <line x1="0" y1="6" x2="0" y2="48"/><line x1="66" y1="6" x2="66" y2="48"/><line x1="132" y1="6" x2="132" y2="48"/><line x1="198" y1="6" x2="198" y2="48"/><line x1="264" y1="6" x2="264" y2="48"/><line x1="330" y1="6" x2="330" y2="48"/><line x1="396" y1="6" x2="396" y2="48"/><line x1="462" y1="6" x2="462" y2="48"/><line x1="528" y1="6" x2="528" y2="48"/><line x1="594" y1="6" x2="594" y2="48"/><line x1="660" y1="6" x2="660" y2="48"/><line x1="726" y1="6" x2="726" y2="48"/><line x1="792" y1="6" x2="792" y2="48"/><line x1="858" y1="6" x2="858" y2="48"/><line x1="924" y1="6" x2="924" y2="48"/><line x1="990" y1="6" x2="990" y2="48"/><line x1="1000" y1="6" x2="1000" y2="48"/>
+            <line x1="0" y1="6" x2="1000" y2="6"/>
+          </g>
+          <polyline points="0,48 0,6 1000,6 1000,48" fill="none" stroke="var(--net-stroke)" stroke-width="4" stroke-linecap="square"/>
+        </svg>
+        <span class="label">05 · Graduation isn't unsupervised</span>
+      </div>
+
+      <h1 class="h-chapter">The QA loop continues after graduation.</h1>
+      <p class="h-deck">Graduated labelers are not unsupervised. Three ongoing checks catch drift before it corrupts the dataset.</p>
+
+      <h2 class="h-section">Three ongoing checks</h2>
+      <ul>
+        <li><strong>5% spot check.</strong> Joshua (or another graduated labeler) re-labels a random 5% of every labeler's matches in shadow mode and compares.</li>
+        <li><strong>Edge cases always go to the log.</strong> Even graduated labelers add new gray areas. The log is canonical; private rulings are forbidden.</li>
+        <li><strong>Quarterly recalibration.</strong> Every labeler labels one fresh calibration match against the current gold standard. Catches drift from accumulated bad habits.</li>
+      </ul>
+
+      <h2 class="h-section">Pay model — base + accuracy bonus</h2>
+
+      <div class="body-cols">
+        <div class="col-main">
+          <p>The right model is <strong>base rate per match + accuracy bonus</strong>:</p>
+          <ul>
+            <li><strong>Base rate per match.</strong> Calibrated to roughly 1.5× the time a competent labeler takes (so an experienced labeler earns a premium).</li>
+            <li><strong>Accuracy bonus.</strong> Paid against a sampled subset (5–10% of the labeler's matches) re-labeled by a graduated reviewer. Bonus scales with agreement against the gold standard.</li>
+          </ul>
+          <p>Pay per match alone incentivizes speed over accuracy. Pay per hour alone incentivizes slowness. The split model rewards labelers who are both fast AND right.</p>
+        </div>
+        <div class="col-side">
+          <div class="side-label">For volunteers / equity helpers</div>
+          <div class="side-body">
+            Same QA loop applies but the accuracy bonus is replaced by recognition — your name in the dataset credits, project shoutouts, eventual reference letter if you stick.
+            <br><br>
+            The Edge Case Log is also signed — every ruling carries the labeler's name. That becomes a portfolio piece.
+          </div>
+        </div>
+      </div>
+
+      <div class="bigquote" style="margin-top:32px">
+        <p class="q">At ready-to-scale, you can give a calibrated labeler their first 5 production matches with confidence that what comes back is <em>consistent training data</em> — not personal interpretation.</p>
+        <p class="a">The threshold for scaling</p>
+      </div>
+
+    </main>
+  </div>
+</section>
+
+</body>
+</html>
