@@ -58,6 +58,9 @@ scripts/bench-results/*
 *.gcp-key.json
 *-credentials.json
 
-# SFT training corpus — regenerable via scripts/build-sft-training-data.py.
-# Keep .stats.json (audit trail of what was built) but not the JSONL itself.
+# SFT training corpus — regenerable via scripts/build-sft-corpus.py orchestrator.
+# Keep manifest.json + holdout-policy.md + stats (provenance) in source control
+# only if explicitly added; the JSONL itself is large and rebuildable.
 training/*.jsonl
+training/**/*.jsonl
+training/v*/
