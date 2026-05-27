@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Variant 3 — Magazine Spread · StixAnalytix Training</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;800;900&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300;1,400&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:       #0c0c0a;
+  --bg-2:     #111110;
+  --paper:    #F1EEE8;
+  --fg:       #EDEAE1;
+  --fg-mid:   rgba(237,234,225,0.46);
+  --fg-dim:   rgba(237,234,225,0.22);
+  --fg-ghost: rgba(237,234,225,0.09);
+  --green:    #10b981;
+  --green-dk: #047857;
+  --rule:     rgba(237,234,225,0.07);
+  --display:  'Outfit', sans-serif;
+  --ui:       'DM Sans', sans-serif;
+}
+html { background: #1a1a18; }
+body { font-family: var(--ui); -webkit-font-smoothing: antialiased; color: var(--fg); }
+
+.page {
+  width: 1100px;
+  min-height: 1400px;
+  margin: 40px auto;
+  background: var(--bg);
+  position: relative;
+  overflow: hidden;
+}
+.page--mixed {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+}
+.page--mixed .top { background: var(--bg); padding: 64px 80px; position: relative; }
+.page--mixed .bot { background: var(--paper); color: #0c0c0a; padding: 64px 80px; position: relative; }
+
+/* ── COVER ──────────────────────────────────────────────────────── */
+.cover {
+  position: relative;
+  padding: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 1400px;
+}
+
+.cover-band-top {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  padding: 36px 64px;
+  border-bottom: 1px solid var(--rule);
+  align-items: center;
+}
+.cover-band-top .b-l, .cover-band-top .b-r {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--green);
+}
+.cover-band-top .b-r { text-align: right; color: var(--fg-dim); }
+.cover-band-top .b-c {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--green);
+  letter-spacing: -0.4px;
+}
+
+.cover-hero {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  padding: 60px 64px;
+  position: relative;
+}
+.cover-hero-text {
+  padding-right: 40px;
+}
+.cover-hero-num {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 220px;
+  line-height: 0.82;
+  color: var(--green);
+  letter-spacing: -12px;
+  margin-bottom: 6px;
+}
+.cover-hero-label {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--fg-mid);
+  margin-bottom: 24px;
+}
+.cover-hero-title {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 76px;
+  line-height: 0.92;
+  letter-spacing: -3px;
+  color: var(--fg);
+}
+.cover-hero-title em {
+  font-style: normal;
+  color: var(--green);
+}
+.cover-hero-deck {
+  font-size: 16px;
+  font-weight: 300;
+  line-height: 1.6;
+  color: var(--fg-mid);
+  margin-top: 22px;
+  max-width: 380px;
+}
+
+.cover-hero-svg {
+  position: relative;
+}
+
+.cover-band-bot {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid var(--rule);
+  padding: 30px 64px;
+}
+.cover-band-bot .b {
+  padding-right: 24px;
+}
+.cover-band-bot .b strong {
+  display: block;
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--green);
+  margin-bottom: 8px;
+}
+.cover-band-bot .b span {
+  font-size: 11.5px;
+  font-weight: 300;
+  line-height: 1.6;
+  color: var(--fg);
+}
+
+/* ── PAGE HEADER for inner pages ────────────────────────────────── */
+.pageheader {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  padding: 28px 64px;
+  border-bottom: 1px solid var(--rule);
+  gap: 24px;
+}
+.pageheader .ph-id {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--green);
+  letter-spacing: -0.4px;
+}
+.pageheader .ph-section {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--fg-mid);
+  text-align: center;
+}
+.pageheader .ph-page {
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: var(--fg-dim);
+}
+
+/* ── FEATURE OPENER (first content page) ────────────────────────── */
+.opener {
+  padding: 64px 64px 64px;
+  position: relative;
+}
+.opener-eyebrow {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--green);
+  margin-bottom: 24px;
+}
+
+.opener-stripe {
+  height: 60px;
+  margin-bottom: 32px;
+  position: relative;
+}
+.opener-stripe svg { display: block; width: 100%; height: 100%; }
+
+.opener-title {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 88px;
+  line-height: 0.9;
+  letter-spacing: -3px;
+  color: var(--fg);
+  margin-bottom: 20px;
+  max-width: 900px;
+}
+.opener-title em {
+  font-style: normal;
+  color: var(--green);
+}
+.opener-deck {
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 22px;
+  line-height: 1.35;
+  letter-spacing: -0.4px;
+  color: var(--fg-mid);
+  margin-bottom: 56px;
+  max-width: 720px;
+}
+
+.opener-cols {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 56px;
+}
+.opener-cols .col-lead p {
+  font-size: 15px;
+  font-weight: 300;
+  line-height: 1.78;
+  margin-bottom: 16px;
+  color: var(--fg);
+}
+.opener-cols .col-lead p:first-of-type::first-letter {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 84px;
+  line-height: 0.85;
+  float: left;
+  margin: 6px 14px -8px 0;
+  color: var(--green);
+}
+.opener-cols .col-aside {
+  border-left: 1px solid var(--rule);
+  padding-left: 32px;
+}
+.opener-cols .col-aside .aside-eyebrow {
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--green);
+  margin-bottom: 12px;
+}
+.opener-cols .col-aside .aside-quote {
+  font-family: var(--display);
+  font-weight: 500;
+  font-style: italic;
+  font-size: 24px;
+  line-height: 1.35;
+  letter-spacing: -0.4px;
+  color: var(--fg);
+  margin-bottom: 18px;
+}
+.opener-cols .col-aside .aside-attrib {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--fg-mid);
+}
+
+/* ── BODY (mid-document) PAGE ───────────────────────────────────── */
+.body-page {
+  padding: 56px 64px 64px;
+}
+.body-page .eyebrow {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--green);
+  margin-bottom: 18px;
+}
+.body-page h1 {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 56px;
+  line-height: 0.96;
+  letter-spacing: -2px;
+  color: var(--fg);
+  margin-bottom: 16px;
+  max-width: 860px;
+}
+.body-page h1 em { font-style: normal; color: var(--green); }
+.body-page .deck {
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 18px;
+  line-height: 1.4;
+  letter-spacing: -0.3px;
+  color: var(--fg-mid);
+  margin-bottom: 48px;
+  max-width: 720px;
+}
+
+.body-page .body-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 48px;
+}
+.body-page .body-grid h3 {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: -0.5px;
+  margin-bottom: 8px;
+  color: var(--fg);
+}
+.body-page .body-grid h3 .num {
+  font-family: var(--display);
+  font-weight: 800;
+  color: var(--green);
+  font-size: 28px;
+  margin-right: 12px;
+  letter-spacing: -1px;
+}
+.body-page .body-grid p {
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 1.75;
+  color: var(--fg);
+  margin-bottom: 12px;
+}
+.body-page .body-grid p strong { font-weight: 500; }
+
+.bigquote {
+  margin: 56px 0 12px;
+  padding: 36px 48px;
+  background: var(--bg-2);
+  border-top: 2px solid var(--green);
+  border-bottom: 2px solid var(--green);
+}
+.bigquote .q {
+  font-family: var(--display);
+  font-weight: 500;
+  font-style: italic;
+  font-size: 30px;
+  line-height: 1.3;
+  letter-spacing: -0.6px;
+  color: var(--fg);
+  margin-bottom: 16px;
+}
+.bigquote .q em { font-style: normal; color: var(--green); font-weight: 700; }
+.bigquote .a {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--green);
+}
+
+/* ── TABLE PAGE ─────────────────────────────────────────────────── */
+.table-page {
+  padding: 56px 64px 64px;
+}
+.gktable {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--ui);
+  font-size: 13.5px;
+  font-weight: 300;
+  margin-top: 24px;
+}
+.gktable thead th {
+  background: var(--green-dk);
+  color: var(--fg);
+  text-align: left;
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  padding: 14px 18px;
+  border-right: 1.1px solid rgba(255,255,255,0.14);
+}
+.gktable thead th:last-child { border-right: none; }
+.gktable tbody td {
+  padding: 14px 18px;
+  border-top: 1.1px solid var(--green);
+  border-right: 1.1px solid rgba(16,185,129,0.18);
+  vertical-align: top;
+  line-height: 1.55;
+  color: var(--fg);
+}
+.gktable tbody td:last-child { border-right: none; }
+.gktable tbody tr:hover td { background: rgba(237,234,225,0.04); }
+.gktable tbody tr:last-child td { border-bottom: 1.1px solid var(--green); }
+.gktable td .lbl {
+  font-family: var(--display);
+  font-weight: 700;
+  color: var(--green);
+}
+.tbl-caption {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--fg-mid);
+  margin-bottom: 10px;
+}
+
+/* ── DIAGRAM / MIXED PAGE ───────────────────────────────────────── */
+.mixedpage-top h2 {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 48px;
+  line-height: 0.95;
+  letter-spacing: -1.6px;
+  color: var(--fg);
+  margin-bottom: 24px;
+  max-width: 780px;
+}
+.mixedpage-top h2 em { font-style: normal; color: var(--green); }
+.mixedpage-top .deck {
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 16px;
+  letter-spacing: -0.2px;
+  color: var(--fg-mid);
+  max-width: 600px;
+  line-height: 1.45;
+  margin-bottom: 32px;
+}
+.mixedpage-bot .eyebrow-dk {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--green-dk);
+  margin-bottom: 16px;
+}
+.mixedpage-bot h2 {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 40px;
+  line-height: 0.98;
+  letter-spacing: -1.4px;
+  color: #0c0c0a;
+  margin-bottom: 24px;
+  max-width: 700px;
+}
+.mixedpage-bot h2 em { font-style: normal; color: var(--green-dk); }
+.mixedpage-bot .deck-dk {
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 1.7;
+  color: rgba(12,12,10,0.7);
+  max-width: 620px;
+  margin-bottom: 28px;
+}
+
+.bar-chart-x {
+  display: grid;
+  grid-template-columns: 120px 1fr 50px;
+  gap: 10px 16px;
+  align-items: center;
+  max-width: 620px;
+}
+.bar-chart-x .bar-label {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--fg);
+  text-align: right;
+}
+.bar-chart-x .bar-track {
+  height: 18px;
+  background: var(--fg-ghost);
+}
+.bar-chart-x .bar-fill {
+  height: 100%;
+  background: var(--green);
+}
+.bar-chart-x .bar-fill--dim { background: var(--green-dk); }
+.bar-chart-x .bar-value {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--green);
+}
+
+/* ── PAGE FOOTER ────────────────────────────────────────────────── */
+.pagefooter {
+  position: absolute;
+  bottom: 28px; left: 64px; right: 64px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--green);
+}
+.pagefooter--dk { color: var(--green-dk); }
+.pagefooter .pgn {
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--fg-dim);
+}
+.pagefooter--dk .pgn { color: rgba(12,12,10,0.4); }
+
+code {
+  font-family: 'DM Sans', monospace;
+  background: rgba(16,185,129,0.10);
+  color: var(--green);
+  padding: 2px 7px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 1 — COVER (magazine feature opener)
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page cover">
+
+  <div class="cover-band-top">
+    <div class="b-l">StixAnalytix · Training</div>
+    <div class="b-c">stixanalytix</div>
+    <div class="b-r">Part 02 of 07 · v1.0 · 2026</div>
+  </div>
+
+  <div class="cover-hero">
+    <div class="cover-hero-text">
+      <div class="cover-hero-num">02</div>
+      <div class="cover-hero-label">Domain Primer</div>
+      <h1 class="cover-hero-title">Goalkeeper.<br><em>The position,</em><br>the vocabulary.</h1>
+      <p class="cover-hero-deck">Operational definitions for ground-truth labelers. Written from the perspective of someone who has played the position professionally and coached it for four decades.</p>
+    </div>
+
+    <div class="cover-hero-svg">
+      <svg viewBox="0 0 480 380" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:440px">
+        <g stroke="#10b981" stroke-width="1.1" opacity="0.22" stroke-linecap="square">
+          <line x1="10"  y1="10" x2="10"  y2="380"/>
+          <line x1="68"  y1="10" x2="68"  y2="380"/>
+          <line x1="126" y1="10" x2="126" y2="380"/>
+          <line x1="184" y1="10" x2="184" y2="380"/>
+          <line x1="242" y1="10" x2="242" y2="380"/>
+          <line x1="300" y1="10" x2="300" y2="380"/>
+          <line x1="358" y1="10" x2="358" y2="380"/>
+          <line x1="416" y1="10" x2="416" y2="380"/>
+          <line x1="470" y1="10" x2="470" y2="380"/>
+          <line x1="10" y1="10"  x2="470" y2="10"/>
+          <line x1="10" y1="68"  x2="470" y2="68"/>
+          <line x1="10" y1="126" x2="470" y2="126"/>
+          <line x1="10" y1="184" x2="470" y2="184"/>
+          <line x1="10" y1="242" x2="470" y2="242"/>
+          <line x1="10" y1="300" x2="470" y2="300"/>
+          <line x1="10" y1="358" x2="470" y2="358"/>
+        </g>
+        <polyline points="10,380 10,10 470,10 470,380" fill="none" stroke="#10b981" stroke-width="8" stroke-linecap="square"/>
+
+        <!-- Compass-style content inside the goal frame -->
+        <g font-family="Outfit" fill="#EDEAE1" opacity="0.42" letter-spacing="0.22em">
+          <text x="240" y="48"  font-size="8" font-weight="500" text-anchor="middle">— SHOT STOPPING</text>
+          <text x="240" y="356" font-size="8" font-weight="500" text-anchor="middle">— DISTRIBUTION</text>
+          <text x="40"  y="200" font-size="8" font-weight="500" transform="rotate(-90 40 200)">— CROSSING</text>
+          <text x="450" y="200" font-size="8" font-weight="500" transform="rotate(90 450 200)">— 1V1S</text>
+        </g>
+
+        <text x="240" y="210" font-family="Outfit" font-weight="800" font-size="92" fill="#EDEAE1" text-anchor="middle" letter-spacing="-3">02</text>
+      </svg>
+    </div>
+  </div>
+
+  <div class="cover-band-bot">
+    <div class="b">
+      <strong>Read time</strong>
+      <span>30 – 45 minutes</span>
+    </div>
+    <div class="b">
+      <strong>Audience</strong>
+      <span>Anyone labeling matches</span>
+    </div>
+    <div class="b">
+      <strong>Required</strong>
+      <span>Before first labeling work</span>
+    </div>
+    <div class="b">
+      <strong>Series</strong>
+      <span>Onboarding · 7 parts</span>
+    </div>
+  </div>
+
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 2 — FIRST CONTENT (feature opener)
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page">
+
+  <div class="pageheader">
+    <div class="ph-id">02 · stixanalytix</div>
+    <div class="ph-section">Section 01 · Introduction</div>
+    <div class="ph-page">PAGE 02 — 47</div>
+  </div>
+
+  <div class="opener">
+    <div class="opener-eyebrow">A word on the voice of this document</div>
+
+    <div class="opener-stripe">
+      <svg viewBox="0 0 1000 60" preserveAspectRatio="none">
+        <g stroke="#10b981" stroke-width="1.1" opacity="0.24" stroke-linecap="square">
+          <line x1="0" y1="6" x2="0" y2="60"/>
+          <line x1="66" y1="6" x2="66" y2="60"/><line x1="132" y1="6" x2="132" y2="60"/>
+          <line x1="198" y1="6" x2="198" y2="60"/><line x1="264" y1="6" x2="264" y2="60"/>
+          <line x1="330" y1="6" x2="330" y2="60"/><line x1="396" y1="6" x2="396" y2="60"/>
+          <line x1="462" y1="6" x2="462" y2="60"/><line x1="528" y1="6" x2="528" y2="60"/>
+          <line x1="594" y1="6" x2="594" y2="60"/><line x1="660" y1="6" x2="660" y2="60"/>
+          <line x1="726" y1="6" x2="726" y2="60"/><line x1="792" y1="6" x2="792" y2="60"/>
+          <line x1="858" y1="6" x2="858" y2="60"/><line x1="924" y1="6" x2="924" y2="60"/>
+          <line x1="990" y1="6" x2="990" y2="60"/><line x1="1000" y1="6" x2="1000" y2="60"/>
+          <line x1="0" y1="6" x2="1000" y2="6"/>
+          <line x1="0" y1="34" x2="1000" y2="34"/>
+        </g>
+        <polyline points="0,60 0,6 1000,6 1000,60" fill="none" stroke="#10b981" stroke-width="4.5" stroke-linecap="square"/>
+      </svg>
+    </div>
+
+    <h1 class="opener-title">The position, <em>more readable</em><br>than it looks.</h1>
+    <p class="opener-deck">Coaches don't call it a "save attempt"; they call it a save. They don't say the keeper "blocked the goal"; they say <em>he made it small</em>. The vocabulary of this document is the vocabulary of the dashboard.</p>
+
+    <div class="opener-cols">
+      <div class="col-lead">
+        <p>Goalkeeping has a culture and a language. We use the coaches' vocabulary throughout because that's what the dashboard speaks back to them. You'll pick it up. If you have never played football, you can still label well. The position is more readable than it looks once you know what to watch.</p>
+
+        <p>People who watch football casually think a goalkeeper does one thing — stops shots. That's roughly 5% of the job in modern football. The actual job has four parts: <strong>shot stopping</strong>, <strong>crossing &amp; aerial</strong>, <strong>1v1s and through balls</strong>, and <strong>distribution &amp; build-up</strong>. You will be labeling all four.</p>
+
+        <p>The vocabulary for each is in the chapters that follow. Read them in order. Don't skim. The cost of a mis-labeled training example is paid by every coach who reads the model's output downstream.</p>
+      </div>
+      <div class="col-aside">
+        <div class="aside-eyebrow">From the field</div>
+        <p class="aside-quote">"Honest 'I couldn't tell' beats a confident guess every time. The model will eventually train on what you label — wrong labels teach wrong lessons."</p>
+        <p class="aside-attrib">— Mission &amp; Why · Part 01</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="pagefooter">
+    <span>StixAnalytix · Training · 02 Domain Primer</span>
+    <span class="pgn">02 — 47</span>
+  </div>
+
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 3 — BODY (mid document — feature article style)
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page">
+
+  <div class="pageheader">
+    <div class="ph-id">02 · stixanalytix</div>
+    <div class="ph-section">Section 03 · Shot stopping</div>
+    <div class="ph-page">PAGE 03 — 47</div>
+  </div>
+
+  <div class="body-page">
+    <div class="eyebrow">§ 03 · The save action</div>
+    <h1>Watch the hands. <em>Watch the ball</em><br>after contact.</h1>
+    <p class="deck">When there was a save event, classify the keeper's action by what their hands and body did at the moment of contact. Do not infer from the trajectory alone.</p>
+
+    <div class="body-grid">
+      <div>
+        <h3><span class="num">01</span>Catch</h3>
+        <p>Both hands close around the ball, fingers form a "W" or basket behind the ball. Keeper retains the ball after contact — it stays in their possession.</p>
+        <p><strong>If you do not see clear two-handed retention, it is not a Catch.</strong></p>
+      </div>
+      <div>
+        <h3><span class="num">02</span>Block</h3>
+        <p>Ball stops on the keeper's body or one hand without secure retention. Often produces a rebound.</p>
+        <p>The keeper does NOT have control of the ball after contact; it bounces away or is collected on the second action.</p>
+      </div>
+      <div>
+        <h3><span class="num">03</span>Parry</h3>
+        <p>Keeper's hand(s) intentionally redirect the ball away from danger — wide, over the bar, to ground in front. The redirect is purposeful.</p>
+        <p>You can see the wrist or palm push the ball in a chosen direction. A strong parry pushes hard and far; a weak parry leaves a dangerous rebound.</p>
+      </div>
+      <div>
+        <h3><span class="num">04</span>Deflect</h3>
+        <p>Ball glances off the keeper without an intentional redirect. Often a fingertip touch on a shot heading just over or wide.</p>
+        <p><strong>If the keeper barely got a hand on it and the ball mostly continues its original line, it is a Deflect.</strong></p>
+      </div>
+    </div>
+
+    <div class="bigquote">
+      <p class="q">A parry has wrist action. <em>A deflect has no wrist action.</em> The difference between a learned skill and an accident — and the difference coaches care about.</p>
+      <p class="a">Internal · The #1 disagreement in calibration</p>
+    </div>
+  </div>
+
+  <div class="pagefooter">
+    <span>StixAnalytix · Training · 02 Domain Primer</span>
+    <span class="pgn">03 — 47</span>
+  </div>
+
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 4 — TABLE / REFERENCE
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page">
+
+  <div class="pageheader">
+    <div class="ph-id">02 · stixanalytix</div>
+    <div class="ph-section">Section 04 · Reference</div>
+    <div class="ph-page">PAGE 04 — 47</div>
+  </div>
+
+  <div class="table-page">
+    <div class="eyebrow" style="font-size:10px;font-weight:500;letter-spacing:0.32em;text-transform:uppercase;color:var(--green);margin-bottom:18px">§ 04 · Cheat sheet</div>
+    <h1 style="font-family:var(--display);font-weight:800;font-size:56px;line-height:0.96;letter-spacing:-2px;color:var(--fg);margin-bottom:14px">Save action <em style="font-style:normal;color:var(--green)">cheat sheet.</em></h1>
+    <p style="font-family:var(--display);font-weight:500;font-size:17px;line-height:1.45;letter-spacing:-0.3px;color:var(--fg-mid);max-width:680px;margin-bottom:32px">Pin this near your screen during the first matches. After ten labelings you will not need it.</p>
+
+    <div class="tbl-caption">Table 04.1 · GK action by recognition cue</div>
+    <table class="gktable">
+      <thead>
+        <tr>
+          <th style="width:46%">If you see&hellip;</th>
+          <th style="width:24%">The label is</th>
+          <th>Common pitfall</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Two-handed W behind the ball, keeper holds</td>
+          <td><span class="lbl">Catch</span></td>
+          <td>Fumbled cleanly = Block, not Catch</td>
+        </tr>
+        <tr>
+          <td>Ball stops on body or one hand, rebound likely</td>
+          <td><span class="lbl">Block</span></td>
+          <td>If hands open and ball held = Catch</td>
+        </tr>
+        <tr>
+          <td>Hand pushes ball wide / over / to ground with intent</td>
+          <td><span class="lbl">Parry</span></td>
+          <td>Watch the wrist — passive hand = Deflect</td>
+        </tr>
+        <tr>
+          <td>Ball glances off passive hand, continues path</td>
+          <td><span class="lbl">Deflect</span></td>
+          <td>Confused with Parry — see § 03.3</td>
+        </tr>
+        <tr>
+          <td>Clenched fist(s) strike the ball clear</td>
+          <td><span class="lbl">Punch</span></td>
+          <td>Open palms = Block, not Punch</td>
+        </tr>
+        <tr>
+          <td>Keeper goes to ground before shot, wraps ball</td>
+          <td><span class="lbl">Smother</span></td>
+          <td>Usually a 1v1 — note in observations</td>
+        </tr>
+        <tr>
+          <td>Keeper should have saved but didn't</td>
+          <td><span class="lbl">Missed</span></td>
+          <td>Don't use for unstoppable strikes</td>
+        </tr>
+        <tr>
+          <td>Ball in the net</td>
+          <td><span class="lbl">Goal</span></td>
+          <td>Logged in Goals sheet separately</td>
+        </tr>
+        <tr>
+          <td>Couldn't tell, or keeper not visible</td>
+          <td><span class="lbl">Unclear</span></td>
+          <td>Use freely — honest beats confident</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p style="font-family:var(--ui);font-weight:300;font-style:italic;font-size:14px;color:var(--fg-mid);margin-top:28px;max-width:600px;line-height:1.6">When in doubt between two labels, mark <code style="font-style:normal">Unclear</code>. Reviewers prefer 30% Unclear to 30% wrong — and one of the few rules with no exceptions.</p>
+  </div>
+
+  <div class="pagefooter">
+    <span>StixAnalytix · Training · 02 Domain Primer</span>
+    <span class="pgn">04 — 47</span>
+  </div>
+
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 5 — MIXED MEDIA (diagram + data)
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page page--mixed">
+
+  <div class="top">
+    <div class="eyebrow" style="font-size:10px;font-weight:500;letter-spacing:0.32em;text-transform:uppercase;color:var(--green);margin-bottom:16px">§ 05 · Pitch geometry</div>
+    <div class="mixedpage-top">
+      <h2>The language coaches use <em>for space.</em></h2>
+      <p class="deck">Most labeling errors trace to not knowing where on the pitch a thing happened. Left and right of <strong>shot origin</strong> is from the attacker's perspective. Left and right of <strong>goal placement</strong> flips to the goalkeeper's perspective.</p>
+
+      <svg viewBox="0 0 800 320" style="width:100%;max-width:760px;background:#0a0a08;border:1px solid var(--rule)">
+        <rect x="20" y="20" width="760" height="280" fill="none" stroke="#10b981" stroke-width="2" opacity="0.6"/>
+        <rect x="160" y="100" width="480" height="200" fill="none" stroke="#10b981" stroke-width="1.5" opacity="0.5"/>
+        <rect x="320" y="210" width="160" height="90" fill="none" stroke="#10b981" stroke-width="1.5" opacity="0.5"/>
+        <rect x="360" y="294" width="80" height="10" fill="#10b981" opacity="0.85"/>
+        <circle cx="400" cy="180" r="3" fill="#10b981" opacity="0.85"/>
+
+        <g font-family="Outfit" font-weight="500" font-size="10" letter-spacing="0.16em" text-transform="uppercase" fill="#10b981" opacity="0.85">
+          <text x="80" y="60" text-anchor="middle">OUT L</text>
+          <text x="400" y="60" text-anchor="middle">OUT C</text>
+          <text x="720" y="60" text-anchor="middle">OUT R</text>
+          <text x="200" y="92" text-anchor="middle">CORNER L</text>
+          <text x="600" y="92" text-anchor="middle">CORNER R</text>
+          <text x="220" y="180" text-anchor="middle">BOX L</text>
+          <text x="400" y="150" text-anchor="middle">BOX C</text>
+          <text x="580" y="180" text-anchor="middle">BOX R</text>
+          <text x="400" y="265" text-anchor="middle">6 YARD</text>
+        </g>
+
+        <g stroke="#EDEAE1" stroke-width="1.2" opacity="0.32" stroke-dasharray="4,4">
+          <line x1="400" y1="80" x2="400" y2="294"/>
+          <line x1="220" y1="160" x2="380" y2="294"/>
+          <line x1="580" y1="200" x2="420" y2="294"/>
+        </g>
+        <g fill="#10b981">
+          <circle cx="400" cy="80" r="4"/>
+          <circle cx="220" cy="160" r="4"/>
+          <circle cx="580" cy="200" r="4"/>
+        </g>
+
+        <circle cx="400" cy="299" r="5" fill="#EDEAE1"/>
+        <text x="400" y="316" font-family="DM Sans" font-size="9" letter-spacing="0.22em" text-transform="uppercase" fill="#EDEAE1" opacity="0.7" text-anchor="middle">GK</text>
+      </svg>
+    </div>
+
+    <div class="pagefooter">
+      <span>StixAnalytix · Training · 02 Domain Primer</span>
+      <span class="pgn">05 — 47</span>
+    </div>
+  </div>
+
+  <div class="bot">
+    <div class="mixedpage-bot">
+      <div class="eyebrow-dk">§ 05.2 · Observed save mix</div>
+      <h2><em>Twelve matches.</em><br>Ninety-eight saves.</h2>
+      <p class="deck-dk">Distribution of save types from the Judah-keeper sample, 2026 season. Catches dominate; parries and blocks split the rest. Below ~10% for any category, expect the label to be noisy — use Unclear freely.</p>
+
+      <div class="bar-chart-x">
+        <span class="bar-label" style="color:#0c0c0a">Catch</span>
+        <div class="bar-track" style="background:rgba(12,12,10,0.10)"><div class="bar-fill" style="width:62%;background:#047857"></div></div>
+        <span class="bar-value" style="color:#047857">31</span>
+
+        <span class="bar-label" style="color:#0c0c0a">Block</span>
+        <div class="bar-track" style="background:rgba(12,12,10,0.10)"><div class="bar-fill" style="width:42%;background:#047857"></div></div>
+        <span class="bar-value" style="color:#047857">21</span>
+
+        <span class="bar-label" style="color:#0c0c0a">Parry</span>
+        <div class="bar-track" style="background:rgba(12,12,10,0.10)"><div class="bar-fill" style="width:38%;background:#047857"></div></div>
+        <span class="bar-value" style="color:#047857">19</span>
+
+        <span class="bar-label" style="color:#0c0c0a">Deflect</span>
+        <div class="bar-track" style="background:rgba(12,12,10,0.10)"><div class="bar-fill" style="width:18%;background:rgba(4,120,87,0.55)"></div></div>
+        <span class="bar-value" style="color:#047857">9</span>
+
+        <span class="bar-label" style="color:#0c0c0a">Punch</span>
+        <div class="bar-track" style="background:rgba(12,12,10,0.10)"><div class="bar-fill" style="width:14%;background:rgba(4,120,87,0.55)"></div></div>
+        <span class="bar-value" style="color:#047857">7</span>
+
+        <span class="bar-label" style="color:#0c0c0a">Smother</span>
+        <div class="bar-track" style="background:rgba(12,12,10,0.10)"><div class="bar-fill" style="width:8%;background:rgba(4,120,87,0.55)"></div></div>
+        <span class="bar-value" style="color:#047857">4</span>
+
+        <span class="bar-label" style="color:#0c0c0a">Missed</span>
+        <div class="bar-track" style="background:rgba(12,12,10,0.10)"><div class="bar-fill" style="width:5%;background:rgba(4,120,87,0.55)"></div></div>
+        <span class="bar-value" style="color:#047857">2</span>
+
+        <span class="bar-label" style="color:#0c0c0a">Unclear</span>
+        <div class="bar-track" style="background:rgba(12,12,10,0.10)"><div class="bar-fill" style="width:11%;background:rgba(4,120,87,0.55)"></div></div>
+        <span class="bar-value" style="color:#047857">5</span>
+      </div>
+    </div>
+
+    <div class="pagefooter pagefooter--dk">
+      <span>Figure 05.2 · n=98 · 12 matches</span>
+      <span class="pgn">05 — 47</span>
+    </div>
+  </div>
+
+</section>
+
+</body>
+</html>

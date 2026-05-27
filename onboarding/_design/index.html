@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design exploration — StixAnalytix Training Manual</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:       #0c0c0a;
+  --bg-2:     #111110;
+  --fg:       #EDEAE1;
+  --fg-mid:   rgba(237,234,225,0.46);
+  --fg-dim:   rgba(237,234,225,0.22);
+  --green:    #10b981;
+  --green-dk: #047857;
+  --rule:     rgba(237,234,225,0.09);
+  --display:  'Outfit', sans-serif;
+  --ui:       'DM Sans', sans-serif;
+}
+html, body { background: var(--bg); color: var(--fg); font-family: var(--ui); -webkit-font-smoothing: antialiased; min-height: 100%; }
+
+.wrap { max-width: 1100px; margin: 0 auto; padding: 80px 64px; }
+
+.eyebrow {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--green);
+  margin-bottom: 18px;
+}
+
+h1.title {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 56px;
+  line-height: 0.96;
+  letter-spacing: -2px;
+  color: var(--fg);
+  margin-bottom: 12px;
+  max-width: 760px;
+}
+h1.title em { font-style: normal; color: var(--green); }
+
+p.deck {
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 18px;
+  line-height: 1.45;
+  letter-spacing: -0.3px;
+  color: var(--fg-mid);
+  margin-bottom: 56px;
+  max-width: 680px;
+}
+
+.variants {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 56px;
+}
+
+.card {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 40px;
+  align-items: start;
+  padding: 32px;
+  background: var(--bg-2);
+  border: 1px solid var(--rule);
+}
+
+.card .num {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 130px;
+  line-height: 0.85;
+  color: var(--green);
+  letter-spacing: -6px;
+  margin-bottom: 8px;
+}
+
+.card .vname {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: -0.5px;
+  margin-bottom: 4px;
+  color: var(--fg);
+}
+.card .vsub {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--green);
+  margin-bottom: 18px;
+}
+
+.card .vbody p {
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 1.7;
+  color: var(--fg);
+  margin-bottom: 10px;
+  max-width: 540px;
+}
+.card .vbody p strong { font-weight: 500; }
+
+.card .vmeta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 24px;
+  margin: 20px 0 24px;
+  max-width: 540px;
+}
+.card .vmeta .m {
+  font-size: 11px;
+  font-weight: 300;
+  line-height: 1.5;
+  color: var(--fg-mid);
+}
+.card .vmeta .m strong {
+  display: block;
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--green);
+  margin-bottom: 4px;
+}
+
+.card a.btn {
+  display: inline-block;
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: -0.2px;
+  color: var(--bg);
+  background: var(--green);
+  padding: 12px 22px;
+  text-decoration: none;
+  margin-right: 12px;
+  transition: background 0.15s;
+}
+.card a.btn:hover { background: #34d399; }
+.card a.btn-ghost {
+  background: transparent;
+  color: var(--green);
+  border: 1px solid var(--green);
+}
+.card a.btn-ghost:hover { background: rgba(16,185,129,0.08); }
+
+.howto {
+  margin-top: 64px;
+  padding: 32px;
+  border: 1px solid var(--rule);
+}
+.howto h2 {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: -0.5px;
+  color: var(--fg);
+  margin-bottom: 14px;
+}
+.howto ol {
+  padding-left: 20px;
+}
+.howto ol li {
+  font-size: 13.5px;
+  font-weight: 300;
+  line-height: 1.75;
+  color: var(--fg);
+  margin-bottom: 6px;
+  max-width: 720px;
+}
+.howto ol li strong { font-weight: 500; color: var(--green); }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <div class="eyebrow">Design exploration · 2026 · 02 Domain Primer mockup</div>
+  <h1 class="title">Three takes on a <em>StixAnalytix</em><br>training manual.</h1>
+  <p class="deck">Each variant uses the same brand DNA — bone &amp; emerald on warm near-black, Outfit display + DM Sans body, the rectangular goal-net as architectural motif. They diverge on editorial structure. Open each, decide which one we run with.</p>
+
+  <div class="variants">
+
+    <div class="card">
+      <div>
+        <div class="num">01</div>
+        <div class="vname">Editorial Classic</div>
+        <div class="vsub">Single-column · Drop caps · Pull quotes</div>
+      </div>
+      <div class="vbody">
+        <p>The most book-like of the three. Single 640px column centred on the page with generous margins. Drop-cap on the chapter opener. Italic pull-quotes set off a green hairline rule. The net motif appears as a horizontal strip section divider only — earning its impact by being rare.</p>
+        <p><strong>Use this if:</strong> the docs will be read cover-to-cover. Maximum reading comfort over 30-45 min sittings. Closest to a Stripe Press playbook or coaching manual.</p>
+        <div class="vmeta">
+          <div class="m"><strong>Layout</strong>Single column, 640px max</div>
+          <div class="m"><strong>Density</strong>Lower — most whitespace</div>
+          <div class="m"><strong>Tone</strong>Authoritative, editorial, calm</div>
+          <div class="m"><strong>Risk</strong>Less distinctly "us"</div>
+        </div>
+        <a class="btn" href="variant-1-editorial-classic.html">Open variant 1 →</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="num">02</div>
+        <div class="vname">Brief with Marginalia</div>
+        <div class="vsub">Two-column · Nav rail · Reference-dense</div>
+      </div>
+      <div class="vbody">
+        <p>Narrow left rail on every inner page carries the section navigation, page number, big stat callouts, and inline asides. Wide right column for body copy. The body is two-column with sidebar quotes inline. Reference-manual energy — McKinsey brief / Anthropic engineering doc.</p>
+        <p><strong>Use this if:</strong> labelers will scan-and-jump rather than read linearly. Best for the rubric &amp; reference docs (03a, 03b). Also strongest for Nicolas' ML team — looks like a serious technical document.</p>
+        <div class="vmeta">
+          <div class="m"><strong>Layout</strong>200px rail + main column</div>
+          <div class="m"><strong>Density</strong>Highest — most signal per page</div>
+          <div class="m"><strong>Tone</strong>Technical, navigable, dossier</div>
+          <div class="m"><strong>Risk</strong>Can feel corporate over 30 pages</div>
+        </div>
+        <a class="btn" href="variant-2-brief-marginalia.html">Open variant 2 →</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <div>
+        <div class="num">03</div>
+        <div class="vname">Magazine Spread</div>
+        <div class="vsub">Feature article · Big display · Mixed-bg pages</div>
+      </div>
+      <div class="vbody">
+        <p>Largest display type, most editorial drama. Cover treats each part as a feature article with a hero number + headline. Body pages use 4-column grids for cue lists. The diagram/data page goes half-dark / half-paper for visual rhythm. Big pull-quotes get full-width treatment with double rules.</p>
+        <p><strong>Use this if:</strong> the docs need to feel premium and distinctly STIX. Best at hooking new readers (the cover sells the document). Less efficient if the reader is in scanning mode.</p>
+        <div class="vmeta">
+          <div class="m"><strong>Layout</strong>Asymmetric · 4-col body grids</div>
+          <div class="m"><strong>Density</strong>Medium — more breathing room</div>
+          <div class="m"><strong>Tone</strong>Cinematic, brand-forward, FT Weekend</div>
+          <div class="m"><strong>Risk</strong>Slower to read; type can intimidate</div>
+        </div>
+        <a class="btn" href="variant-3-magazine-spread.html">Open variant 3 →</a>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="howto">
+    <h2>How to compare</h2>
+    <ol>
+      <li>Open all three in separate tabs. <strong>Look at the covers first</strong> — which one would you put in front of Nicolas?</li>
+      <li>Now scroll to <strong>page 4 in each</strong> — the table page. Tables are the most-used pattern across all 7 docs. The one that handles tables best wins the most ground.</li>
+      <li>Then scroll to <strong>page 5</strong> — the diagram/data page. Will the keepers we work with respond to it?</li>
+      <li>Pick one, OR mark up <strong>one variant's cover + another variant's table treatment</strong> — we can hybridize.</li>
+      <li>Once picked, I build the master template that produces all 7 branded docs from the existing markdown.</li>
+    </ol>
+  </div>
+
+</div>
+
+</body>
+</html>
