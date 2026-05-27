@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02 · Domain Primer — StixAnalytix Training (print)</title>
+<link rel="stylesheet" href="stixanalytix-doc.css">
+</head>
+<body class="is-print">
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 1 — COVER
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page cover">
+
+  <div class="cover-rail">
+    <div class="rail-block">
+      <span class="rail-label">StixAnalytix</span>
+      <span class="rail-value">Training Series</span>
+    </div>
+    <div class="rail-block center">
+      <span class="rail-label">Part 02 / 07</span>
+      <span class="rail-value">Ground-Truth Labeling</span>
+    </div>
+    <div class="rail-block right">
+      <span class="rail-label">v1.0 · 2026</span>
+      <span class="rail-value">Internal · Confidential</span>
+    </div>
+  </div>
+
+  <div class="cover-doc-id">02</div>
+
+  <div class="cover-frame-wrap">
+    <svg width="640" height="220" viewBox="0 0 800 280" xmlns="http://www.w3.org/2000/svg" class="cover-goalframe">
+      <g class="net-lines" stroke="var(--net-stroke)" stroke-width="1.1" stroke-opacity="var(--net-opacity)" stroke-linecap="square">
+        <line x1="10"  y1="10" x2="10"  y2="280"/>
+        <line x1="76"  y1="10" x2="76"  y2="280"/>
+        <line x1="142" y1="10" x2="142" y2="280"/>
+        <line x1="208" y1="10" x2="208" y2="280"/>
+        <line x1="274" y1="10" x2="274" y2="280"/>
+        <line x1="340" y1="10" x2="340" y2="280"/>
+        <line x1="406" y1="10" x2="406" y2="280"/>
+        <line x1="472" y1="10" x2="472" y2="280"/>
+        <line x1="538" y1="10" x2="538" y2="280"/>
+        <line x1="604" y1="10" x2="604" y2="280"/>
+        <line x1="670" y1="10" x2="670" y2="280"/>
+        <line x1="736" y1="10" x2="736" y2="280"/>
+        <line x1="790" y1="10" x2="790" y2="280"/>
+        <line x1="10" y1="10"  x2="790" y2="10"/>
+        <line x1="10" y1="66"  x2="790" y2="66"/>
+        <line x1="10" y1="122" x2="790" y2="122"/>
+        <line x1="10" y1="178" x2="790" y2="178"/>
+        <line x1="10" y1="234" x2="790" y2="234"/>
+      </g>
+      <polyline points="10,280 10,10 790,10 790,280" fill="none" stroke="var(--net-stroke)" stroke-width="6" stroke-linecap="square"/>
+      <text x="400" y="140" font-family="'Outfit',sans-serif" font-weight="800" font-size="78" fill="var(--accent)" text-anchor="middle" letter-spacing="-3">GOALKEEPER</text>
+      <text x="400" y="210" font-family="'Outfit',sans-serif" font-weight="800" font-size="78" fill="var(--accent)" text-anchor="middle" letter-spacing="-3">DOMAIN PRIMER</text>
+    </svg>
+  </div>
+
+  <div class="cover-subtitle">Operational definitions · ground-truth labelers</div>
+
+  <div class="cover-foot">
+    <div class="cover-foot-block">
+      <strong>Read time</strong>
+      30 – 45 minutes
+    </div>
+    <div class="cover-foot-block">
+      <strong>Audience</strong>
+      Anyone labeling matches. Required reading before any labeling work begins.
+    </div>
+    <div class="cover-foot-block">
+      <strong>Voice</strong>
+      Written from the perspective of someone who has played the position professionally and coached it for four decades.
+    </div>
+  </div>
+
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 2 — FIRST CONTENT
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page">
+  <div class="inner">
+    <aside class="rail">
+      <div class="rail-doc-num">02</div>
+      <div class="rail-doc-label">Domain Primer</div>
+
+      <div class="rail-section">
+        <div class="rail-section-label">In this part</div>
+        <div class="rail-section-body">Four chapters covering shot stopping, crossing, 1v1s, and distribution. Each with operational definitions matched to the analyzer's prompts.</div>
+      </div>
+
+      <div class="rail-nav">
+        <div class="rail-nav-item is-current"><span>Introduction</span><span class="num">01</span></div>
+        <div class="rail-nav-item"><span>The role</span><span class="num">02</span></div>
+        <div class="rail-nav-item"><span>Shot stopping</span><span class="num">03</span></div>
+        <div class="rail-nav-item"><span>Reference</span><span class="num">04</span></div>
+        <div class="rail-nav-item"><span>Pitch geometry</span><span class="num">05</span></div>
+        <div class="rail-nav-item"><span>Crossing</span><span class="num">06</span></div>
+        <div class="rail-nav-item"><span>1v1s</span><span class="num">07</span></div>
+        <div class="rail-nav-item"><span>Distribution</span><span class="num">08</span></div>
+      </div>
+
+      <div class="rail-pagenum">
+        <div class="rail-pagenum-big">02</div>
+        <div class="rail-pagenum-total">of 47</div>
+      </div>
+    </aside>
+
+    <main class="main">
+
+      <div class="section-strip">
+        <svg viewBox="0 0 1000 48" preserveAspectRatio="none">
+          <g stroke="var(--net-stroke)" stroke-width="1.1" stroke-opacity="var(--net-opacity)" stroke-linecap="square">
+            <line x1="0" y1="6" x2="0" y2="48"/>
+            <line x1="66" y1="6" x2="66" y2="48"/><line x1="132" y1="6" x2="132" y2="48"/>
+            <line x1="198" y1="6" x2="198" y2="48"/><line x1="264" y1="6" x2="264" y2="48"/>
+            <line x1="330" y1="6" x2="330" y2="48"/><line x1="396" y1="6" x2="396" y2="48"/>
+            <line x1="462" y1="6" x2="462" y2="48"/><line x1="528" y1="6" x2="528" y2="48"/>
+            <line x1="594" y1="6" x2="594" y2="48"/><line x1="660" y1="6" x2="660" y2="48"/>
+            <line x1="726" y1="6" x2="726" y2="48"/><line x1="792" y1="6" x2="792" y2="48"/>
+            <line x1="858" y1="6" x2="858" y2="48"/><line x1="924" y1="6" x2="924" y2="48"/>
+            <line x1="990" y1="6" x2="990" y2="48"/><line x1="1000" y1="6" x2="1000" y2="48"/>
+            <line x1="0" y1="6" x2="1000" y2="6"/>
+          </g>
+          <polyline points="0,48 0,6 1000,6 1000,48" fill="none" stroke="var(--net-stroke)" stroke-width="4" stroke-linecap="square"/>
+        </svg>
+        <span class="label">01 · Introduction</span>
+      </div>
+
+      <h1 class="h-chapter">A word on the voice of this document.</h1>
+      <p class="h-deck">The primer teaches you to see what a goalkeeper coach sees. Same vocabulary, same definitions, the analyzer uses.</p>
+
+      <p>Goalkeeping has a culture and a language. Coaches don't call it a "save attempt"; they call it a save. They don't say the keeper "blocked the goal"; they say <em>he made it small</em>. We use the coaches' vocabulary throughout because that's what the dashboard speaks back to them. You'll pick it up.</p>
+
+      <p>If you have never played football, you can still label well. The position is more readable than it looks once you know what to watch.</p>
+
+      <h2 class="h-section">What a goalkeeper actually does</h2>
+
+      <p>People who watch football casually think a goalkeeper does one thing — stops shots. That's roughly 5% of the job in modern football. The actual job has four parts:</p>
+
+      <div class="body-cols">
+        <div class="col-main">
+          <p><strong>Shot stopping.</strong> Reaction to a ball struck toward goal. Subdivided by where the shot came from, how it arrived (foot, head, deflection), and what the keeper did to deal with it (catch, parry, block, punch, deflect, beat, conceded).</p>
+          <p><strong>Crossing &amp; aerial.</strong> Anything in the air into the box that the keeper claims, punches, or chooses to leave. A keeper's command of the area is judged by how decisively they take or stay on crosses.</p>
+          <p><strong>1v1s and through balls.</strong> Situations where an attacker is bearing down on goal in space. Different toolkit — smother, K-barrier, spread save, narrowing the angle. Coaches study these separately.</p>
+          <p><strong>Distribution &amp; build-up.</strong> What the keeper does <em>after</em> they have the ball. In modern football this is half of the job. A keeper who can't play out of the back has a short ceiling.</p>
+        </div>
+        <div class="col-side">
+          <div class="side-label">Why this matters for labeling</div>
+          <div class="side-body">
+            Each of these four areas has its own sheet in the labeling workbook:
+            <strong>Saves</strong>
+            for shot stopping events with the keeper's action and body distance
+            <strong>Crosses</strong>
+            for aerial-claim decisions and starting position
+            <strong>1v1s</strong>
+            for the big moments where the rubric doesn't fit
+            <strong>Distribution</strong>
+            for every release, classified by motion not by distance
+          </div>
+        </div>
+      </div>
+
+      <div class="stat-row">
+        <div class="stat">
+          <div class="num">50+</div>
+          <div class="lbl">GK data points<br>captured per match</div>
+        </div>
+        <div class="stat">
+          <div class="num">200</div>
+          <div class="lbl">Matches in the<br>labeling backlog</div>
+        </div>
+        <div class="stat">
+          <div class="num">95%</div>
+          <div class="lbl">Accuracy target<br>against ground truth</div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 3 — BODY TEXT
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page">
+  <div class="inner">
+    <aside class="rail">
+      <div class="rail-doc-num">02</div>
+      <div class="rail-doc-label">Domain Primer</div>
+
+      <div class="rail-section">
+        <div class="rail-section-label">The trap</div>
+        <div class="rail-section-body">If you cannot describe the opposition's attack in the 3–5 seconds before the shot, it is not a save event. It's a keeper touch.</div>
+      </div>
+
+      <div class="rail-section">
+        <div class="rail-section-label">Related</div>
+        <div class="rail-section-body">
+          04 — Reference cheat sheet<br>
+          05 — Pitch geometry<br>
+          03a — Labeling rubric
+        </div>
+      </div>
+
+      <div class="rail-pagenum">
+        <div class="rail-pagenum-big">03</div>
+        <div class="rail-pagenum-total">of 47</div>
+      </div>
+    </aside>
+
+    <main class="main">
+
+      <div class="section-strip">
+        <svg viewBox="0 0 1000 48" preserveAspectRatio="none">
+          <g stroke="var(--net-stroke)" stroke-width="1.1" stroke-opacity="var(--net-opacity)" stroke-linecap="square">
+            <line x1="0" y1="6" x2="0" y2="48"/>
+            <line x1="66" y1="6" x2="66" y2="48"/><line x1="132" y1="6" x2="132" y2="48"/>
+            <line x1="198" y1="6" x2="198" y2="48"/><line x1="264" y1="6" x2="264" y2="48"/>
+            <line x1="330" y1="6" x2="330" y2="48"/><line x1="396" y1="6" x2="396" y2="48"/>
+            <line x1="462" y1="6" x2="462" y2="48"/><line x1="528" y1="6" x2="528" y2="48"/>
+            <line x1="594" y1="6" x2="594" y2="48"/><line x1="660" y1="6" x2="660" y2="48"/>
+            <line x1="726" y1="6" x2="726" y2="48"/><line x1="792" y1="6" x2="792" y2="48"/>
+            <line x1="858" y1="6" x2="858" y2="48"/><line x1="924" y1="6" x2="924" y2="48"/>
+            <line x1="990" y1="6" x2="990" y2="48"/><line x1="1000" y1="6" x2="1000" y2="48"/>
+            <line x1="0" y1="6" x2="1000" y2="6"/>
+          </g>
+          <polyline points="0,48 0,6 1000,6 1000,48" fill="none" stroke="var(--net-stroke)" stroke-width="4" stroke-linecap="square"/>
+        </svg>
+        <span class="label">03 · Shot stopping</span>
+      </div>
+
+      <h1 class="h-chapter">The save action — what the keeper actually did.</h1>
+      <p class="h-deck">Classify by what the hands and body did at the moment of contact. Watch the hands. Watch the ball after contact. Do not infer from the trajectory alone.</p>
+
+      <h2 class="h-section">Recognition cues</h2>
+
+      <h3 class="h-subsection">Catch</h3>
+      <p>Both hands close around the ball, fingers form a "W" or basket behind the ball. Keeper retains the ball after contact — it stays in their possession. <strong>If you do not see clear two-handed retention, it is not a Catch.</strong></p>
+
+      <h3 class="h-subsection">Block</h3>
+      <p>Ball stops on the keeper's body or one hand without secure retention. Often produces a rebound. The keeper does NOT have control after contact; the ball bounces away or is collected on the second action.</p>
+
+      <h3 class="h-subsection">Parry</h3>
+      <p>Keeper's hand(s) intentionally redirect the ball away from danger — wide, over the bar, to ground in front. The redirect is <em>purposeful</em>: you can see the wrist or palm push the ball in a chosen direction.</p>
+
+      <h3 class="h-subsection">Deflect</h3>
+      <p>Ball glances off the keeper without an intentional redirect. Often a fingertip touch on a shot heading just over or wide. <strong>If the ball mostly continues its original line, it is a Deflect — not a Parry.</strong></p>
+
+      <div class="body-cols" style="margin-top:24px">
+        <div class="col-main">
+          <h3 class="h-subsection">Punch</h3>
+          <p>Clenched fist or two-fisted strike. Most common on crosses but can occur on shots when the keeper can't handle the ball cleanly. <strong>The hands are formed into a fist, not open palms.</strong></p>
+
+          <h3 class="h-subsection">Missed</h3>
+          <p>The keeper should have made the save but didn't. Poor positioning, slow reaction, mishandle. Use this when the keeper was clearly at fault on a goal or near-miss.</p>
+        </div>
+        <div class="col-side">
+          <div class="side-label">Parry vs Deflect · The disagreement</div>
+          <div class="side-body">
+            Watch the wrist. A <strong style="display:inline;font-weight:500">parry</strong> has wrist action — the palm pushes the ball. A <strong style="display:inline;font-weight:500">deflect</strong> has no wrist action — the ball glances off a passive hand.
+            <br><br>
+            A strong parry that lands safely is a coach's dream. A deflect that ends up over the bar was lucky. <em>Coaches care about the difference because it's the difference between a learned skill and an accident.</em>
+            <br><br>
+            When in doubt, mark <code>unclear</code>.
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 4 — TABLE / REFERENCE
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page">
+  <div class="inner">
+    <aside class="rail">
+      <div class="rail-doc-num">02</div>
+      <div class="rail-doc-label">Domain Primer</div>
+
+      <div class="rail-section">
+        <div class="rail-section-label">Quick lookup</div>
+        <div class="rail-section-body">Pin this table near your screen during the first matches. After ten labelings you will not need it.</div>
+      </div>
+
+      <div class="rail-section">
+        <div class="rail-section-label">Default</div>
+        <div class="rail-section-body">When in doubt between two labels, mark <code style="font-size:11px">Unclear</code>. Reviewers prefer 30% Unclear to 30% wrong.</div>
+      </div>
+
+      <div class="rail-pagenum">
+        <div class="rail-pagenum-big">04</div>
+        <div class="rail-pagenum-total">of 47</div>
+      </div>
+    </aside>
+
+    <main class="main">
+
+      <div class="section-strip">
+        <svg viewBox="0 0 1000 48" preserveAspectRatio="none">
+          <g stroke="var(--net-stroke)" stroke-width="1.1" stroke-opacity="var(--net-opacity)" stroke-linecap="square">
+            <line x1="0" y1="6" x2="0" y2="48"/>
+            <line x1="66" y1="6" x2="66" y2="48"/><line x1="132" y1="6" x2="132" y2="48"/>
+            <line x1="198" y1="6" x2="198" y2="48"/><line x1="264" y1="6" x2="264" y2="48"/>
+            <line x1="330" y1="6" x2="330" y2="48"/><line x1="396" y1="6" x2="396" y2="48"/>
+            <line x1="462" y1="6" x2="462" y2="48"/><line x1="528" y1="6" x2="528" y2="48"/>
+            <line x1="594" y1="6" x2="594" y2="48"/><line x1="660" y1="6" x2="660" y2="48"/>
+            <line x1="726" y1="6" x2="726" y2="48"/><line x1="792" y1="6" x2="792" y2="48"/>
+            <line x1="858" y1="6" x2="858" y2="48"/><line x1="924" y1="6" x2="924" y2="48"/>
+            <line x1="990" y1="6" x2="990" y2="48"/><line x1="1000" y1="6" x2="1000" y2="48"/>
+            <line x1="0" y1="6" x2="1000" y2="6"/>
+          </g>
+          <polyline points="0,48 0,6 1000,6 1000,48" fill="none" stroke="var(--net-stroke)" stroke-width="4" stroke-linecap="square"/>
+        </svg>
+        <span class="label">04 · Reference · Cheat sheet</span>
+      </div>
+
+      <h1 class="h-chapter">Save action cheat sheet.</h1>
+      <p class="h-deck">Quick lookup table mapped to recognition cues from 03.</p>
+
+      <div class="tbl-caption">Table 04.1 · GK action by recognition cue</div>
+      <table class="gktable">
+        <thead>
+          <tr>
+            <th style="width:42%">If you see&hellip;</th>
+            <th style="width:20%">The label is</th>
+            <th>Common pitfall</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Two-handed W behind the ball, keeper holds</td><td><span class="lbl">Catch</span></td><td>Fumbled cleanly = Block</td></tr>
+          <tr><td>Ball stops on body or one hand, rebound likely</td><td><span class="lbl">Block</span></td><td>Hands open + ball held = Catch</td></tr>
+          <tr><td>Hand pushes ball wide / over with intent</td><td><span class="lbl">Parry</span></td><td>Passive hand = Deflect</td></tr>
+          <tr><td>Ball glances off passive hand, continues path</td><td><span class="lbl">Deflect</span></td><td>Often confused with Parry</td></tr>
+          <tr><td>Clenched fist(s) strike the ball clear</td><td><span class="lbl">Punch</span></td><td>Open palms = Block</td></tr>
+          <tr><td>Keeper goes to ground before shot, wraps ball</td><td><span class="lbl">Smother</span></td><td>Usually a 1v1 — note in obs</td></tr>
+          <tr><td>Keeper should have saved but didn't</td><td><span class="lbl">Missed</span></td><td>Don't use for unstoppable strikes</td></tr>
+          <tr><td>Ball in the net</td><td><span class="lbl">Goal</span></td><td>Logged in Goals sheet separately</td></tr>
+          <tr><td>Couldn't tell, or keeper not visible</td><td><span class="lbl">Unclear</span></td><td>Use freely — honest beats confident</td></tr>
+        </tbody>
+      </table>
+
+      <p style="font-size:12px;font-weight:300;color:var(--fg-mid);margin-top:20px;max-width:520px;">
+        <strong style="font-family:var(--display);font-weight:500;color:var(--accent);font-size:9px;letter-spacing:0.22em;text-transform:uppercase;display:block;margin-bottom:6px">Antecedent attack</strong>
+        Every save row must describe the opposition's attack in the 3–5 seconds before the shot. <strong style="color:var(--fg)">No describable attack → drop the row.</strong>
+      </p>
+
+    </main>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 5 — DIAGRAM / DATA
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page">
+  <div class="inner">
+    <aside class="rail">
+      <div class="rail-doc-num">02</div>
+      <div class="rail-doc-label">Domain Primer</div>
+
+      <div class="rail-section">
+        <div class="rail-section-label">Perspective flip</div>
+        <div class="rail-section-body">
+          <strong>Shot origin</strong>
+          Attacker's perspective.
+          <strong>Goal placement</strong>
+          Goalkeeper's perspective.
+        </div>
+      </div>
+
+      <div class="rail-section">
+        <div class="rail-section-label">Sample size</div>
+        <div class="rail-section-body">12 matches · Judah keeper · 2026 season · 98 save events</div>
+      </div>
+
+      <div class="rail-pagenum">
+        <div class="rail-pagenum-big">05</div>
+        <div class="rail-pagenum-total">of 47</div>
+      </div>
+    </aside>
+
+    <main class="main">
+
+      <div class="section-strip">
+        <svg viewBox="0 0 1000 48" preserveAspectRatio="none">
+          <g stroke="var(--net-stroke)" stroke-width="1.1" stroke-opacity="var(--net-opacity)" stroke-linecap="square">
+            <line x1="0" y1="6" x2="0" y2="48"/>
+            <line x1="66" y1="6" x2="66" y2="48"/><line x1="132" y1="6" x2="132" y2="48"/>
+            <line x1="198" y1="6" x2="198" y2="48"/><line x1="264" y1="6" x2="264" y2="48"/>
+            <line x1="330" y1="6" x2="330" y2="48"/><line x1="396" y1="6" x2="396" y2="48"/>
+            <line x1="462" y1="6" x2="462" y2="48"/><line x1="528" y1="6" x2="528" y2="48"/>
+            <line x1="594" y1="6" x2="594" y2="48"/><line x1="660" y1="6" x2="660" y2="48"/>
+            <line x1="726" y1="6" x2="726" y2="48"/><line x1="792" y1="6" x2="792" y2="48"/>
+            <line x1="858" y1="6" x2="858" y2="48"/><line x1="924" y1="6" x2="924" y2="48"/>
+            <line x1="990" y1="6" x2="990" y2="48"/><line x1="1000" y1="6" x2="1000" y2="48"/>
+            <line x1="0" y1="6" x2="1000" y2="6"/>
+          </g>
+          <polyline points="0,48 0,6 1000,6 1000,48" fill="none" stroke="var(--net-stroke)" stroke-width="4" stroke-linecap="square"/>
+        </svg>
+        <span class="label">05 · Pitch geometry &amp; data</span>
+      </div>
+
+      <h1 class="h-chapter">Shot origin &amp; observed save mix.</h1>
+      <p class="h-deck">Most labeling errors trace to not knowing where on the pitch a thing happened. Learn this once.</p>
+
+      <div class="diagram-card">
+        <div class="caption">Figure 05.1 · Shot origin zones · attacker perspective · proportions to FIFA Law 1</div>
+        <!--
+          Pitch dimensions at 10px = 1m
+            Visible third       68m wide × 32m deep   →  680 × 320
+            Penalty area        40.32m × 16.5m        →  403 × 165
+            Goal area           18.32m × 5.5m         →  183 × 55  (= 1/3 of penalty depth)
+            Goal mouth          7.32m × 2.44m         →  73 × ~8
+            Penalty spot        11m from goal line    →  y offset 110 from line
+            Penalty arc         r = 9.15m              →  91.5px around penalty spot
+        -->
+        <svg viewBox="0 0 720 360" data-pitch="true" style="width:100%;max-width:680px;background:var(--bg-2);border:1px solid var(--rule)">
+          <!-- Sidelines + back-of-pitch (visible third) -->
+          <rect x="20" y="20" width="680" height="320" fill="none" stroke="var(--accent)" stroke-width="2" opacity="0.6"/>
+          <!-- Penalty area (18-yard box) -->
+          <rect x="158.5" y="175" width="403" height="165" fill="none" stroke="var(--accent)" stroke-width="1.5" opacity="0.5"/>
+          <!-- Goal area (6-yard box) -->
+          <rect x="268.5" y="285" width="183" height="55" fill="none" stroke="var(--accent)" stroke-width="1.5" opacity="0.5"/>
+          <!-- Goal mouth -->
+          <rect x="323.5" y="332" width="73" height="8" fill="var(--accent)" opacity="0.85"/>
+          <!-- Penalty spot -->
+          <circle cx="360" cy="230" r="3" fill="var(--accent)" opacity="0.85"/>
+          <!-- Penalty arc (D) — bulges away from goal -->
+          <path d="M 286.9 175 A 91.5 91.5 0 0 0 433.1 175" fill="none" stroke="var(--accent)" stroke-width="1.5" opacity="0.5"/>
+
+          <!-- Zone labels -->
+          <g font-family="Outfit" font-weight="500" font-size="10" letter-spacing="0.16em" text-transform="uppercase" fill="var(--accent)" opacity="0.85">
+            <text x="90"  y="100" text-anchor="middle">OUT L</text>
+            <text x="360" y="100" text-anchor="middle">OUT C</text>
+            <text x="630" y="100" text-anchor="middle">OUT R</text>
+            <text x="90"  y="265" text-anchor="middle">CORNER L</text>
+            <text x="630" y="265" text-anchor="middle">CORNER R</text>
+            <text x="210" y="262" text-anchor="middle">BOX L</text>
+            <text x="360" y="208" text-anchor="middle">BOX C</text>
+            <text x="510" y="262" text-anchor="middle">BOX R</text>
+            <text x="360" y="320" text-anchor="middle">6 YARD</text>
+          </g>
+
+          <!-- Sample shot trajectories: outC, boxL, cornerR -->
+          <g stroke="var(--fg)" stroke-width="1.2" opacity="0.35" stroke-dasharray="4,4">
+            <line x1="360" y1="80"  x2="360" y2="332"/>
+            <line x1="210" y1="262" x2="345" y2="332"/>
+            <line x1="630" y1="245" x2="385" y2="332"/>
+          </g>
+          <g fill="var(--accent)">
+            <circle cx="360" cy="80"  r="4"/>
+            <circle cx="210" cy="262" r="4"/>
+            <circle cx="630" cy="245" r="4"/>
+          </g>
+
+          <!-- Goalkeeper position marker -->
+          <circle cx="360" cy="336" r="5" fill="var(--fg)"/>
+        </svg>
+      </div>
+
+      <div class="diagram-card">
+        <div class="caption">Figure 05.2 · Observed save type distribution</div>
+        <div class="bar-chart-mini">
+          <span class="bar-label">Catch</span>
+          <div class="bar-track"><div class="bar-fill" style="width:62%"></div></div>
+          <span class="bar-value">31</span>
+
+          <span class="bar-label">Block</span>
+          <div class="bar-track"><div class="bar-fill" style="width:42%"></div></div>
+          <span class="bar-value">21</span>
+
+          <span class="bar-label">Parry</span>
+          <div class="bar-track"><div class="bar-fill" style="width:38%"></div></div>
+          <span class="bar-value">19</span>
+
+          <span class="bar-label">Deflect</span>
+          <div class="bar-track"><div class="bar-fill bar-fill--dim" style="width:18%"></div></div>
+          <span class="bar-value">9</span>
+
+          <span class="bar-label">Punch</span>
+          <div class="bar-track"><div class="bar-fill bar-fill--dim" style="width:14%"></div></div>
+          <span class="bar-value">7</span>
+
+          <span class="bar-label">Smother</span>
+          <div class="bar-track"><div class="bar-fill bar-fill--dim" style="width:8%"></div></div>
+          <span class="bar-value">4</span>
+
+          <span class="bar-label">Missed</span>
+          <div class="bar-track"><div class="bar-fill bar-fill--dim" style="width:5%"></div></div>
+          <span class="bar-value">2</span>
+
+          <span class="bar-label">Unclear</span>
+          <div class="bar-track"><div class="bar-fill bar-fill--dim" style="width:11%"></div></div>
+          <span class="bar-value">5</span>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</section>
+
+</body>
+</html>

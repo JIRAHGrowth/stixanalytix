@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>## · Document Title — StixAnalytix Training</title>
+<!-- ────────────────────────────────────────────────────────────────────
+     StixAnalytix · Document Template (V2 — Brief with Marginalia)
+     ────────────────────────────────────────────────────────────────────
+     HOW TO USE THIS FILE
+       1. Save-as with your document slug, e.g. `06-eval-process.html`.
+       2. Edit the <title>, change `02` → your document number,
+          rename "Domain Primer" → your document name everywhere.
+       3. Toggle theme on <body>:
+            class="is-screen"  → dark theme for online viewing
+            class="is-print"   → white theme for printing / PDF
+          When you actually print (Ctrl-P), the print theme is forced
+          regardless of which class is set — so the screen version
+          prints correctly without changes.
+       4. Use the page templates below as starting points.
+          Delete any pages you don't need; duplicate any you do.
+       5. The "rail" (left column on inner pages) holds: doc number,
+          section labels, navigation, asides, page numbers. The "main"
+          (right column) holds: section strip, chapter heading, body.
+
+     COMPONENT LIBRARY (CSS classes available — see stixanalytix-doc.css)
+       Layout
+         .page                Page shell (1100×1400 min)
+         .cover               Cover page layout
+         .inner               Two-column inner page (rail + main)
+         .rail                Left sidebar (marginalia + nav)
+         .main                Right column (body content)
+       Type
+         .h-chapter           Big chapter heading (Outfit 800, 38px)
+         .h-deck              Chapter deck (Outfit 500, 16px)
+         .h-section           Section heading (Outfit 700, 19px)
+         .h-subsection        Subsection heading (Outfit 700, 13px)
+       Components
+         .section-strip       The horizontal goal-net divider (with .label)
+         .body-cols           Two-col body (1.4fr main + 1fr aside)
+         .col-side            Aside callout (with .side-label + .side-body)
+         .stat-row            Three-stat hero box
+         .gktable             Net-cropped data table
+         .diagram-card        Wrapper for figures + bar charts
+         .bar-chart-mini      Horizontal bar chart (label · track · value)
+       Inline
+         code                 Inline code / category labels
+         strong               Bold (weight 500, NOT 700)
+         em                   Emphasis (italic 300)
+   ──────────────────────────────────────────────────────────────────── -->
+<link rel="stylesheet" href="stixanalytix-doc.css">
+</head>
+<body class="is-screen">
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 1 — COVER
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page cover">
+
+  <div class="cover-rail">
+    <div class="rail-block">
+      <span class="rail-label">StixAnalytix</span>
+      <span class="rail-value">[Series Name]</span>
+    </div>
+    <div class="rail-block center">
+      <span class="rail-label">Part ## / ##</span>
+      <span class="rail-value">[Subtitle]</span>
+    </div>
+    <div class="rail-block right">
+      <span class="rail-label">v1.0 · 2026</span>
+      <span class="rail-value">Internal · Confidential</span>
+    </div>
+  </div>
+
+  <div class="cover-doc-id">##</div>
+
+  <div class="cover-frame-wrap">
+    <!-- Replace the title text inside this SVG. Keep the net + frame geometry. -->
+    <svg width="640" height="220" viewBox="0 0 800 280" xmlns="http://www.w3.org/2000/svg">
+      <g stroke="var(--net-stroke)" stroke-width="1.1" stroke-opacity="var(--net-opacity)" stroke-linecap="square">
+        <line x1="10"  y1="10" x2="10"  y2="280"/>
+        <line x1="76"  y1="10" x2="76"  y2="280"/>
+        <line x1="142" y1="10" x2="142" y2="280"/>
+        <line x1="208" y1="10" x2="208" y2="280"/>
+        <line x1="274" y1="10" x2="274" y2="280"/>
+        <line x1="340" y1="10" x2="340" y2="280"/>
+        <line x1="406" y1="10" x2="406" y2="280"/>
+        <line x1="472" y1="10" x2="472" y2="280"/>
+        <line x1="538" y1="10" x2="538" y2="280"/>
+        <line x1="604" y1="10" x2="604" y2="280"/>
+        <line x1="670" y1="10" x2="670" y2="280"/>
+        <line x1="736" y1="10" x2="736" y2="280"/>
+        <line x1="790" y1="10" x2="790" y2="280"/>
+        <line x1="10" y1="10"  x2="790" y2="10"/>
+        <line x1="10" y1="66"  x2="790" y2="66"/>
+        <line x1="10" y1="122" x2="790" y2="122"/>
+        <line x1="10" y1="178" x2="790" y2="178"/>
+        <line x1="10" y1="234" x2="790" y2="234"/>
+      </g>
+      <polyline points="10,280 10,10 790,10 790,280" fill="none" stroke="var(--net-stroke)" stroke-width="6" stroke-linecap="square"/>
+      <text x="400" y="140" font-family="'Outfit',sans-serif" font-weight="800" font-size="78" fill="var(--accent)" text-anchor="middle" letter-spacing="-3">DOCUMENT</text>
+      <text x="400" y="210" font-family="'Outfit',sans-serif" font-weight="800" font-size="78" fill="var(--accent)" text-anchor="middle" letter-spacing="-3">TITLE HERE</text>
+    </svg>
+  </div>
+
+  <div class="cover-subtitle">Subtitle · audience · context</div>
+
+  <div class="cover-foot">
+    <div class="cover-foot-block">
+      <strong>Read time</strong>
+      ## minutes
+    </div>
+    <div class="cover-foot-block">
+      <strong>Audience</strong>
+      Who this is for.
+    </div>
+    <div class="cover-foot-block">
+      <strong>Prerequisites</strong>
+      What you should have read first.
+    </div>
+  </div>
+
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 2 — STANDARD INNER PAGE
+     Duplicate this block for additional pages. Change the rail content,
+     section strip label, chapter heading, and body to match.
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page">
+  <div class="inner">
+
+    <!-- LEFT RAIL (marginalia) -->
+    <aside class="rail">
+      <div class="rail-doc-num">##</div>
+      <div class="rail-doc-label">[Doc Name]</div>
+
+      <div class="rail-section">
+        <div class="rail-section-label">In this part</div>
+        <div class="rail-section-body">One-sentence orientation for this page or chapter.</div>
+      </div>
+
+      <!-- Optional: navigation -->
+      <div class="rail-nav">
+        <div class="rail-nav-item is-current"><span>Section A</span><span class="num">01</span></div>
+        <div class="rail-nav-item"><span>Section B</span><span class="num">02</span></div>
+        <div class="rail-nav-item"><span>Section C</span><span class="num">03</span></div>
+      </div>
+
+      <div class="rail-pagenum">
+        <div class="rail-pagenum-big">##</div>
+        <div class="rail-pagenum-total">of ##</div>
+      </div>
+    </aside>
+
+    <!-- MAIN COLUMN -->
+    <main class="main">
+
+      <!-- Section divider with the net motif -->
+      <div class="section-strip">
+        <svg viewBox="0 0 1000 48" preserveAspectRatio="none">
+          <g stroke="var(--net-stroke)" stroke-width="1.1" stroke-opacity="var(--net-opacity)" stroke-linecap="square">
+            <line x1="0" y1="6" x2="0" y2="48"/>
+            <line x1="66" y1="6" x2="66" y2="48"/><line x1="132" y1="6" x2="132" y2="48"/>
+            <line x1="198" y1="6" x2="198" y2="48"/><line x1="264" y1="6" x2="264" y2="48"/>
+            <line x1="330" y1="6" x2="330" y2="48"/><line x1="396" y1="6" x2="396" y2="48"/>
+            <line x1="462" y1="6" x2="462" y2="48"/><line x1="528" y1="6" x2="528" y2="48"/>
+            <line x1="594" y1="6" x2="594" y2="48"/><line x1="660" y1="6" x2="660" y2="48"/>
+            <line x1="726" y1="6" x2="726" y2="48"/><line x1="792" y1="6" x2="792" y2="48"/>
+            <line x1="858" y1="6" x2="858" y2="48"/><line x1="924" y1="6" x2="924" y2="48"/>
+            <line x1="990" y1="6" x2="990" y2="48"/><line x1="1000" y1="6" x2="1000" y2="48"/>
+            <line x1="0" y1="6" x2="1000" y2="6"/>
+          </g>
+          <polyline points="0,48 0,6 1000,6 1000,48" fill="none" stroke="var(--net-stroke)" stroke-width="4" stroke-linecap="square"/>
+        </svg>
+        <span class="label">01 · Section name</span>
+      </div>
+
+      <h1 class="h-chapter">Chapter heading goes here.</h1>
+      <p class="h-deck">The deck — one or two sentences that orient the reader before the body copy begins.</p>
+
+      <h2 class="h-section">A subsection heading</h2>
+      <p>Body copy. Use <code>code</code> for inline code or category labels. Use <strong>strong</strong> for emphasis and <em>em</em> for italics. Keep paragraphs to 3-5 lines for readability.</p>
+
+      <h3 class="h-subsection">A subsubsection</h3>
+      <p>More body copy.</p>
+
+      <ul>
+        <li>Bulleted list with custom green dash bullets.</li>
+        <li>Each item gets a 1.5px green hairline.</li>
+      </ul>
+
+    </main>
+  </div>
+</section>
+
+</body>
+</html>

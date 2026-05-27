@@ -1,0 +1,593 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   StixAnalytix · Document System
+   ────────────────────────────────────────────────────────────────────────────
+   The canonical stylesheet for branded long-form documents (training manuals,
+   internal briefs, technical playbooks, partner-facing docs).
+
+   Brand reference:
+     C:/Users/joshu/OneDrive/Stixanalytix/03 - Marketing & Brand/Brand Assets/
+     6_Color & Typography/stixanalytix-brand-r7.html
+
+   Two themes, one stylesheet:
+     body.is-screen   →  dark theme — warm near-black bg, bone fg, bright emerald
+     body.is-print    →  light theme — white paper, ink-black, deep emerald
+
+   The @media print rule below forces the print theme automatically when
+   any document is sent to the printer, regardless of which body class is set.
+
+   ──────────────────────────────────────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300;1,400&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── THEME TOKENS ─────────────────────────────────────────────────────────── */
+
+:root {
+  /* shared */
+  --green:           #10b981;
+  --green-dk:        #047857;
+  --display:         'Outfit', sans-serif;
+  --ui:              'DM Sans', sans-serif;
+}
+
+body.is-screen, body:not(.is-print) {
+  --bg:              #0c0c0a;
+  --bg-2:            #111110;
+  --fg:              #EDEAE1;
+  --fg-mid:          rgba(237, 234, 225, 0.46);
+  --fg-dim:          rgba(237, 234, 225, 0.22);
+  --fg-ghost:        rgba(237, 234, 225, 0.09);
+  --rule:            rgba(237, 234, 225, 0.07);
+  --accent:          var(--green);
+  --accent-strong:   var(--green);
+  --header-bg:       var(--green-dk);
+  --header-fg:       var(--fg);
+  --net-stroke:      #10b981;
+  --net-opacity:     0.22;
+  --row-hover:       rgba(237, 234, 225, 0.04);
+  --code-bg:         rgba(16, 185, 129, 0.10);
+  --code-fg:         var(--green);
+  --page-shell:      #1a1a18;
+}
+
+body.is-print {
+  --bg:              #FFFFFF;
+  --bg-2:            #FAFAF7;
+  --fg:              #0c0c0a;
+  --fg-mid:          rgba(12, 12, 10, 0.72);
+  --fg-dim:          rgba(12, 12, 10, 0.58);
+  --fg-ghost:        rgba(12, 12, 10, 0.32);
+  --rule:            rgba(12, 12, 10, 0.14);
+  --accent:          var(--green-dk);
+  --accent-strong:   var(--green-dk);
+  --header-bg:       var(--green-dk);
+  --header-fg:       #FFFFFF;
+  --net-stroke:      #047857;
+  --net-opacity:     0.30;
+  --row-hover:       rgba(12, 12, 10, 0.03);
+  --code-bg:         rgba(4, 120, 87, 0.10);
+  --code-fg:         var(--green-dk);
+  --page-shell:      #E8E5DE;
+}
+
+/* When actually printing, force the print theme regardless of body class.
+   Browser print preview shows the document as it would appear on paper. */
+@media print {
+  body, body.is-screen {
+    --bg:              #FFFFFF;
+    --bg-2:            #FAFAF7;
+    --fg:              #0c0c0a;
+    --fg-mid:          rgba(12, 12, 10, 0.72);
+    --fg-dim:          rgba(12, 12, 10, 0.58);
+    --fg-ghost:        rgba(12, 12, 10, 0.32);
+    --rule:            rgba(12, 12, 10, 0.14);
+    --accent:          var(--green-dk);
+    --accent-strong:   var(--green-dk);
+    --header-bg:       var(--green-dk);
+    --header-fg:       #FFFFFF;
+    --net-stroke:      #047857;
+    --net-opacity:     0.30;
+    --row-hover:       transparent;
+    --code-bg:         rgba(4, 120, 87, 0.10);
+    --code-fg:         var(--green-dk);
+    --page-shell:      #FFFFFF;
+  }
+  .page { box-shadow: none !important; page-break-after: always; }
+  .page:last-of-type { page-break-after: auto; }
+  @page { size: letter; margin: 0; }
+}
+
+/* ── BASE ─────────────────────────────────────────────────────────────────── */
+
+html { background: var(--page-shell); }
+body {
+  font-family: var(--ui);
+  -webkit-font-smoothing: antialiased;
+  color: var(--fg);
+  background: var(--page-shell);
+}
+
+/* ── PAGE SHELL ───────────────────────────────────────────────────────────── */
+
+.page {
+  width: 1100px;
+  min-height: 1400px;
+  margin: 40px auto;
+  background: var(--bg);
+  position: relative;
+  overflow: hidden;
+}
+body.is-print .page,
+@media print { .page { box-shadow: none; } }
+body.is-print .page {
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.06);
+}
+
+/* ── COVER ────────────────────────────────────────────────────────────────── */
+
+.cover {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 80px 80px 64px;
+}
+
+.cover-rail {
+  display: grid;
+  grid-template-columns: 200px 1fr 200px;
+  gap: 32px;
+  align-items: start;
+}
+.rail-block {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  line-height: 2;
+}
+.rail-block .rail-label { color: var(--accent); }
+.rail-block .rail-value { color: var(--fg-dim); font-weight: 400; }
+.rail-block.center { text-align: center; }
+.rail-block.right  { text-align: right; }
+
+.cover-doc-id {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 180px;
+  line-height: 0.85;
+  color: var(--accent);
+  letter-spacing: -8px;
+  text-align: center;
+  margin: 50px 0 14px;
+}
+
+.cover-frame-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 24px 0 32px;
+}
+
+.cover-subtitle {
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--accent);
+  text-align: center;
+  margin-top: 18px;
+}
+
+.cover-foot {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-top: auto;
+  padding-top: 80px;
+  border-top: 1px solid var(--rule);
+}
+.cover-foot-block {
+  font-size: 11px;
+  font-weight: 300;
+  color: var(--fg-mid);
+  line-height: 1.7;
+}
+.cover-foot-block strong {
+  display: block;
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+/* ── INNER PAGES — two-column with marginalia rail ───────────────────────── */
+
+.inner {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 0;
+  min-height: 1400px;
+}
+
+.rail {
+  border-right: 1px solid var(--rule);
+  padding: 56px 28px 56px 64px;
+  display: flex;
+  flex-direction: column;
+}
+.rail-doc-num {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 60px;
+  line-height: 0.85;
+  color: var(--accent);
+  letter-spacing: -2.5px;
+  margin-bottom: 4px;
+}
+.rail-doc-label {
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+  margin-bottom: 36px;
+}
+.rail-section { margin-top: 28px; }
+.rail-section-label {
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+.rail-section-body {
+  font-size: 11.5px;
+  font-weight: 300;
+  line-height: 1.6;
+  color: var(--fg-mid);
+}
+.rail-section-body strong {
+  display: block;
+  color: var(--accent);
+  font-weight: 500;
+  margin: 4px 0;
+}
+
+.rail-nav {
+  margin-top: 40px;
+  padding-top: 24px;
+  border-top: 1px solid var(--rule);
+}
+.rail-nav-item {
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: var(--fg);
+  padding: 4px 0;
+  line-height: 1.4;
+  display: flex;
+  justify-content: space-between;
+}
+.rail-nav-item.is-current { color: var(--accent); font-weight: 500; }
+.rail-nav-item .num { color: var(--fg-mid); }
+
+.rail-pagenum {
+  margin-top: auto;
+  padding-top: 40px;
+}
+.rail-pagenum-big {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 28px;
+  letter-spacing: -0.5px;
+  color: var(--fg);
+  line-height: 1;
+}
+.rail-pagenum-total {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--fg-dim);
+  margin-top: 6px;
+}
+
+.main {
+  padding: 56px 80px 64px 48px;
+  position: relative;
+}
+
+/* ── SECTION STRIP (the net motif as section divider) ─────────────────────── */
+
+.section-strip {
+  height: 48px;
+  margin: 0 0 36px;
+  position: relative;
+}
+.section-strip svg { display: block; width: 100%; height: 100%; }
+.section-strip .label {
+  position: absolute;
+  top: 50%; left: 18px;
+  transform: translateY(-50%);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--bg);
+  padding: 0 12px;
+}
+
+/* ── TYPE HIERARCHY ───────────────────────────────────────────────────────── */
+
+.h-chapter {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 38px;
+  line-height: 1.05;
+  letter-spacing: -1.2px;
+  margin-bottom: 12px;
+  color: var(--fg);
+}
+.h-deck {
+  font-family: var(--display);
+  font-weight: 500;
+  font-size: 16px;
+  line-height: 1.4;
+  letter-spacing: -0.15px;
+  color: var(--fg-mid);
+  margin-bottom: 36px;
+  max-width: 600px;
+}
+.h-section {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 19px;
+  line-height: 1.3;
+  letter-spacing: -0.4px;
+  margin: 32px 0 12px;
+  color: var(--fg);
+}
+.h-subsection {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  margin: 20px 0 6px;
+  color: var(--fg);
+}
+
+.main p, .main li {
+  font-size: 14.5px;
+  font-weight: 300;
+  line-height: 1.75;
+  color: var(--fg);
+}
+.main p { margin-bottom: 14px; max-width: 680px; }
+.main p strong { font-weight: 500; color: var(--fg); }
+
+.main ul {
+  margin: 12px 0 20px;
+  padding-left: 0;
+  list-style: none;
+}
+.main ul li {
+  position: relative;
+  padding-left: 20px;
+  margin-bottom: 6px;
+  max-width: 680px;
+}
+.main ul li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 11px;
+  width: 8px;
+  height: 1.5px;
+  background: var(--accent);
+}
+
+code {
+  font-family: 'DM Sans', monospace;
+  background: var(--code-bg);
+  color: var(--code-fg);
+  padding: 2px 7px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* ── BODY GRID — main column + side callout ──────────────────────────────── */
+
+.body-cols {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 36px;
+  margin: 32px 0;
+}
+.body-cols .col-main p { font-size: 13.5px; }
+.body-cols .col-side {
+  background: var(--bg-2);
+  border-left: 2px solid var(--accent);
+  padding: 20px 22px;
+}
+.col-side .side-label {
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 12px;
+}
+.col-side .side-body {
+  font-size: 12.5px;
+  font-weight: 300;
+  line-height: 1.7;
+  color: var(--fg);
+}
+.col-side .side-body strong {
+  display: block;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--accent);
+  margin: 8px 0 4px;
+  letter-spacing: -0.1px;
+}
+
+/* ── BIG STAT ROW ─────────────────────────────────────────────────────────── */
+
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--accent);
+  margin: 28px 0;
+}
+.stat-row .stat {
+  background: var(--bg-2);
+  padding: 20px 24px;
+}
+.stat-row .stat .num {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 36px;
+  line-height: 1;
+  letter-spacing: -1.5px;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+.stat-row .stat .lbl {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--fg-mid);
+  line-height: 1.4;
+}
+
+/* ── TABLE — styled as a cropped goal net ─────────────────────────────────── */
+
+.gktable {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--ui);
+  font-size: 12.5px;
+  font-weight: 300;
+  margin-top: 18px;
+}
+.gktable thead th {
+  background: var(--header-bg);
+  color: var(--header-fg);
+  text-align: left;
+  font-weight: 500;
+  font-size: 9.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  padding: 12px 16px;
+  border-right: 1.1px solid rgba(255, 255, 255, 0.12);
+}
+.gktable thead th:last-child { border-right: none; }
+.gktable tbody td {
+  padding: 12px 16px;
+  border-top: 1.1px solid var(--accent);
+  border-right: 1.1px solid rgba(16, 185, 129, 0.18);
+  vertical-align: top;
+  line-height: 1.55;
+  color: var(--fg);
+}
+body.is-print .gktable tbody td {
+  border-right: 1.1px solid rgba(4, 120, 87, 0.20);
+}
+.gktable tbody td:last-child { border-right: none; }
+.gktable tbody tr:hover td { background: var(--row-hover); }
+.gktable tbody tr:last-child td { border-bottom: 1.1px solid var(--accent); }
+.gktable td .lbl {
+  font-family: var(--display);
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.tbl-caption {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--fg-mid);
+  margin-bottom: 6px;
+}
+
+/* ── DIAGRAM / CHART ──────────────────────────────────────────────────────── */
+
+.diagram-card {
+  margin: 24px 0 36px;
+}
+.diagram-card .caption {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 12px;
+}
+
+.bar-chart-mini {
+  display: grid;
+  grid-template-columns: 90px 1fr 40px;
+  gap: 8px 12px;
+  align-items: center;
+  margin-top: 16px;
+  max-width: 480px;
+}
+.bar-chart-mini .bar-label {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--fg);
+  text-align: right;
+}
+.bar-chart-mini .bar-track {
+  height: 14px;
+  background: var(--fg-ghost);
+  position: relative;
+}
+.bar-chart-mini .bar-fill {
+  height: 100%;
+  background: var(--accent);
+}
+.bar-chart-mini .bar-fill--dim {
+  background: var(--accent);
+  opacity: 0.55;
+}
+.bar-chart-mini .bar-value {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+/* ── SVG diagram backdrops in print mode ──────────────────────────────────── */
+body.is-print .diagram-card svg[data-pitch] rect[fill="#0c0c0a"],
+body.is-print .diagram-card svg[data-pitch] {
+  background: var(--bg-2) !important;
+}
+
+/* ── SCREEN-ONLY niceties ─────────────────────────────────────────────────── */
+
+body.is-print .page {
+  background: var(--bg);
+}
+
+/* ── INLINE LABEL (small green tags inside body) ──────────────────────────── */
+
+.inlabel {
+  display: inline-block;
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  padding-right: 8px;
+}
