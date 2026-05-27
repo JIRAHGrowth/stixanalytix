@@ -591,3 +591,219 @@ body.is-print .page {
   color: var(--accent);
   padding-right: 8px;
 }
+
+/* ── ENTRY CARD (edge-case log, decision records, dated entries) ──────────── */
+
+.entry-card {
+  border-top: 1.5px solid var(--accent);
+  margin: 32px 0;
+  padding: 18px 0 0;
+}
+.entry-card .entry-header {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1.3;
+  letter-spacing: -0.3px;
+  color: var(--fg);
+  margin-bottom: 16px;
+}
+.entry-card .entry-header .date {
+  color: var(--accent);
+  margin-right: 12px;
+}
+.entry-card .entry-grid {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 10px 20px;
+  margin-bottom: 14px;
+}
+.entry-card .entry-label {
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  padding-top: 4px;
+}
+.entry-card .entry-value {
+  font-size: 13.5px;
+  font-weight: 300;
+  line-height: 1.6;
+  color: var(--fg);
+}
+.entry-card .entry-value strong { font-weight: 500; color: var(--fg); }
+.entry-card .entry-value em { font-style: italic; }
+.entry-card .entry-foot {
+  border-top: 1px solid var(--rule);
+  padding-top: 10px;
+  font-size: 10.5px;
+  font-weight: 300;
+  font-style: italic;
+  color: var(--fg-mid);
+}
+
+/* ── STEP BLOCK (numbered procedural steps) ───────────────────────────────── */
+
+.step-block {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 24px;
+  margin: 24px 0;
+  align-items: start;
+}
+.step-block .step-num {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 56px;
+  line-height: 0.82;
+  color: var(--accent);
+  letter-spacing: -2.5px;
+  text-align: right;
+}
+.step-block .step-body { padding-top: 6px; }
+.step-block .step-body h3 {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 1.3;
+  letter-spacing: -0.4px;
+  color: var(--fg);
+  margin: 0 0 8px;
+}
+.step-block .step-body p {
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 1.7;
+  color: var(--fg);
+  margin-bottom: 8px;
+}
+.step-block .step-body p strong { font-weight: 500; }
+
+/* ── BIG PULL QUOTE (editorial moments — covers, openings, key statements) ── */
+
+.bigquote {
+  margin: 36px 0;
+  padding: 32px 40px;
+  background: var(--bg-2);
+  border-top: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
+}
+.bigquote .q {
+  font-family: var(--display);
+  font-weight: 500;
+  font-style: italic;
+  font-size: 26px;
+  line-height: 1.3;
+  letter-spacing: -0.5px;
+  color: var(--fg);
+  margin-bottom: 14px;
+}
+.bigquote .q em { font-style: normal; color: var(--accent); font-weight: 700; }
+.bigquote .a {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* ── CHECKLIST (self-check, graduation criteria, QA verification) ─────────── */
+
+.checklist {
+  margin: 18px 0;
+  padding-left: 0;
+  list-style: none;
+}
+.checklist li {
+  position: relative;
+  padding-left: 30px;
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 1.6;
+  margin-bottom: 8px;
+  color: var(--fg);
+  max-width: 680px;
+}
+.checklist li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--accent);
+  background: transparent;
+}
+.checklist li.is-done::before { background: var(--accent); }
+.checklist li.is-done::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 8px;
+  width: 8px;
+  height: 4px;
+  border-left: 1.5px solid var(--bg);
+  border-bottom: 1.5px solid var(--bg);
+  transform: rotate(-45deg);
+}
+
+.checklist-group {
+  margin-bottom: 24px;
+}
+.checklist-group .group-label {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 10px;
+}
+
+/* ── FLOW DIAGRAM (pipeline / process diagrams in SVG) ────────────────────── */
+
+.flow-diagram {
+  width: 100%;
+  max-width: 720px;
+  margin: 24px 0 12px;
+  background: var(--bg-2);
+  padding: 32px 24px;
+  border: 1px solid var(--rule);
+}
+.flow-diagram svg { display: block; width: 100%; height: auto; }
+.flow-diagram .flow-caption {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 12px;
+}
+
+/* SVG-internal classes for flow nodes */
+.flow-node-bg { fill: var(--bg); stroke: var(--accent); stroke-width: 1.5; }
+.flow-node-label {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+  fill: var(--fg);
+  font-size: 13px;
+  letter-spacing: -0.2px;
+}
+.flow-node-sub {
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 300;
+  fill: var(--fg-mid);
+  font-size: 10px;
+}
+.flow-arrow { stroke: var(--accent); stroke-width: 2; fill: none; }
+.flow-arrow-marker { fill: var(--accent); }
+.flow-callout {
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 500;
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  fill: var(--accent);
+}
+.flow-node-emphasis { fill: var(--accent); }
+.flow-node-emphasis + text { fill: var(--bg); }

@@ -138,6 +138,69 @@ The cover-page goalframe is larger and contains the document title. Same pattern
 
 **Inline `<code>`** — for category labels, file paths, field values. Auto-coloured emerald on a 10%-opacity fill.
 
+**Entry card** — for dated log entries (edge-case log, decision records):
+```html
+<div class="entry-card">
+  <div class="entry-header">
+    <span class="date">2026-05-27</span> Short title of the entry
+  </div>
+  <div class="entry-grid">
+    <div class="entry-label">Match / clip</div>
+    <div class="entry-value">judah-2026-05-23, 23:14</div>
+    <div class="entry-label">What I saw</div>
+    <div class="entry-value">One or two sentences describing the moment.</div>
+    <div class="entry-label">Ruling</div>
+    <div class="entry-value"><strong>Drop the row.</strong> No describable opposition attack → not a save event.</div>
+  </div>
+  <div class="entry-foot">Ruled by: Joshua Marshall</div>
+</div>
+```
+
+**Step block** — numbered procedural step:
+```html
+<div class="step-block">
+  <div class="step-num">01</div>
+  <div class="step-body">
+    <h3>Set up the workbook</h3>
+    <p>Copy <code>_template.xlsx</code> to <code>scripts/ground-truth/&lt;match-name&gt;.xlsx</code> and open in Excel.</p>
+  </div>
+</div>
+```
+
+**Big pull quote** — full-width editorial moment, double emerald rules:
+```html
+<div class="bigquote">
+  <p class="q">"Honest 'I couldn't tell' beats a confident guess <em>every time</em>. The model will eventually train on what you label."</p>
+  <p class="a">— Mission &amp; Why · Part 01</p>
+</div>
+```
+
+**Checklist** — checkbox list, optionally grouped:
+```html
+<div class="checklist-group">
+  <div class="group-label">Goals</div>
+  <ul class="checklist">
+    <li>Every goal has a kickoff or celebration or scoreboard confirmation</li>
+    <li>Scoring team matches the shooter's observed jersey colour</li>
+    <li class="is-done">Final score equals the sum of goals per team</li>
+  </ul>
+</div>
+```
+Add `class="is-done"` to mark an item as checked (rendered with a green tick).
+
+**Flow diagram** — SVG-based process/pipeline diagrams. Use CSS classes inside SVG for theming:
+```html
+<div class="flow-diagram">
+  <div class="flow-caption">Figure 01.1 · The pipeline</div>
+  <svg viewBox="0 0 720 200">
+    <rect class="flow-node-bg" x="20"  y="60" width="140" height="80" rx="6"/>
+    <text class="flow-node-label" x="90" y="100" text-anchor="middle">Match video</text>
+    <text class="flow-node-sub"   x="90" y="120" text-anchor="middle">uploaded</text>
+    <!-- repeat for each node, arrows via <path class="flow-arrow"/> -->
+  </svg>
+</div>
+```
+
 ## Pitch diagram — FIFA proportions
 
 For any diagram that shows a pitch, penalty area, goal area, or goal, use these proportions from FIFA Law 1. The audience for these documents is goalkeeping professionals — incorrect ratios create immediate visual friction and distract from the content.
