@@ -48,6 +48,9 @@ scripts/eval-reports/
 
 # bench harness — model-comparison outputs and downloaded source videos
 scripts/.bench-videos/
+# bench drivers — local one-off shell scripts + their logs
+scripts/.bench-driver-*.sh
+scripts/.bench-driver-*.log
 # Per-run bench job outputs are large; commit only the scorecard summaries.
 scripts/bench-results/*
 !scripts/bench-results/scorecards/
