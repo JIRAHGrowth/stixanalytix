@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>04b · Review Keyboard Shortcuts — StixAnalytix Training</title>
+<link rel="stylesheet" href="../_design/template/stixanalytix-doc.css">
+<style>
+  /* Local table styling for the shortcut reference. Keeps brand language
+     but renders a tight cheat-sheet grid that prints well. */
+  .kbd-grid {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 8px 18px;
+    margin-top: 8px;
+  }
+  .kbd-grid .k {
+    text-align: right;
+    padding-top: 2px;
+  }
+  .kbd-grid .d {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  kbd {
+    display: inline-block;
+    padding: 3px 9px;
+    font-family: 'JetBrains Mono', Menlo, Consolas, monospace;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--card-alt, #f3efe6);
+    border: 1px solid var(--border, #c9c3b5);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    color: var(--text-strong, #0a0a0a);
+    min-width: 16px;
+    text-align: center;
+    letter-spacing: 0.5px;
+  }
+  kbd + kbd { margin-left: 4px; }
+  .star kbd {
+    background: var(--accent-soft, #e6f0e0);
+    border-color: var(--accent, #2e5d3a);
+  }
+  .star .d { font-weight: 600; }
+  .practice-box {
+    margin-top: 20px;
+    padding: 14px 18px;
+    border-left: 3px solid var(--accent, #2e5d3a);
+    background: var(--card-alt, #f3efe6);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  .practice-box strong { display: block; margin-bottom: 6px; color: var(--text-strong); }
+</style>
+</head>
+<body class="is-screen">
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 1 — COVER
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page cover">
+
+  <div class="cover-rail">
+    <div class="rail-block">
+      <span class="rail-label">StixAnalytix</span>
+      <span class="rail-value">Training Series</span>
+    </div>
+    <div class="rail-block center">
+      <span class="rail-label">Part 04b / 07</span>
+      <span class="rail-value">Review keyboard shortcuts</span>
+    </div>
+    <div class="rail-block right">
+      <span class="rail-label">v1.0 · 2026</span>
+      <span class="rail-value">Internal · Confidential</span>
+    </div>
+  </div>
+
+  <div class="cover-doc-id">04b</div>
+
+  <div class="cover-frame-wrap">
+    <svg width="640" height="220" viewBox="0 0 800 280" xmlns="http://www.w3.org/2000/svg">
+      <g stroke="var(--net-stroke)" stroke-width="1.1" stroke-opacity="var(--net-opacity)" stroke-linecap="square">
+        <line x1="10"  y1="10" x2="10"  y2="280"/><line x1="76"  y1="10" x2="76"  y2="280"/><line x1="142" y1="10" x2="142" y2="280"/><line x1="208" y1="10" x2="208" y2="280"/><line x1="274" y1="10" x2="274" y2="280"/><line x1="340" y1="10" x2="340" y2="280"/><line x1="406" y1="10" x2="406" y2="280"/><line x1="472" y1="10" x2="472" y2="280"/><line x1="538" y1="10" x2="538" y2="280"/><line x1="604" y1="10" x2="604" y2="280"/><line x1="670" y1="10" x2="670" y2="280"/><line x1="736" y1="10" x2="736" y2="280"/><line x1="790" y1="10" x2="790" y2="280"/>
+        <line x1="10" y1="10"  x2="790" y2="10"/><line x1="10" y1="66"  x2="790" y2="66"/><line x1="10" y1="122" x2="790" y2="122"/><line x1="10" y1="178" x2="790" y2="178"/><line x1="10" y1="234" x2="790" y2="234"/>
+      </g>
+      <polyline points="10,280 10,10 790,10 790,280" fill="none" stroke="var(--net-stroke)" stroke-width="6" stroke-linecap="square"/>
+      <text x="400" y="140" font-family="'Outfit',sans-serif" font-weight="800" font-size="78" fill="var(--accent)" text-anchor="middle" letter-spacing="-3">KEYBOARD</text>
+      <text x="400" y="210" font-family="'Outfit',sans-serif" font-weight="800" font-size="78" fill="var(--accent)" text-anchor="middle" letter-spacing="-3">SHORTCUTS</text>
+    </svg>
+  </div>
+
+  <div class="cover-subtitle">In-app review surface · print and tape beside your keyboard</div>
+
+  <div class="cover-foot">
+    <div class="cover-foot-block">
+      <strong>Read time</strong>
+      5 minutes · then practice on a real match
+    </div>
+    <div class="cover-foot-block">
+      <strong>Audience</strong>
+      Anyone reviewing match output through the review screen — coaches, helpers, calibrators.
+    </div>
+    <div class="cover-foot-block">
+      <strong>Pairs with</strong>
+      <strong>04 Tool Walkthrough</strong>. The shortcuts are the workflow accelerant; the walkthrough explains the workflow itself.
+    </div>
+  </div>
+
+</section>
+
+
+<!-- ════════════════════════════════════════════════════════════════
+     PAGE 2 — THE SHORTCUTS
+     ════════════════════════════════════════════════════════════════ -->
+<section class="page">
+  <div class="inner">
+
+    <aside class="rail">
+      <div class="rail-doc-num">04b</div>
+      <div class="rail-doc-label">Keyboard Shortcuts</div>
+
+      <div class="rail-section">
+        <div class="rail-section-label">In this part</div>
+        <div class="rail-section-body">The four keys you'll actually use, plus the power-user reference. Print this page and tape it beside your keyboard.</div>
+      </div>
+
+      <div class="rail-nav">
+        <div class="rail-nav-item is-current"><span>The four keys</span><span class="num">01</span></div>
+        <div class="rail-nav-item"><span>Navigation</span><span class="num">02</span></div>
+        <div class="rail-nav-item"><span>Mark events</span><span class="num">03</span></div>
+        <div class="rail-nav-item"><span>Bulk actions</span><span class="num">04</span></div>
+        <div class="rail-nav-item"><span>Practice</span><span class="num">05</span></div>
+      </div>
+
+      <div class="rail-pagenum">
+        <div class="rail-pagenum-big">02</div>
+        <div class="rail-pagenum-total">of 02</div>
+      </div>
+    </aside>
+
+    <main class="main">
+
+      <div class="section-strip">
+        <svg viewBox="0 0 1000 48" preserveAspectRatio="none">
+          <g stroke="var(--net-stroke)" stroke-width="1.1" stroke-opacity="var(--net-opacity)" stroke-linecap="square">
+            <line x1="0" y1="6" x2="0" y2="48"/>
+            <line x1="66" y1="6" x2="66" y2="48"/><line x1="132" y1="6" x2="132" y2="48"/>
+            <line x1="198" y1="6" x2="198" y2="48"/><line x1="264" y1="6" x2="264" y2="48"/>
+            <line x1="330" y1="6" x2="330" y2="48"/><line x1="396" y1="6" x2="396" y2="48"/>
+            <line x1="462" y1="6" x2="462" y2="48"/><line x1="528" y1="6" x2="528" y2="48"/>
+            <line x1="594" y1="6" x2="594" y2="48"/><line x1="660" y1="6" x2="660" y2="48"/>
+            <line x1="726" y1="6" x2="726" y2="48"/><line x1="792" y1="6" x2="792" y2="48"/>
+            <line x1="858" y1="6" x2="858" y2="48"/><line x1="924" y1="6" x2="924" y2="48"/>
+            <line x1="990" y1="6" x2="990" y2="48"/><line x1="1000" y1="6" x2="1000" y2="48"/>
+            <line x1="0" y1="6" x2="1000" y2="6"/>
+          </g>
+          <polyline points="0,48 0,6 1000,6 1000,48" fill="none" stroke="var(--net-stroke)" stroke-width="4" stroke-linecap="square"/>
+        </svg>
+        <span class="label">01 · Reference</span>
+      </div>
+
+      <h1 class="h-chapter">The four keys you'll actually use.</h1>
+      <p class="h-deck">These cover ~95% of a review session. Learn them first; everything else below is for power users and bulk operations.</p>
+
+      <div class="kbd-grid">
+        <div class="k star"><kbd>&gt;</kbd></div>
+        <div class="d star">★ Jump to the <strong>next event in time</strong>, across goals/saves/distribution combined. The video-following key.</div>
+
+        <div class="k star"><kbd>y</kbd></div>
+        <div class="d star">★ <strong>Keep</strong> the focused event (it was real).</div>
+
+        <div class="k star"><kbd>n</kbd></div>
+        <div class="d star">★ <strong>Reject</strong> the focused event (false positive).</div>
+
+        <div class="k star"><kbd>?</kbd></div>
+        <div class="d star">★ Open the full shortcuts overlay if you forget a key.</div>
+      </div>
+
+      <h2 class="h-section">Navigation</h2>
+      <div class="kbd-grid">
+        <div class="k"><kbd>&gt;</kbd></div>
+        <div class="d">Next event in time (across all sections)</div>
+
+        <div class="k"><kbd>&lt;</kbd></div>
+        <div class="d">Previous event in time</div>
+
+        <div class="k"><kbd>↓</kbd> or <kbd>j</kbd></div>
+        <div class="d">Next event in <em>current</em> section only</div>
+
+        <div class="k"><kbd>↑</kbd> or <kbd>k</kbd></div>
+        <div class="d">Previous event in current section</div>
+
+        <div class="k"><kbd>Tab</kbd></div>
+        <div class="d">Switch to next section (goals → saves → distribution)</div>
+
+        <div class="k"><kbd>Shift</kbd>+<kbd>Tab</kbd></div>
+        <div class="d">Switch to previous section</div>
+      </div>
+
+      <p style="font-size:12px; color:var(--text-dim); margin-top:8px;">Use <kbd>&gt;</kbd> when you're following the match video — it jumps to whatever happened next in time. Use <kbd>↓</kbd> when scanning within one category (e.g., reviewing all distributions back-to-back).</p>
+
+      <h2 class="h-section">Mark the focused event</h2>
+      <div class="kbd-grid">
+        <div class="k"><kbd>y</kbd></div>
+        <div class="d">Keep (event was real)</div>
+
+        <div class="k"><kbd>n</kbd> or <kbd>x</kbd></div>
+        <div class="d">Reject (false positive — Gemini was wrong)</div>
+
+        <div class="k"><kbd>Space</kbd></div>
+        <div class="d">Toggle keep / reject</div>
+      </div>
+
+      <h2 class="h-section">Bulk actions (current section only)</h2>
+      <div class="kbd-grid">
+        <div class="k"><kbd>Shift</kbd>+<kbd>A</kbd></div>
+        <div class="d"><strong>Accept all</strong> events in this section</div>
+
+        <div class="k"><kbd>Shift</kbd>+<kbd>R</kbd></div>
+        <div class="d"><strong>Reject all</strong> events in this section</div>
+
+        <div class="k"><kbd>Shift</kbd>+<kbd>H</kbd></div>
+        <div class="d">Accept all <strong>high-confidence</strong> events</div>
+
+        <div class="k"><kbd>Shift</kbd>+<kbd>L</kbd></div>
+        <div class="d">Reject all <strong>low-confidence</strong> events</div>
+
+        <div class="k"><kbd>?</kbd></div>
+        <div class="d">Show or hide the shortcuts overlay</div>
+
+        <div class="k"><kbd>Esc</kbd></div>
+        <div class="d">Close overlay, or step out of a text field to re-enable shortcuts</div>
+      </div>
+
+      <div class="practice-box">
+        <strong>How to practice (5 minutes)</strong>
+        1. Open any published match's review page.<br>
+        2. Find the focus glow. Press <kbd>&gt;</kbd> a few times — watch it jump across sections in time order.<br>
+        3. Press <kbd>y</kbd> on one event, <kbd>n</kbd> on another. Watch the checkboxes tick.<br>
+        4. Press <kbd>?</kbd> to see the full overlay if you forget a key.<br>
+        5. When typing in notes, shortcuts auto-pause. <kbd>Esc</kbd> to step out and re-enable.<br><br>
+        The goal: drive one match end-to-end with only the keyboard. After one match, the muscle memory is built.
+      </div>
+
+    </main>
+  </div>
+</section>
+
+</body>
+</html>

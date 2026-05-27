@@ -30,6 +30,7 @@ const DOC_ORDER = [
   '03a-labeling-rubric.html',
   '03b-edge-case-log.html',
   '04-tool-walkthrough.html',
+  '04b-review-keyboard-shortcuts.html',
   '05-calibration-process.html',
 ];
 

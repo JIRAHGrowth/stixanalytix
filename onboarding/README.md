@@ -11,6 +11,7 @@ This is the entry point for anyone joining the StixAnalytix ground-truth labelin
 | 3a | [Labeling Rubric](03a-labeling-rubric.md) | Active labelers | reference |
 | 3b | [Edge-Case Log](03b-edge-case-log.md) | Active labelers (living doc) | reference |
 | 4 | [Tool Walkthrough](04-tool-walkthrough.md) | Active labelers | 20 min + 2 Loom videos |
+| 4b | [Review Keyboard Shortcuts](04b-review-keyboard-shortcuts.md) | Anyone using the in-app review surface | 5 min reference (print + tape it down) |
 | 5 | [Calibration Process](05-calibration-process.md) | First cohort + reviewers | 15 min |
 
 ## Two tracks
