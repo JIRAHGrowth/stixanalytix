@@ -121,8 +121,27 @@ function UploadPage() {
   // network blips. Path: <user_id>/<timestamp>_<rand>/<filename>.
   const uploadFile = (file) => new Promise(async (resolve, reject) => {
     const tus = await import("tus-js-client");
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return reject(new Error("Not authenticated"));
+
+    // Returns a non-expired access token. Supabase access tokens live ~1 hour;
+    // a stitched match video on home Wi-Fi can upload longer than that, and
+    // the upload page may have been idle for hours before the user clicks.
+    // Both cases used to surface as `"exp" claim timestamp check failed` on
+    // the resumable POST. We re-check on every tus request via onBeforeRequest.
+    const getFreshToken = async () => {
+      let { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+      const expiresAtMs = (session.expires_at || 0) * 1000;
+      if (Date.now() > expiresAtMs - 60_000) {
+        const { data, error } = await supabase.auth.refreshSession();
+        if (error || !data?.session) throw new Error("Session refresh failed: " + (error?.message || "no session"));
+        session = data.session;
+      }
+      return session.access_token;
+    };
+
+    let token;
+    try { token = await getFreshToken(); }
+    catch (e) { return reject(e); }
 
     const folder = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -135,8 +154,12 @@ function UploadPage() {
       // home Wi-Fi blips routinely exceed the previous ~38s ceiling.
       retryDelays: [0, 3000, 5000, 10000, 20000, 30000, 60000, 120000],
       headers: {
-        authorization: `Bearer ${session.access_token}`,
+        authorization: `Bearer ${token}`,
         "x-upsert": "false",
+      },
+      onBeforeRequest: async (req) => {
+        const fresh = await getFreshToken();
+        req.setHeader("authorization", `Bearer ${fresh}`);
       },
       uploadDataDuringCreation: true,
       removeFingerprintOnSuccess: true,
