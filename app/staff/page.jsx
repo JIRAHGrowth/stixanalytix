@@ -7,6 +7,7 @@ import Link from "next/link";
 import { tDark } from "@/lib/theme";
 import { DELEGATE_ROLES, FONT } from "@/lib/constants";
 import { fetchActiveKeepers, fetchDelegates as fetchDelegatesQ } from "@/lib/queries";
+import { authedFetch } from "@/lib/authed-fetch";
 
 const t = tDark;
 const font = FONT;
@@ -509,7 +510,7 @@ export default function StaffPage() {
   const handleInviteSave = async (data) => {
     if (data.createAccount) {
       // Call server-side API to create the auth account + delegate record
-      const res = await fetch("/api/create-delegate", {
+      const res = await authedFetch(supabase, "/api/create-delegate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

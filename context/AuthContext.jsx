@@ -1,6 +1,7 @@
 "use client";
 import { createContext, useContext, useEffect, useState, useRef } from "react";
 import { createClient } from "@/lib/supabase-browser";
+import { ensureFreshSession } from "@/lib/supabase-token";
 
 const AuthContext = createContext({});
 
@@ -122,6 +123,30 @@ export function AuthProvider({ children }) {
       clearTimeout(timeout);
     };
   }, []);
+
+  // Session keep-alive. Supabase access tokens live ~1 hour and a coach can
+  // sit on the review screen for 4+ hours stepping through events. Browsers
+  // also throttle background-tab timers, so we both run a periodic refresh
+  // AND refresh on visibilitychange (tab comes back into view). Together
+  // this guarantees an active tab never sees an expired session.
+  useEffect(() => {
+    if (!user) return;
+    const refresh = () => ensureFreshSession(supabase);
+    // 50 min interval — 60 min token TTL gives 10 min of slack
+    const interval = setInterval(refresh, 50 * 60 * 1000);
+    const onVisible = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") refresh();
+    };
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onVisible);
+    }
+    return () => {
+      clearInterval(interval);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onVisible);
+      }
+    };
+  }, [user, supabase]);
 
   const signOut = async () => {
     await supabase.auth.signOut().catch(() => {});

@@ -16,6 +16,8 @@ export default function UploadPageWrapper() {
 import { tDark } from "@/lib/theme";
 import { FONT } from "@/lib/constants";
 import { fetchActiveKeepers } from "@/lib/queries";
+import { getFreshToken } from "@/lib/supabase-token";
+import { authedFetch } from "@/lib/authed-fetch";
 
 const t = tDark;
 const font = FONT;
@@ -122,25 +124,12 @@ function UploadPage() {
   const uploadFile = (file) => new Promise(async (resolve, reject) => {
     const tus = await import("tus-js-client");
 
-    // Returns a non-expired access token. Supabase access tokens live ~1 hour;
-    // a stitched match video on home Wi-Fi can upload longer than that, and
-    // the upload page may have been idle for hours before the user clicks.
-    // Both cases used to surface as `"exp" claim timestamp check failed` on
-    // the resumable POST. We re-check on every tus request via onBeforeRequest.
-    const getFreshToken = async () => {
-      let { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Not authenticated");
-      const expiresAtMs = (session.expires_at || 0) * 1000;
-      if (Date.now() > expiresAtMs - 60_000) {
-        const { data, error } = await supabase.auth.refreshSession();
-        if (error || !data?.session) throw new Error("Session refresh failed: " + (error?.message || "no session"));
-        session = data.session;
-      }
-      return session.access_token;
-    };
-
+    // Stitched match videos on home Wi-Fi can upload longer than the ~1 hour
+    // access-token TTL, and the upload page may have been idle for hours
+    // before click. We resolve a fresh token at start AND re-stamp the
+    // Authorization header on every tus request via onBeforeRequest.
     let token;
-    try { token = await getFreshToken(); }
+    try { token = await getFreshToken(supabase); }
     catch (e) { return reject(e); }
 
     const folder = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -158,7 +147,7 @@ function UploadPage() {
         "x-upsert": "false",
       },
       onBeforeRequest: async (req) => {
-        const fresh = await getFreshToken();
+        const fresh = await getFreshToken(supabase);
         req.setHeader("authorization", `Bearer ${fresh}`);
       },
       uploadDataDuringCreation: true,
@@ -197,7 +186,7 @@ function UploadPage() {
       setKeepers(ks);
       if (!form.keeper_id && ks?.[0]) setF({ keeper_id: ks[0].id });
 
-      const res = await fetch("/api/video-jobs");
+      const res = await authedFetch(supabase, "/api/video-jobs");
       const json = await res.json();
       if (mounted) {
         setJobs(json.jobs || []);
@@ -281,7 +270,7 @@ function UploadPage() {
         storage_path: storagePath,
         use_chunking: form.use_chunking,
       };
-      const res = await fetch("/api/video-jobs", {
+      const res = await authedFetch(supabase, "/api/video-jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -302,7 +291,7 @@ function UploadPage() {
 
   const discardJob = async (id) => {
     if (!confirm("Discard this upload? It will be marked failed and removed from the queue.")) return;
-    const res = await fetch(`/api/video-jobs/${id}`, { method: "DELETE" });
+    const res = await authedFetch(supabase, `/api/video-jobs/${id}`, { method: "DELETE" });
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
       alert("Discard failed: " + (j.error || res.status));
@@ -310,7 +299,7 @@ function UploadPage() {
   };
 
   const retryJob = async (id) => {
-    const res = await fetch(`/api/video-jobs/${id}`, { method: "POST" });
+    const res = await authedFetch(supabase, `/api/video-jobs/${id}`, { method: "POST" });
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
       alert("Retry failed: " + (j.error || res.status));

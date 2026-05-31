@@ -26,9 +26,10 @@ const inputStyle = {
 
 import { defaultZone, defaultSource, defaultShotType, fmtTs, tsStrToSeconds } from "@/lib/mappings";
 import { defaultKeepGoal, defaultKeepSave, defaultKeepDistribution } from "@/lib/default-keep";
+import { authedFetch } from "@/lib/authed-fetch";
 
 export default function ReviewPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, supabase, loading: authLoading } = useAuth();
   const router = useRouter();
   const { jobId } = useParams();
 
@@ -62,7 +63,7 @@ export default function ReviewPage() {
     if (!user) return;
     let mounted = true;
     (async () => {
-      const res = await fetch(`/api/video-jobs/${jobId}`);
+      const res = await authedFetch(supabase, `/api/video-jobs/${jobId}`);
       const json = await res.json();
       if (!mounted) return;
       if (!res.ok) { setError(json.error || "Failed to load"); setLoading(false); return; }
@@ -540,7 +541,7 @@ export default function ReviewPage() {
 
     setPublishing(true);
     try {
-      const res = await fetch(`/api/video-jobs/${jobId}/publish`, {
+      const res = await authedFetch(supabase, `/api/video-jobs/${jobId}/publish`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -561,7 +562,7 @@ export default function ReviewPage() {
       // Stay on this page — show the published summary so coach can revisit.
       setPublishedMatchId(json.match_id);
       // Refetch the job so the page re-renders with status='published' state
-      const refreshed = await fetch(`/api/video-jobs/${jobId}`);
+      const refreshed = await authedFetch(supabase, `/api/video-jobs/${jobId}`);
       const fresh = await refreshed.json();
       if (refreshed.ok) setJob(fresh.job);
     } catch (e) {
