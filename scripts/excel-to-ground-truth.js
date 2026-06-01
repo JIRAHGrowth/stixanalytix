@@ -87,21 +87,38 @@ function tsToSeconds(s) {
   if (s == null) return null;
   if (typeof s === 'number') return Math.round(s);
   if (s instanceof Date) {
-    // Excel may store MM:SS as either:
-    //   (a) a time-of-day fraction → ExcelJS Date displayed in local time
-    //       matches the user's "MM:SS" input ("16:44" → Date.getHours()=16,
-    //       .getMinutes()=44).
-    //   (b) a datetime if the value overflowed 24h ("55:28" → Excel rolls
-    //       into next day; ExcelJS gives a Date whose UTC math from Excel
-    //       epoch equals the user's intent).
+    // Excel encodes a user-typed "MM:SS" value one of two ways depending on
+    // whether the first number is a valid hour:
     //
-    // Heuristic: try UTC math first. If the result is >= 1440 minutes (24h)
-    // it's an overflow datetime — trust it. Otherwise the value is a time-
-    // of-day where local-time getters match user intent.
-    const utcMs = s.getTime() - Date.UTC(1899, 11, 30);
-    const utcMin = Math.round(utcMs / 60000);
-    if (utcMin >= 1440) return utcMin;
-    return s.getHours() * 60 + s.getMinutes();
+    //   A. First number ≤ 23 (e.g. "11:28") — Excel parses as HH:MM, stores
+    //      as a time-of-day fraction. ExcelJS gives a Date whose LOCAL
+    //      representation still falls on Dec 30 1899 (Excel epoch day);
+    //      getHours() and getMinutes() in local time read back the user's
+    //      MM and SS directly.
+    //
+    //   B. First number > 23 (e.g. "32:30", "55:32") — Excel can't fit it
+    //      as HH:MM and treats it as MM:SS duration, stored as a small
+    //      fraction of a day. ExcelJS gives a Date whose UTC math from
+    //      Dec 30 1899 epoch reads the duration cleanly via getUTCMinutes()
+    //      + getUTCSeconds(). The LOCAL representation appears shifted by
+    //      the local TZ offset (e.g. lands on Dec 29 in PST), which used
+    //      to mislead this function (we'd grab getHours() and miss the SS
+    //      component, returning ~16:32 = 992 instead of 32:30 = 1950).
+    //
+    // Discriminator: the LOCAL calendar date. Dec 30 1899 ⇒ Case A. Any
+    // other date ⇒ Case B. Documented as a bug class on the
+    // 2026-05-30 KCITY v OUFC match where the static GT clumped every
+    // H2 event around minute 16 in the JSON because all H2 timestamps were
+    // Case B and got misread.
+    const isExcelEpochDayLocal = (
+      s.getFullYear() === 1899 &&
+      s.getMonth() === 11 &&
+      s.getDate() === 30
+    );
+    if (isExcelEpochDayLocal) {
+      return s.getHours() * 60 + s.getMinutes();
+    }
+    return s.getUTCMinutes() * 60 + s.getUTCSeconds();
   }
   const str = String(s).trim();
   if (!str) return null;
