@@ -150,6 +150,11 @@ export default function VideoClip({ clipUrl, sourceUrl, timestampSeconds, theme,
         </div>
         {label && <span style={{ color: t.dim }}>{label}</span>}
       </div>
+      {/* Diagnostic strip — TEMPORARY, removable once prod clip playback verified */}
+      <div style={{ padding: "6px 10px", background: "#0a0d0f", borderTop: `1px solid ${t.border}`, fontSize: 10, color: t.dim, fontFamily: "monospace", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <span>mode: {usingClip ? "clip" : "source"} · state: {readyState} ({readyStateLabel}){loadError ? ` · err ${loadError.code}` : ""}</span>
+        {url ? <a href={url} target="_blank" rel="noopener" style={{ color: t.accent, textDecoration: "underline" }}>open URL ↗</a> : <span>no URL</span>}
+      </div>
     </div>
   );
 }
