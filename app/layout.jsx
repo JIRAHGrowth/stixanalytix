@@ -33,7 +33,7 @@ export default function RootLayout({ children }) {
         <link rel="apple-touch-icon" href="/logo.svg" />
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
         <meta name="theme-color" content="#070b0e" />
-        <style>{`
+        <style dangerouslySetInnerHTML={{ __html: `
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body {
             background: #070b0e;
@@ -46,7 +46,7 @@ export default function RootLayout({ children }) {
           ::-webkit-scrollbar { width: 6px; }
           ::-webkit-scrollbar-track { background: #070b0e; }
           ::-webkit-scrollbar-thumb { background: #1e2a32; border-radius: 3px; }
-        `}</style>
+        ` }} />
       </head>
       <body>
         <AuthProvider>

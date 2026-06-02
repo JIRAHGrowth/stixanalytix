@@ -521,6 +521,15 @@ function computeCorrections({ geminiOutput, reviewDiff, meta, coachId, videoJobI
       }));
   }
 
+  // Reclassifications — the coach moved a Gemini detection to a different
+  // event type (e.g. "this isn't a goal, it's a back-pass distribution").
+  // Highest-quality training signal we get: both "this isn't X" AND "it's Y"
+  // in one row. Calibration preamble reads these to bias future detections.
+  for (const rc of (reviewDiff.reclassifications || [])) {
+    const type = `reclassified_${rc.from || 'unknown'}_to_${rc.to || 'unknown'}`;
+    out.push(baseRow(type, rc.gemini_value || null, rc.coach_value || null));
+  }
+
   return out;
 }
 

@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>StixAnalytix — Goal Focus Card mockup</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg: #070b0e; --card: #0f1419; --card-alt: #151c22; --border: #1e2a32;
+    --accent: #10b981; --gold: #d4a853; --orange: #f97316;
+    --red: #ef4444; --green: #22c55e;
+    --text: #d1d9e0; --dim: #5c6b77; --bright: #f0f4f7;
+    --font: 'DM Sans', -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text); font-family: var(--font);
+    padding: 24px; min-height: 100vh;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  .toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 18px; gap: 14px; flex-wrap: wrap;
+  }
+  .toolbar h1 { font-size: 18px; font-weight: 700; margin: 0; color: var(--bright); letter-spacing: 0.4px; }
+  .toolbar .sub { color: var(--dim); font-size: 12px; }
+  .seg {
+    display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden;
+    font-size: 11px;
+  }
+  .seg button { padding: 5px 12px; background: transparent; color: var(--dim); border: none; cursor: pointer; font-family: var(--font); }
+  .seg button.on { background: var(--accent); color: #fff; font-weight: 700; }
+
+  .progress { display: flex; gap: 4px; margin-bottom: 12px; }
+  .progress div { flex: 1; height: 6px; border-radius: 3px; }
+  .p-done { background: var(--green); }
+  .p-here { background: var(--accent); }
+  .p-todo { background: var(--border); }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    overflow: hidden;
+  }
+  .card-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; background: var(--card-alt); border-bottom: 1px solid var(--border);
+    gap: 12px; flex-wrap: wrap;
+  }
+  .badge { font-size: 11px; color: var(--dim); letter-spacing: 1px; text-transform: uppercase; }
+  .ts { font-size: 13px; color: var(--bright); font-weight: 700; }
+  .conf { font-size: 11px; color: var(--gold); font-family: monospace; }
+  .ghost {
+    padding: 5px 10px; font-size: 11px; border-radius: 5px;
+    background: transparent; color: var(--dim);
+    border: 1px solid var(--border); cursor: pointer; font-family: var(--font);
+  }
+
+  .body { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(360px, 1.1fr); gap: 16px; padding: 16px; }
+  @media (max-width: 880px) { .body { grid-template-columns: 1fr; } }
+
+  .vid {
+    background: #000; border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+  }
+  .vid .screen {
+    aspect-ratio: 16 / 9; background:
+      radial-gradient(ellipse at center, #0d2418 0%, #050a07 75%),
+      repeating-linear-gradient(0deg, #ffffff06 0 24px, transparent 24px 48px);
+    position: relative;
+  }
+  .vid .play-overlay {
+    position: absolute; inset: 0; display: grid; place-items: center; color: #ffffff55; font-size: 48px;
+  }
+  .vid .scoreboard {
+    position: absolute; top: 10px; left: 10px; background: #00000088; border-radius: 4px;
+    padding: 4px 8px; font-size: 11px; font-family: monospace; color: #fff;
+  }
+  .vid .ctrl {
+    display: flex; align-items: center; justify-content: space-between; padding: 8px 10px;
+    background: #0a0d0f; border-top: 1px solid var(--border); font-size: 11px;
+  }
+  .vid .ctrl .btn {
+    background: var(--accent); color: #fff; border: none; border-radius: 4px;
+    padding: 4px 10px; font-weight: 700; font-size: 11px; font-family: var(--font);
+  }
+  .vid .ctrl .mute {
+    background: transparent; color: var(--dim); border: 1px solid var(--border);
+    padding: 4px 8px; border-radius: 4px; font-family: var(--font);
+  }
+  .vid .ctrl .loop { color: var(--dim); margin-left: 10px; }
+
+  .panel {
+    background: var(--card-alt); border: 1px solid var(--border); border-radius: 10px; padding: 12px;
+  }
+  .panel .h { font-size: 10px; color: var(--dim); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; }
+  .panel .body-text { font-size: 12px; color: var(--text); line-height: 1.5; }
+  .panel .quote { font-size: 11px; color: var(--dim); margin-top: 6px; font-style: italic; }
+
+  .team-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .team-btn {
+    padding: 6px 12px; font-size: 12px; border-radius: 6px; cursor: pointer; font-family: var(--font);
+    background: transparent; color: var(--text); border: 1px solid var(--border); font-weight: 500;
+  }
+  .team-btn.us { color: #fff; background: var(--green); border-color: var(--green); font-weight: 700; }
+  .team-btn.them { color: var(--red); border-color: #ef444466; }
+
+  .diagram-label {
+    font-size: 11px; color: var(--dim); margin-bottom: 6px; font-weight: 600;
+    letter-spacing: 1px; text-transform: uppercase;
+  }
+  .diagram-frame {
+    background: var(--card-alt); border: 1px solid var(--border); border-radius: 10px; padding: 12px;
+  }
+  .diagram-frame .compass {
+    font-size: 9px; color: var(--dim); letter-spacing: 2px; text-transform: uppercase;
+    text-align: center; margin-bottom: 4px;
+  }
+
+  .cat-grid {
+    padding: 8px 16px 16px; border-top: 1px dashed var(--border);
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+  }
+  @media (max-width: 700px) { .cat-grid { grid-template-columns: 1fr; } }
+
+  .seg-field .h {
+    font-size: 10px; color: var(--dim); margin-bottom: 5px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .opts { display: flex; flex-wrap: wrap; gap: 6px; }
+  .opt {
+    padding: 6px 12px; font-size: 12px; font-family: var(--font); border-radius: 6px;
+    background: transparent; color: var(--text); border: 1px solid var(--border);
+    cursor: pointer; font-weight: 500;
+  }
+  .opt.guess { background: #10b9811a; color: var(--accent); border-color: #10b98166; font-weight: 600; }
+  .opt.on { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 700; }
+  .opt.sm { padding: 4px 8px; font-size: 11px; }
+
+  textarea {
+    width: 100%; padding: 8px 10px; font-size: 12px; border-radius: 6px;
+    background: var(--card-alt); border: 1px solid var(--border); color: var(--bright);
+    font-family: var(--font); resize: vertical; min-height: 50px;
+  }
+
+  .card-foot {
+    padding: 12px 16px; border-top: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    background: var(--card-alt);
+  }
+  .card-foot .legend { font-size: 11px; color: var(--dim); font-family: monospace; }
+  .btn-reject {
+    padding: 8px 14px; font-size: 12px; border-radius: 6px;
+    background: transparent; color: var(--red); border: 1px solid #ef444466;
+    cursor: pointer; font-weight: 600; font-family: var(--font);
+  }
+  .btn-confirm {
+    padding: 8px 18px; font-size: 13px; border-radius: 6px;
+    background: var(--accent); color: #fff; border: none;
+    cursor: pointer; font-weight: 700; font-family: var(--font);
+  }
+
+  .note {
+    margin: 28px auto 0; max-width: 1100px;
+    background: #10b9811a; border: 1px solid #10b98144;
+    padding: 14px 18px; border-radius: 10px; font-size: 12px; color: var(--text); line-height: 1.55;
+  }
+  .note strong { color: var(--accent); }
+  .note code { background: #00000044; padding: 1px 5px; border-radius: 3px; font-size: 11px; }
+
+  .ruler {
+    display: flex; gap: 24px; flex-wrap: wrap;
+    background: var(--card-alt); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 14px; font-size: 11px; color: var(--dim); font-family: monospace;
+    margin-top: 18px;
+  }
+  .ruler strong { color: var(--text); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="toolbar">
+    <div>
+      <h1>CANDIDATE GOALS</h1>
+      <div class="sub">Phase 1 prototype — focus-mode review card</div>
+    </div>
+    <div class="seg">
+      <button class="on">Focus</button>
+      <button>Bulk</button>
+    </div>
+  </div>
+
+  <div class="progress">
+    <div class="p-done"></div>
+    <div class="p-done"></div>
+    <div class="p-here"></div>
+    <div class="p-todo"></div>
+    <div class="p-todo"></div>
+    <div class="p-todo"></div>
+    <div class="p-todo"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+        <span class="badge">Goal · 3 of 7</span>
+        <span class="ts">Video 37:42 · clock 38'</span>
+        <span class="conf">Gemini ●●○ medium</span>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="ghost">← Prev</button>
+        <button class="ghost">Skip →</button>
+      </div>
+    </div>
+
+    <div class="body">
+      <!-- LEFT: Video + Gemini context + team picker -->
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div class="vid">
+          <div class="screen">
+            <div class="scoreboard">37:42 · OUR 1 — 2 OPP</div>
+            <div class="play-overlay">▶</div>
+          </div>
+          <div class="ctrl">
+            <div style="display:flex;align-items:center">
+              <button class="btn">Pause</button>
+              <button class="mute" style="margin-left:8px">🔇 Muted</button>
+              <span class="loop">Loop 34s → 42s</span>
+            </div>
+            <span style="color:var(--dim)">±3s loop</span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="h">Gemini observed</div>
+          <div class="body-text">
+            <strong style="color:var(--bright)">Red team</strong> scored.
+            Counter · Foot from edge of box · low / right
+          </div>
+          <div class="quote">"Right-foot strike from edge of box, low to keeper's right. GK shifted late."</div>
+          <div style="font-size:11px;color:var(--dim);margin-top:4px">GK: caught flat-footed, weight on wrong side</div>
+        </div>
+
+        <div class="panel">
+          <div class="h">Who scored?</div>
+          <div class="team-row">
+            <button class="team-btn">We did (Blue)</button>
+            <button class="team-btn us">They did (Red)</button>
+            <button class="team-btn">Not a goal</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Diagrams -->
+      <div style="display:flex;flex-direction:column;gap:14px">
+
+        <!-- GOAL MOUTH -->
+        <div>
+          <div class="diagram-label">Where it went in</div>
+          <div class="diagram-frame">
+            <div class="compass">← view from behind the keeper →</div>
+            <svg viewBox="0 0 472 154" style="width:100%;display:block">
+              <!-- OVER BAR ribbon -->
+              <rect x="56" y="0" width="360" height="34" rx="4" fill="transparent" stroke="#1e2a32" stroke-width="1"/>
+              <text x="236" y="18" text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="600" fill="#5c6b77" font-family="DM Sans, sans-serif" letter-spacing="1" style="text-transform:uppercase">Over Bar</text>
+
+              <!-- WIDE LEFT -->
+              <rect x="0" y="34" width="56" height="120" rx="4" fill="transparent" stroke="#1e2a32" stroke-width="1"/>
+              <text x="28" y="94" text-anchor="middle" font-size="10" font-weight="600" fill="#5c6b77" font-family="DM Sans, sans-serif" letter-spacing="1" transform="rotate(-90 28 94)" style="text-transform:uppercase">Wide L</text>
+
+              <!-- WIDE RIGHT -->
+              <rect x="416" y="34" width="56" height="120" rx="4" fill="transparent" stroke="#1e2a32" stroke-width="1"/>
+              <text x="444" y="94" text-anchor="middle" font-size="10" font-weight="600" fill="#5c6b77" font-family="DM Sans, sans-serif" letter-spacing="1" transform="rotate(90 444 94)" style="text-transform:uppercase">Wide R</text>
+
+              <!-- Grass behind goal -->
+              <rect x="56" y="34" width="360" height="120" fill="#0c1a12"/>
+
+              <!-- Net diagonal pattern -->
+              <defs>
+                <clipPath id="netClip"><rect x="56" y="34" width="360" height="120"/></clipPath>
+              </defs>
+              <g clip-path="url(#netClip)">
+                <g stroke="#ffffff10" stroke-width="0.6">
+                  <line x1="-64" y1="34" x2="56" y2="154"/>
+                  <line x1="-44" y1="34" x2="76" y2="154"/>
+                  <line x1="-24" y1="34" x2="96" y2="154"/>
+                  <line x1="-4"  y1="34" x2="116" y2="154"/>
+                  <line x1="16"  y1="34" x2="136" y2="154"/>
+                  <line x1="36"  y1="34" x2="156" y2="154"/>
+                  <line x1="56"  y1="34" x2="176" y2="154"/>
+                  <line x1="76"  y1="34" x2="196" y2="154"/>
+                  <line x1="96"  y1="34" x2="216" y2="154"/>
+                  <line x1="116" y1="34" x2="236" y2="154"/>
+                  <line x1="136" y1="34" x2="256" y2="154"/>
+                  <line x1="156" y1="34" x2="276" y2="154"/>
+                  <line x1="176" y1="34" x2="296" y2="154"/>
+                  <line x1="196" y1="34" x2="316" y2="154"/>
+                  <line x1="216" y1="34" x2="336" y2="154"/>
+                  <line x1="236" y1="34" x2="356" y2="154"/>
+                  <line x1="256" y1="34" x2="376" y2="154"/>
+                  <line x1="276" y1="34" x2="396" y2="154"/>
+                  <line x1="296" y1="34" x2="416" y2="154"/>
+                  <line x1="316" y1="34" x2="436" y2="154"/>
+                  <line x1="336" y1="34" x2="456" y2="154"/>
+                  <line x1="356" y1="34" x2="476" y2="154"/>
+                  <!-- opposite diagonals -->
+                  <line x1="-64" y1="154" x2="56" y2="34"/>
+                  <line x1="-44" y1="154" x2="76" y2="34"/>
+                  <line x1="-24" y1="154" x2="96" y2="34"/>
+                  <line x1="-4"  y1="154" x2="116" y2="34"/>
+                  <line x1="16"  y1="154" x2="136" y2="34"/>
+                  <line x1="36"  y1="154" x2="156" y2="34"/>
+                  <line x1="56"  y1="154" x2="176" y2="34"/>
+                  <line x1="76"  y1="154" x2="196" y2="34"/>
+                  <line x1="96"  y1="154" x2="216" y2="34"/>
+                  <line x1="116" y1="154" x2="236" y2="34"/>
+                  <line x1="136" y1="154" x2="256" y2="34"/>
+                  <line x1="156" y1="154" x2="276" y2="34"/>
+                  <line x1="176" y1="154" x2="296" y2="34"/>
+                  <line x1="196" y1="154" x2="316" y2="34"/>
+                  <line x1="216" y1="154" x2="336" y2="34"/>
+                  <line x1="236" y1="154" x2="356" y2="34"/>
+                  <line x1="256" y1="154" x2="376" y2="34"/>
+                  <line x1="276" y1="154" x2="396" y2="34"/>
+                  <line x1="296" y1="154" x2="416" y2="34"/>
+                  <line x1="316" y1="154" x2="436" y2="34"/>
+                  <line x1="336" y1="154" x2="456" y2="34"/>
+                  <line x1="356" y1="154" x2="476" y2="34"/>
+                </g>
+              </g>
+
+              <!-- 3x3 cells: this example shows Gemini guess "Low R" (bottom-right) -->
+              <!-- Row 1: High L, High C, High R -->
+              <rect x="57" y="35" width="118" height="38" fill="transparent" rx="2"/>
+              <text x="116" y="55" text-anchor="middle" dominant-baseline="middle" font-size="11" fill="#8a9aa6" font-family="DM Sans, sans-serif">High L</text>
+              <rect x="177" y="35" width="118" height="38" fill="transparent" rx="2"/>
+              <text x="236" y="55" text-anchor="middle" dominant-baseline="middle" font-size="11" fill="#8a9aa6" font-family="DM Sans, sans-serif">High C</text>
+              <rect x="297" y="35" width="118" height="38" fill="transparent" rx="2"/>
+              <text x="356" y="55" text-anchor="middle" dominant-baseline="middle" font-size="11" fill="#8a9aa6" font-family="DM Sans, sans-serif">High R</text>
+              <!-- Row 2: Mid L, Mid C, Mid R -->
+              <rect x="57"  y="75" width="118" height="38" fill="transparent" rx="2"/>
+              <text x="116" y="95" text-anchor="middle" dominant-baseline="middle" font-size="11" fill="#8a9aa6" font-family="DM Sans, sans-serif">Mid L</text>
+              <rect x="177" y="75" width="118" height="38" fill="transparent" rx="2"/>
+              <text x="236" y="95" text-anchor="middle" dominant-baseline="middle" font-size="11" fill="#8a9aa6" font-family="DM Sans, sans-serif">Mid C</text>
+              <rect x="297" y="75" width="118" height="38" fill="transparent" rx="2"/>
+              <text x="356" y="95" text-anchor="middle" dominant-baseline="middle" font-size="11" fill="#8a9aa6" font-family="DM Sans, sans-serif">Mid R</text>
+              <!-- Row 3: Low L, Low C, Low R (selected) -->
+              <rect x="57"  y="115" width="118" height="38" fill="transparent" rx="2"/>
+              <text x="116" y="135" text-anchor="middle" dominant-baseline="middle" font-size="11" fill="#8a9aa6" font-family="DM Sans, sans-serif">Low L</text>
+              <rect x="177" y="115" width="118" height="38" fill="transparent" rx="2"/>
+              <text x="236" y="135" text-anchor="middle" dominant-baseline="middle" font-size="11" fill="#8a9aa6" font-family="DM Sans, sans-serif">Low C</text>
+              <!-- SELECTED cell -->
+              <rect x="297" y="115" width="118" height="38" fill="#ef444455" stroke="#ef4444" stroke-width="2" rx="2"/>
+              <text x="356" y="135" text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="700" fill="#ef4444" font-family="DM Sans, sans-serif">Low R</text>
+
+              <!-- Internal grid dividers -->
+              <g style="pointer-events:none" stroke="#ffffff18" stroke-width="0.8">
+                <line x1="176" y1="34" x2="176" y2="154"/>
+                <line x1="296" y1="34" x2="296" y2="154"/>
+                <line x1="56" y1="74" x2="416" y2="74"/>
+                <line x1="56" y1="114" x2="416" y2="114"/>
+              </g>
+
+              <!-- Posts + crossbar (on top) -->
+              <rect x="54" y="32" width="4" height="124" fill="#e8eef2"/>
+              <rect x="414" y="32" width="4" height="124" fill="#e8eef2"/>
+              <rect x="54" y="32" width="364" height="4" fill="#e8eef2"/>
+              <line x1="56" y1="154" x2="416" y2="154" stroke="#e8eef266" stroke-width="1.2"/>
+            </svg>
+            <div style="font-size:10px;color:var(--dim);margin-top:6px;text-align:center;font-style:italic">
+              24 ft wide × 8 ft tall — true 3:1 aspect, each cell 3:1 too
+            </div>
+          </div>
+        </div>
+
+        <!-- PITCH ORIGIN MAP -->
+        <div>
+          <div class="diagram-label">Where it came from</div>
+          <div class="diagram-frame">
+            <div class="compass">attacking direction ↓</div>
+            <svg viewBox="0 0 700 318" style="width:100%;display:block">
+              <defs>
+                <linearGradient id="grass-grad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#091c11"/>
+                  <stop offset="100%" stop-color="#0e2418"/>
+                </linearGradient>
+                <pattern id="mow" x="0" y="0" width="700" height="50" patternUnits="userSpaceOnUse">
+                  <rect x="0" y="0" width="700" height="25" fill="#ffffff04"/>
+                </pattern>
+              </defs>
+              <rect x="0" y="0" width="700" height="300" fill="url(#grass-grad)"/>
+              <rect x="0" y="0" width="700" height="300" fill="url(#mow)"/>
+
+              <!-- Pitch lines: 18-yard box, 6-yard box, penalty D, goal line -->
+              <g stroke="#2e6a42" stroke-width="1.5" fill="none">
+                <rect x="130" y="120" width="440" height="180"/>
+                <rect x="250" y="240" width="200" height="60"/>
+                <path d="M270,120 A100,100 0 0,1 430,120"/>
+                <line x1="0" y1="300" x2="700" y2="300" stroke="#3a7a4a" stroke-width="1.2"/>
+              </g>
+              <circle cx="350" cy="180" r="2.5" fill="#3a7a4a"/>
+
+              <!-- Corner arcs (real-scale 1 yard radius) -->
+              <g fill="none" stroke="#2e6a42" stroke-width="1.2">
+                <path d="M0,290 A10,10 0 0,0 10,300"/>
+                <path d="M700,290 A10,10 0 0,1 690,300"/>
+              </g>
+
+              <!-- Zone hit areas (all dim — no selection in this mock) -->
+              <g fill="#ffffff06" stroke="#ffffff14" stroke-width="0.5">
+                <path d="M130,0 L570,0 L570,120 L130,120 Z"/>
+                <path d="M0,0 L130,0 L130,300 L0,300 Z"/>
+                <path d="M570,0 L700,0 L700,300 L570,300 Z"/>
+                <path d="M130,120 L250,120 L250,300 L130,300 Z"/>
+                <path d="M450,120 L570,120 L570,300 L450,300 Z"/>
+                <path d="M250,120 L450,120 L450,240 L250,240 Z"/>
+              </g>
+              <!-- 6-YARD selected -->
+              <path d="M250,240 L450,240 L450,300 L250,300 Z" fill="#10b98155" stroke="#10b981" stroke-width="2.5"/>
+              <g fill="#ffffff06" stroke="#ffffff14" stroke-width="0.5">
+                <path d="M0,300 L56,300 A56,56 0 0,1 0,244 Z"/>
+                <path d="M700,300 L644,300 A56,56 0 0,0 700,244 Z"/>
+              </g>
+
+              <!-- Labels -->
+              <g font-family="DM Sans, sans-serif" font-size="12" fill="#7da291">
+                <text x="350" y="56" text-anchor="middle">Central distance</text>
+                <text x="65" y="150" text-anchor="middle">Wide L</text>
+                <text x="635" y="150" text-anchor="middle">Wide R</text>
+                <text x="190" y="210" text-anchor="middle">Left ch.</text>
+                <text x="510" y="210" text-anchor="middle">Right ch.</text>
+                <text x="350" y="180" text-anchor="middle">Central box</text>
+                <text x="22" y="282" text-anchor="middle" font-size="10">Corner</text>
+                <text x="678" y="282" text-anchor="middle" font-size="10">Corner</text>
+              </g>
+              <text x="350" y="270" text-anchor="middle" font-family="DM Sans, sans-serif" font-size="12" font-weight="700" fill="#10b981">6-yard</text>
+
+              <!-- Goal -->
+              <rect x="310" y="300" width="80" height="9" rx="1" fill="#1b3a26" stroke="#e8eef2" stroke-width="1.5"/>
+              <text x="350" y="317" text-anchor="middle" font-family="DM Sans, sans-serif" font-size="9" font-weight="700" fill="#3a7a4a" letter-spacing="1">GOAL</text>
+            </svg>
+            <div style="font-size:10px;color:var(--dim);margin-top:6px;text-align:center;font-style:italic">
+              18-yd box 44×18 · 6-yd box 20×6 · 8-yd goal · 12-yd penalty spot · 10-yd D arc
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CATEGORICAL FIELDS -->
+    <div class="cat-grid">
+      <div class="seg-field">
+        <div class="h">Source</div>
+        <div class="opts">
+          <button class="opt on">Open Play</button>
+          <button class="opt">Corner</button>
+          <button class="opt">Penalty</button>
+        </div>
+      </div>
+      <div class="seg-field">
+        <div class="h">Body</div>
+        <div class="opts">
+          <button class="opt on">Foot</button>
+          <button class="opt">Header</button>
+          <button class="opt">Deflection</button>
+          <button class="opt">Own Goal</button>
+        </div>
+      </div>
+      <div class="seg-field">
+        <div class="h">GK set?</div>
+        <div class="opts">
+          <button class="opt guess">Set</button>
+          <button class="opt">Moving</button>
+        </div>
+      </div>
+      <div class="seg-field">
+        <div class="h">Rank</div>
+        <div class="opts">
+          <button class="opt">Saveable</button>
+          <button class="opt on">Difficult</button>
+          <button class="opt">Unsaveable</button>
+        </div>
+      </div>
+      <div class="seg-field">
+        <div class="h">Half</div>
+        <div class="opts">
+          <button class="opt sm">1st</button>
+          <button class="opt sm on">2nd</button>
+        </div>
+      </div>
+      <div class="seg-field">
+        <div class="h">Notes</div>
+        <textarea placeholder="Optional observations on this goal"></textarea>
+      </div>
+    </div>
+
+    <div class="card-foot">
+      <div class="legend">← prev · → next · Enter confirm · Esc reject · numpad 1-9 = goal zone</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-reject">Reject</button>
+        <button class="btn-confirm">Confirm &amp; next →</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="ruler">
+    <span><strong>Goal mouth ratio:</strong> 3 : 1</span>
+    <span><strong>Cell ratio:</strong> 3 : 1 (each is 8 ft × 2.67 ft)</span>
+    <span><strong>18-yd box:</strong> 44 × 18 yd → 440 × 180 units</span>
+    <span><strong>6-yd box:</strong> 20 × 6 yd → 200 × 60 units</span>
+    <span><strong>Goal width:</strong> 8 yd → 80 units</span>
+    <span><strong>Penalty arc:</strong> 10 yd from spot</span>
+  </div>
+
+  <div class="note">
+    <strong>How to read this mock:</strong>
+    Solid green outline = Gemini's pre-fill the user confirmed. Soft green outline (the <em>Set</em> button) = Gemini's guess waiting for confirmation. Plain grey = not yet chosen. Red highlight on the goal mouth = the goal zone the coach landed on. The progress bar at top shows two events reviewed, one in progress, four to go. Replace the video placeholder with a real signed Supabase URL and you see exactly what the component renders. Open at <code>localhost:3000/mockup-goal-focus.html</code> with the dev server running, or just double-click the file.
+  </div>
+</div>
+</body>
+</html>

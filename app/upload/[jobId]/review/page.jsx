@@ -27,6 +27,7 @@ const inputStyle = {
 import { defaultZone, defaultSource, defaultShotType, fmtTs, tsStrToSeconds } from "@/lib/mappings";
 import { defaultKeepGoal, defaultKeepSave, defaultKeepDistribution } from "@/lib/default-keep";
 import { authedFetch } from "@/lib/authed-fetch";
+import FocusModeGoals from "@/components/review/FocusModeGoals";
 
 export default function ReviewPage() {
   const { user, supabase, loading: authLoading } = useAuth();
@@ -58,6 +59,20 @@ export default function ReviewPage() {
   // goals -> saves -> distribution -> goals.
   const [activeFocus, setActiveFocus] = useState({ section: "goals", index: 0 });
   const [showShortcuts, setShowShortcuts] = useState(false);
+
+  // Phase B1 — goals review mode. "focus" shows one event at a time with
+  // diagram-driven entry; "bulk" shows the legacy dropdown table. Preference
+  // persists per browser.
+  const [reviewMode, setReviewMode] = useState("focus");
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = window.localStorage.getItem("stix-review-mode");
+    if (saved === "focus" || saved === "bulk") setReviewMode(saved);
+  }, []);
+  const switchMode = (m) => {
+    setReviewMode(m);
+    if (typeof window !== "undefined") window.localStorage.setItem("stix-review-mode", m);
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -235,6 +250,79 @@ export default function ReviewPage() {
 
   const updateCand = (id, patch) => setCandidates(cs => cs.map(c => c._id === id ? { ...c, ...patch } : c));
 
+  // Reclassify a Gemini goal candidate as a different event type. The original
+  // goal is removed from `candidates` and a new row appears in the target
+  // section's state with the clip + timestamp preserved. The event is tagged
+  // with `_reclassified_from` so the publish handler can log a coach_correction
+  // that feeds the calibration preamble on the NEXT match. Fields on the new
+  // row are intentionally blank — the coach enters them fresh through the
+  // section's own UI. See [[project-review-focus-clips-pipeline]].
+  const reclassifyCandidate = (id, targetType) => {
+    const cand = candidates.find(c => c._id === id);
+    if (!cand) return;
+    const g = cand.gemini || {};
+    if (targetType === "distribution") {
+      const newRow = {
+        _id: `d-reclass-${cand._id}`,
+        keep: true,
+        timestamp_seconds: g.timestamp_seconds,
+        match_clock: g.match_clock,
+        trigger: "",
+        type: "",
+        successful: "",
+        press_state: "",
+        pass_selection: "",
+        direction: "",
+        receiver: "",
+        first_touch: "",
+        notes: "",
+        gemini: {
+          timestamp_seconds: g.timestamp_seconds,
+          match_clock: g.match_clock,
+          clip_storage_path: g.clip_storage_path,
+          clip_url: g.clip_url,
+        },
+        _reclassified_from: { source: "goal", gemini_value: g },
+      };
+      setDistRows(rows => {
+        const next = [...rows, newRow];
+        next.sort((a, b) => (a.timestamp_seconds || 0) - (b.timestamp_seconds || 0));
+        return next;
+      });
+      setCandidates(cs => cs.filter(c => c._id !== id));
+    } else if (targetType === "save") {
+      const newRow = {
+        _id: `s-reclass-${cand._id}`,
+        keep: true,
+        timestamp_seconds: g.timestamp_seconds,
+        match_clock: g.match_clock,
+        shot_origin: "",
+        shot_type: "",
+        on_target: "",
+        gk_action: "",
+        gk_visible: "",
+        outcome: "",
+        body_distance_zone: "",
+        goal_placement_height: "",
+        goal_placement_side: "",
+        notes: "",
+        gemini: {
+          timestamp_seconds: g.timestamp_seconds,
+          match_clock: g.match_clock,
+          clip_storage_path: g.clip_storage_path,
+          clip_url: g.clip_url,
+        },
+        _reclassified_from: { source: "goal", gemini_value: g },
+      };
+      setSaveRows(rows => {
+        const next = [...rows, newRow];
+        next.sort((a, b) => (a.timestamp_seconds || 0) - (b.timestamp_seconds || 0));
+        return next;
+      });
+      setCandidates(cs => cs.filter(c => c._id !== id));
+    }
+  };
+
   // ---- Phase A2 keyboard navigation ----
   // Map sections to their current event list + setter so handlers can act
   // on whichever section is focused.
@@ -330,6 +418,12 @@ export default function ReviewPage() {
         return;
       }
 
+      // In focus mode for the goals section, let GoalFocusCard own per-event
+      // keys. We still handle Tab (section switching) below.
+      if (reviewMode === "focus" && activeFocus.section === "goals") {
+        if (e.key !== "Tab") return;
+      }
+
       // Navigation
       if (e.key === "ArrowDown" || e.key === "j") {
         e.preventDefault();
@@ -406,7 +500,7 @@ export default function ReviewPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [loading, error, publishedMatchId, sectionRefs, activeFocus, activeId, showShortcuts, chronological]);
+  }, [loading, error, publishedMatchId, sectionRefs, activeFocus, activeId, showShortcuts, chronological, reviewMode]);
 
   // Scroll-into-view: whenever the active event changes (via any key — arrows,
   // Tab, > / <), bring the focused row into the viewport so the coach can
@@ -499,6 +593,50 @@ export default function ReviewPage() {
           goal_rank: g.goal_rank || null,
         } : null,
       })),
+      // Reclassifications — events the coach moved between sections. Each
+      // becomes a coach_correction with type `reclassified_<from>_to_<to>` so
+      // the calibration preamble on the NEXT match can learn the pattern.
+      // The fields the coach actually entered for the new event type are
+      // included so we know what the "right" answer was.
+      reclassifications: [
+        ...distRows
+          .filter(r => r._reclassified_from)
+          .map(r => ({
+            from: r._reclassified_from.source,
+            to: "distribution",
+            gemini_value: r._reclassified_from.gemini_value,
+            coach_value: {
+              timestamp_seconds: r.timestamp_seconds,
+              trigger: r.trigger || null,
+              type: r.type || null,
+              successful: r.successful || null,
+              press_state: r.press_state || null,
+              direction: r.direction || null,
+              receiver: r.receiver || null,
+              first_touch: r.first_touch || null,
+              notes: r.notes || null,
+            },
+          })),
+        ...saveRows
+          .filter(r => r._reclassified_from)
+          .map(r => ({
+            from: r._reclassified_from.source,
+            to: "save",
+            gemini_value: r._reclassified_from.gemini_value,
+            coach_value: {
+              timestamp_seconds: r.timestamp_seconds,
+              shot_origin: r.shot_origin || null,
+              shot_type: r.shot_type || null,
+              on_target: r.on_target || null,
+              gk_action: r.gk_action || null,
+              outcome: r.outcome || null,
+              body_distance_zone: r.body_distance_zone || null,
+              goal_placement_height: r.goal_placement_height || null,
+              goal_placement_side: r.goal_placement_side || null,
+              notes: r.notes || null,
+            },
+          })),
+      ],
     };
 
     // Phase 2.1 — saves payload. Only kept rows go to shot_events. Coach-added
@@ -700,7 +838,31 @@ export default function ReviewPage() {
         </div>
 
         {/* CANDIDATES */}
-        <h3 style={{ fontSize: 13, fontWeight: 700, color: t.bright, letterSpacing: 0.4, margin: "16px 0 10px" }}>CANDIDATE GOALS</h3>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "16px 0 10px", gap: 10, flexWrap: "wrap" }}>
+          <h3 style={{ fontSize: 13, fontWeight: 700, color: t.bright, letterSpacing: 0.4, margin: 0 }}>CANDIDATE GOALS</h3>
+          <div role="tablist" style={{ display: "inline-flex", border: `1px solid ${t.border}`, borderRadius: 6, overflow: "hidden", fontFamily: font, fontSize: 11 }}>
+            <button role="tab" aria-selected={reviewMode === "focus"} type="button" onClick={() => switchMode("focus")}
+              style={{ padding: "5px 12px", background: reviewMode === "focus" ? t.accent : "transparent", color: reviewMode === "focus" ? "#fff" : t.dim, border: "none", cursor: "pointer", fontWeight: reviewMode === "focus" ? 700 : 500 }}>
+              Focus
+            </button>
+            <button role="tab" aria-selected={reviewMode === "bulk"} type="button" onClick={() => switchMode("bulk")}
+              style={{ padding: "5px 12px", background: reviewMode === "bulk" ? t.accent : "transparent", color: reviewMode === "bulk" ? "#fff" : t.dim, border: "none", cursor: "pointer", fontWeight: reviewMode === "bulk" ? 700 : 500 }}>
+              Bulk
+            </button>
+          </div>
+        </div>
+        {reviewMode === "focus" ? (
+          <div style={{ marginBottom: 16 }}>
+            <FocusModeGoals
+              candidates={candidates}
+              onChange={updateCand}
+              onReclassify={reclassifyCandidate}
+              videoUrl={job?.video_url}
+              meta={meta}
+              theme={t}
+            />
+          </div>
+        ) : (<>
         {candidates.length === 0 && (
           <div style={{ background: t.card, border: `1px dashed ${t.border}`, borderRadius: 12, padding: 24, textAlign: "center", color: t.dim, fontSize: 13 }}>
             Gemini found no goal candidates. Use "+ Add a missed concession" below for any goals it should have caught.
@@ -773,6 +935,7 @@ export default function ReviewPage() {
             )}
           </div>
         ))}
+        </>)}
 
         {/* EXTRA GOALS — coach-added, either team */}
         {extraGoals.length > 0 && (

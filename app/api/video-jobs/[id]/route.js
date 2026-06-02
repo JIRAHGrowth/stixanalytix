@@ -18,7 +18,52 @@ export async function GET(_req, { params }) {
   const { id } = await params;
   const r = await authedJob(supabase, id);
   if (r.error) return NextResponse.json({ error: r.error }, { status: r.status });
-  return NextResponse.json({ job: r.job });
+
+  // Signed URLs are minted at 2-hour TTL when the video is first uploaded.
+  // Any subsequent visit to the review screen is almost certainly past that
+  // window, so re-mint here for in-browser playback. The DB copy is left as
+  // the original (audit trail); we only override the response payload.
+  let job = r.job;
+  const admin = createAdminClient();
+
+  if (job.storage_path) {
+    const { data: signed, error: signErr } = await admin.storage
+      .from('match-videos').createSignedUrl(job.storage_path, 7200);
+    if (!signErr && signed?.signedUrl) {
+      job = { ...job, video_url: signed.signedUrl };
+    }
+  }
+
+  // Per-event clip URLs. The worker stores clip_storage_path on each event
+  // in gemini_output; we batch-sign them here so the review UI can play each
+  // clip directly instead of seeking inside a multi-GB source file.
+  const out = job.gemini_output || null;
+  if (out) {
+    const goals = out.parsed?.goals || [];
+    const saves = out.saves?.parsed?.saves || [];
+    const dist = out.distribution?.parsed?.distribution || [];
+    const collect = [];
+    [goals, saves, dist].forEach(arr => arr.forEach(e => {
+      if (e?.clip_storage_path) collect.push(e.clip_storage_path);
+    }));
+    if (collect.length > 0) {
+      const { data: signedList, error: bulkErr } = await admin.storage
+        .from('match-videos').createSignedUrls(collect, 7200);
+      if (!bulkErr && Array.isArray(signedList)) {
+        const urlByPath = {};
+        signedList.forEach(s => { if (s?.path && s?.signedUrl) urlByPath[s.path] = s.signedUrl; });
+        const attach = (arr) => arr.forEach(e => {
+          if (e?.clip_storage_path && urlByPath[e.clip_storage_path]) {
+            e.clip_url = urlByPath[e.clip_storage_path];
+          }
+        });
+        attach(goals); attach(saves); attach(dist);
+        // gemini_output was mutated in place — already wired through `job`.
+      }
+    }
+  }
+
+  return NextResponse.json({ job });
 }
 
 // Soft discard (sets status='failed' with reason). Hard delete is intentionally

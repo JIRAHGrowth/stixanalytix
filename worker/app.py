@@ -438,6 +438,117 @@ def _render_prompt(template: str, vars: dict) -> str:
     return out
 
 
+# === Per-event clip generation ====================================================
+# Raw match videos are 1–5 GB and can't be streamed directly to a browser
+# (moov atom usually at end of file → browser must download the whole thing
+# before play). We slice a ~7-second window around each detected event into
+# its own faststart MP4 (~1–3 MB), upload to the same bucket under a
+# `clips/<job_id>/` prefix, and store the relative path on each event. The
+# Next.js API signs these paths at request time so URLs stay fresh.
+#
+# Clip windows are per event type because the "what matters" timing differs:
+#   GOALS — buildup carries the most signal (was it a counter / cross / set
+#           piece?). A short tail confirms celebration + restart.
+#   SAVES — the rebound matters as much as the shot. Slightly more tail than nose.
+#   DIST  — the GK touch is the event; the consequence (first touch on the
+#           receiver, did they keep possession?) is the coaching insight.
+CLIP_WINDOWS = {
+    "goal": (5, 3),   # (pre, post) in seconds
+    "save": (4, 5),
+    "dist": (3, 7),
+}
+CLIP_DEFAULT_WINDOW = (5, 3)
+
+# Folder structure inside the bucket. Kept under match-videos to avoid
+# operating a second bucket; cleanup follows the source-file lifecycle.
+CLIPS_PREFIX = "clips"
+
+
+def _generate_event_clip(video_path: str, event: dict, event_type: str,
+                          index: int, job_id: str, sb) -> str | None:
+    """Generate one short MP4 around the event timestamp and upload it.
+
+    Returns the storage path (e.g. ``clips/<job>/goal_003.mp4``) on success,
+    or None if the event has no usable timestamp or ffmpeg fails. The caller
+    writes the returned path onto the event dict.
+    """
+    import subprocess
+    import tempfile
+
+    ts = event.get("timestamp_seconds")
+    if ts is None or not isinstance(ts, (int, float)):
+        return None
+
+    pre, post = CLIP_WINDOWS.get(event_type, CLIP_DEFAULT_WINDOW)
+    start = max(0, int(ts) - pre)
+    duration = pre + post
+
+    out_path = tempfile.mktemp(suffix=".mp4")
+    try:
+        # `-ss` BEFORE `-i` is the fast input seek (keyframe-aligned).
+        # We re-encode the short window with ultrafast h264 so the cut is
+        # frame-accurate and `+faststart` puts the moov atom at the front
+        # for instant browser playback. Audio re-encoded to AAC 96k to keep
+        # the file small; voice tracks are fine at this bitrate.
+        result = subprocess.run(
+            [
+                "ffmpeg", "-ss", str(start), "-i", video_path,
+                "-t", str(duration),
+                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "26",
+                "-c:a", "aac", "-b:a", "96k",
+                "-movflags", "+faststart",
+                "-y", out_path,
+            ],
+            capture_output=True, timeout=120,
+        )
+        if result.returncode != 0:
+            err = (result.stderr or b"").decode("utf-8", errors="replace")[:400]
+            print(f"[clip] ffmpeg failed for {event_type}#{index} @ {start}s: {err}", flush=True)
+            return None
+        if not os.path.exists(out_path) or os.path.getsize(out_path) < 1024:
+            print(f"[clip] {event_type}#{index} produced empty file", flush=True)
+            return None
+
+        storage_path = f"{CLIPS_PREFIX}/{job_id}/{event_type}_{index:03d}.mp4"
+        with open(out_path, "rb") as f:
+            data = f.read()
+        # upsert=true so re-running backfill overwrites cleanly.
+        sb.storage.from_("match-videos").upload(
+            storage_path, data,
+            file_options={"content-type": "video/mp4", "upsert": "true"},
+        )
+        return storage_path
+    except subprocess.TimeoutExpired:
+        print(f"[clip] ffmpeg timeout on {event_type}#{index}", flush=True)
+        return None
+    except Exception as e:
+        print(f"[clip] unexpected failure on {event_type}#{index}: {e}", flush=True)
+        return None
+    finally:
+        try:
+            if os.path.exists(out_path):
+                os.unlink(out_path)
+        except Exception:
+            pass
+
+
+def _generate_clips_for_events(video_path: str, events: list, event_type: str,
+                                job_id: str, sb) -> int:
+    """Mutate each event in `events` in place, adding `clip_storage_path`
+    when a clip was successfully generated. Returns the number of clips
+    actually produced (for logging).
+    """
+    if not events:
+        return 0
+    made = 0
+    for i, e in enumerate(events):
+        path = _generate_event_clip(video_path, e, event_type, i, job_id, sb)
+        if path:
+            e["clip_storage_path"] = path
+            made += 1
+    return made
+
+
 def _build_calibration_preamble(sb, coach_id: str, limit: int = 30) -> str:
     """D11: per-coach calibration from past corrections.
 
@@ -474,15 +585,23 @@ def _build_calibration_preamble(sb, coach_id: str, limit: int = 30) -> str:
     n_zone_changed = len(by_type.get("wrong_zone", []))
     n_attack_changed = len(by_type.get("wrong_attack_type", []))
     n_shot_changed = len(by_type.get("wrong_shot_type", []))
+    # Reclassifications — coach moved an event to a different type. Highest-
+    # quality signal: both "not X" AND "is Y". See [[project-review-focus-clips-pipeline]].
+    n_recl_goal_to_dist = len(by_type.get("reclassified_goal_to_dist", []))
+    n_recl_goal_to_save = len(by_type.get("reclassified_goal_to_save", []))
+    n_recl_save_to_dist = len(by_type.get("reclassified_save_to_dist", []))
+    n_recl_dist_to_save = len(by_type.get("reclassified_dist_to_save", []))
+    n_recl_total = n_recl_goal_to_dist + n_recl_goal_to_save + n_recl_save_to_dist + n_recl_dist_to_save
 
     lines = [
         "# CALIBRATION FROM THIS COACH",
         "",
-        f"This coach has reviewed {n_total} of your past goal candidates across previous matches.",
+        f"This coach has reviewed {n_total} of your past candidates across previous matches.",
         f"They kept {n_kept} as-is, rejected {n_false_pos} as false positives, "
         f"added {n_missed} goals you missed, "
-        f"flipped {n_team_flipped} on scoring team, and edited fields on "
-        f"{n_zone_changed + n_attack_changed + n_shot_changed} (zone/attack/shot type).",
+        f"flipped {n_team_flipped} on scoring team, edited fields on "
+        f"{n_zone_changed + n_attack_changed + n_shot_changed} (zone/attack/shot type), "
+        f"and reclassified {n_recl_total} event(s) to a different type (e.g. goal → distribution).",
         "",
         "Apply this calibration:",
         "",
@@ -522,7 +641,40 @@ def _build_calibration_preamble(sb, coach_id: str, limit: int = 30) -> str:
     if n_attack_changed:
         lines.append(f"- This coach has corrected your `attack_type` {n_attack_changed} times. Use the strict definitions: `corner` only if from a corner kick directly, `counter_attack` only if your team won the ball in own half and scored within ~20s, `open_play` is the default. Don't conflate them.")
 
-    if not any([n_false_pos, n_missed, n_team_flipped, n_zone_changed, n_attack_changed, n_shot_changed]):
+    # Reclassifications — high-signal corrections where the coach told us BOTH
+    # what the event isn't AND what it actually was. Emit one bullet per
+    # non-zero transition with concrete pattern hints derived from the
+    # original Gemini value.
+    if n_recl_goal_to_dist:
+        examples = by_type["reclassified_goal_to_dist"][:5]
+        # Pull the shot_type Gemini originally claimed — common false-positive
+        # signature is "Foot" shots near the GK that were actually back-passes.
+        gemini_shot_types = [str((e.get("gemini_value") or {}).get("shot_type", "")).lower() for e in examples]
+        n_foot = sum(1 for s in gemini_shot_types if "foot" in s)
+        lines.append(
+            f"- You misclassified {n_recl_goal_to_dist} GK distribution event(s) as goals in the last {n_total} candidates. "
+            + ("Most were tagged as Foot shots — when a defender plays the ball backward toward the GK from inside the defensive third, default to a GK touch/distribution event, NOT a shot on the GK's own goal. The ball entering the goal area near the keeper is rarely a shot in youth football. "
+               if n_foot >= 2 else
+               "Watch for defender-back-to-GK passes and GK clearances that you might be tagging as opposition shots. ")
+            + "If the ball's trajectory is from a defender toward the GK at low speed, it's almost never a goal candidate."
+        )
+    if n_recl_goal_to_save:
+        lines.append(
+            f"- You misclassified {n_recl_goal_to_save} save(s) as goals — the shot was stopped, not scored. "
+            "If the GK reaches the ball with any body part before it crosses the line, it's a save, not a goal."
+        )
+    if n_recl_save_to_dist:
+        lines.append(
+            f"- You misclassified {n_recl_save_to_dist} GK distribution(s) as saves. "
+            "A save requires an antecedent opposition shot. A clean GK reception of a back-pass or punt is distribution, not a save."
+        )
+    if n_recl_dist_to_save:
+        lines.append(
+            f"- You misclassified {n_recl_dist_to_save} save(s) as distribution event(s). "
+            "When the GK reacts to an in-flight opposition shot — regardless of whether they catch, parry, or punch — log it as a save first."
+        )
+
+    if not any([n_false_pos, n_missed, n_team_flipped, n_zone_changed, n_attack_changed, n_shot_changed, n_recl_total]):
         # All corrections were "kept_as_is" — strong positive signal
         lines.append(f"- This coach has accepted all {n_kept} of your past candidates without changes. Your judgment is calibrated for this coach's matches; continue applying the same standards.")
 
@@ -722,6 +874,16 @@ def process(job_id: str) -> dict:
             # Cross-event reconciliation (Phase 2.3 — A+B+C)
             all_goals, all_saves, all_dist = _reconcile_events(all_goals, all_saves, all_dist)
 
+            # Generate per-event review clips from the source video. Mutates
+            # each event in place to add `clip_storage_path`. The Next.js API
+            # signs paths to URLs at request time.
+            print("[clips] generating per-event review clips...", flush=True)
+            clip_start = time.time()
+            n_g = _generate_clips_for_events(video_path, all_goals, "goal", job_id, sb)
+            n_s = _generate_clips_for_events(video_path, all_saves, "save", job_id, sb)
+            n_d = _generate_clips_for_events(video_path, all_dist, "dist", job_id, sb)
+            print(f"[clips] produced {n_g} goal / {n_s} save / {n_d} dist clips in {time.time() - clip_start:.0f}s", flush=True)
+
             # Persist as if this had been one merged Gemini call
             sb.table("video_jobs").update({
                 "status": "review_needed",
@@ -909,6 +1071,16 @@ def process(job_id: str) -> dict:
         saves_count = len(sp_saves) if saves_result is not None else None
         dist_count = len(sp_dist) if dist_result is not None else None
 
+        # Generate per-event review clips from the source video. Mutates the
+        # event dicts in place to add `clip_storage_path`. The Next.js API
+        # signs paths to URLs at request time so playback URLs stay fresh.
+        print("[clips] generating per-event review clips...", flush=True)
+        clip_start = time.time()
+        n_g = _generate_clips_for_events(video_path, sp_goals, "goal", job_id, sb)
+        n_s = _generate_clips_for_events(video_path, sp_saves, "save", job_id, sb) if saves_result is not None else 0
+        n_d = _generate_clips_for_events(video_path, sp_dist, "dist", job_id, sb) if dist_result is not None else 0
+        print(f"[clips] produced {n_g} goal / {n_s} save / {n_d} dist clips in {time.time() - clip_start:.0f}s", flush=True)
+
         # === Persist results ===
         gemini_output = {
             "model": model_name,
@@ -1056,6 +1228,118 @@ def reconcile_existing(job_id: str) -> dict:
 
     sb.table("video_jobs").update({"gemini_output": new_out}).eq("id", job_id).execute()
     return {"job_id": job_id, "before": before, "after": after}
+
+
+@app.function(image=IMAGE, secrets=[secret], timeout=1800)
+def backfill_clips(job_id: str, force: bool = False) -> dict:
+    """Generate per-event review clips for a job that's already been analyzed.
+
+    Use this on jobs persisted before the clip pipeline existed, or after a
+    clip-windowing change. Re-downloads the source video, slices clips
+    around every event in gemini_output, uploads them under clips/<job>/,
+    and writes ``clip_storage_path`` back onto each event in the JSON.
+
+    Skips events that already have a clip_storage_path unless ``force`` is
+    True or match_metadata.force_clip_rebuild is set — keeps re-runs cheap.
+
+    Invoke locally:  py -m modal run worker/app.py::backfill_clips --job-id <uuid>
+                     py -m modal run worker/app.py::backfill_clips --job-id <uuid> --force
+    """
+    from datetime import datetime, timezone
+    from pathlib import Path
+    import tempfile
+    import time
+    import requests
+    from supabase import create_client
+
+    sb = create_client(
+        os.environ["NEXT_PUBLIC_SUPABASE_URL"],
+        os.environ["SUPABASE_SERVICE_ROLE_KEY"],
+    )
+    job = sb.table("video_jobs").select("*").eq("id", job_id).single().execute().data
+    if not job:
+        return {"job_id": job_id, "error": "not_found"}
+
+    out = job.get("gemini_output") or {}
+    goals = (out.get("parsed") or {}).get("goals", []) if out.get("parsed") else []
+    saves = ((out.get("saves") or {}).get("parsed") or {}).get("saves", []) if out.get("saves") else []
+    dist = ((out.get("distribution") or {}).get("parsed") or {}).get("distribution", []) if out.get("distribution") else []
+
+    if not (goals or saves or dist):
+        return {"job_id": job_id, "error": "no_events_in_gemini_output"}
+
+    # Resolve a fresh signed download URL — the one stored on the job row is
+    # almost certainly expired (2h TTL).
+    if job.get("storage_path"):
+        signed = sb.storage.from_("match-videos").create_signed_url(job["storage_path"], 7200)
+        download_url = signed.get("signedURL") or signed.get("signedUrl") or signed.get("url")
+        if not download_url:
+            return {"job_id": job_id, "error": "could_not_sign_source_url"}
+    else:
+        download_url = job.get("video_url")
+        if not download_url:
+            return {"job_id": job_id, "error": "no_video_url_or_storage_path"}
+
+    print(f"[backfill] downloading source video...", flush=True)
+    download_start = time.time()
+    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
+        r = requests.get(download_url, stream=True, timeout=900)
+        r.raise_for_status()
+        for chunk in r.iter_content(chunk_size=1024 * 1024):
+            f.write(chunk)
+        video_path = f.name
+    size_mb = os.path.getsize(video_path) / (1024 * 1024)
+    print(f"[backfill] {size_mb:.1f} MB downloaded in {time.time() - download_start:.0f}s", flush=True)
+
+    meta = job.get("match_metadata") or {}
+    force = bool(force) or bool(meta.get("force_clip_rebuild"))
+
+    def _process(events, event_type):
+        if not events:
+            return 0
+        produced = 0
+        for i, e in enumerate(events):
+            if e.get("clip_storage_path") and not force:
+                continue
+            path = _generate_event_clip(video_path, e, event_type, i, job_id, sb)
+            if path:
+                e["clip_storage_path"] = path
+                produced += 1
+        return produced
+
+    clip_start = time.time()
+    n_g = _process(goals, "goal")
+    n_s = _process(saves, "save")
+    n_d = _process(dist, "dist")
+    print(f"[backfill] produced {n_g} goal / {n_s} save / {n_d} dist clips in {time.time() - clip_start:.0f}s", flush=True)
+
+    # Write back, preserving the rest of gemini_output structure.
+    new_out = dict(out)
+    if new_out.get("parsed") is not None:
+        new_out["parsed"] = dict(new_out["parsed"])
+        new_out["parsed"]["goals"] = goals
+    if new_out.get("saves") is not None:
+        new_out["saves"] = dict(new_out["saves"])
+        new_out["saves"]["parsed"] = dict(new_out["saves"].get("parsed") or {})
+        new_out["saves"]["parsed"]["saves"] = saves
+    if new_out.get("distribution") is not None:
+        new_out["distribution"] = dict(new_out["distribution"])
+        new_out["distribution"]["parsed"] = dict(new_out["distribution"].get("parsed") or {})
+        new_out["distribution"]["parsed"]["distribution"] = dist
+    new_out["clips_backfilled_at"] = datetime.now(timezone.utc).isoformat()
+
+    sb.table("video_jobs").update({"gemini_output": new_out}).eq("id", job_id).execute()
+
+    try:
+        os.unlink(video_path)
+    except Exception:
+        pass
+
+    return {
+        "job_id": job_id,
+        "clips_produced": {"goal": n_g, "save": n_s, "dist": n_d},
+        "total_events": {"goal": len(goals), "save": len(saves), "dist": len(dist)},
+    }
 
 
 @app.function(image=IMAGE, secrets=[secret], schedule=modal.Period(minutes=10))
