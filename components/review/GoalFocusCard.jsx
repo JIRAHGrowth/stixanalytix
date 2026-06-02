@@ -202,14 +202,24 @@ export default function GoalFocusCard({
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
           <button type="button" onClick={onReject} style={btnReject(t)}>Reject</button>
           {onReclassify && (
-            <button
-              type="button"
-              onClick={() => onReclassify("distribution")}
-              style={btnReclassify(t)}
-              title="This isn't a goal — it's a GK distribution event. The clip is reused; you'll enter the distribution fields fresh."
-            >
-              Reclassify → Distribution
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => onReclassify("save")}
+                style={btnReclassify(t)}
+                title="This isn't a goal — it's a save. The clip and timestamp move with the event; save fields are blank for fresh entry."
+              >
+                → Save
+              </button>
+              <button
+                type="button"
+                onClick={() => onReclassify("distribution")}
+                style={btnReclassify(t)}
+                title="This isn't a goal — it's a GK distribution event. The clip is reused; you'll enter the distribution fields fresh."
+              >
+                → Distribution
+              </button>
+            </>
           )}
           <button type="button" onClick={onConfirm} style={btnConfirm(t)}>
             Confirm & next →
