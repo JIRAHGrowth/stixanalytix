@@ -290,18 +290,22 @@ export async function POST(request, { params }) {
                    : s.goal_placement_side === 'right_third' ? 'R' : null;
           if (h && sd) goalZone = `${h} ${sd}`;
         }
+        // Goal zone preference: focus card sets s.goal_zone directly (9-zone
+        // shooter-perspective label). Fall back to mapping from goal_placement_
+        // height + side for legacy data from the bulk-mode dropdowns.
+        const focusZone = (s.goal_zone && /^(High|Mid|Low) [LCR]$/.test(s.goal_zone)) ? s.goal_zone : null;
         return {
           match_id: matchId,
           keeper_id: job.keeper_id,
           coach_id: user.id,
           shot_origin: s.shot_origin === 'unclear' ? null : (s.shot_origin || null),
           gk_action: s.gk_action === 'unclear' ? null : (s.gk_action || null),
-          goal_zone: goalZone,
+          goal_zone: focusZone || goalZone,
           is_goal: isGoal,
           is_off_target: isOffTarget,
           shot_type: s.shot_type || null,
           event_type: 'Shot',
-          half: null, // pitchside uses 'H1'/'H2'; we don't capture that today
+          half: null,
           timestamp_seconds: Number.isFinite(s.timestamp_seconds) ? s.timestamp_seconds : null,
           on_target: s.on_target || null,
           outcome: s.outcome || null,
@@ -309,6 +313,9 @@ export async function POST(request, { params }) {
           goal_placement_height: s.goal_placement_height || null,
           goal_placement_side: s.goal_placement_side || null,
           gk_visible: s.gk_visible || null,
+          // v3 focus-card additions (schema 2026-06-01):
+          technique: s.technique || null,
+          dive_family: s.dive_family || null,
           coach_added: !!s.coach_added,
           shot_description: s.shot_description || null,
           gk_observations: s.gk_observations || null,
@@ -344,6 +351,8 @@ export async function POST(request, { params }) {
         direction: emptyToNull(d.direction),
         receiver: emptyToNull(d.receiver),
         first_touch: emptyToNull(d.first_touch),
+        // v3 focus-card addition (schema 2026-06-01):
+        target_zone: emptyToNull(d.target_zone),
         notes: d.notes || null,
         confidence: d.confidence || null,
         source: 'video',

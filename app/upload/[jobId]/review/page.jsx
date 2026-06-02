@@ -28,6 +28,8 @@ import { defaultZone, defaultSource, defaultShotType, fmtTs, tsStrToSeconds } fr
 import { defaultKeepGoal, defaultKeepSave, defaultKeepDistribution } from "@/lib/default-keep";
 import { authedFetch } from "@/lib/authed-fetch";
 import FocusModeGoals from "@/components/review/FocusModeGoals";
+import FocusModeSaves from "@/components/review/FocusModeSaves";
+import FocusModeDistribution from "@/components/review/FocusModeDistribution";
 
 export default function ReviewPage() {
   const { user, supabase, loading: authLoading } = useAuth();
@@ -249,79 +251,100 @@ export default function ReviewPage() {
   const finalScore = scoreOverride || { goals_for: counts.gf, goals_against: counts.ga };
 
   const updateCand = (id, patch) => setCandidates(cs => cs.map(c => c._id === id ? { ...c, ...patch } : c));
+  const updateSave = (id, patch) => setSaveRows(rs => rs.map(r => r._id === id ? { ...r, ...patch } : r));
+  const updateDist = (id, patch) => setDistRows(rs => rs.map(r => r._id === id ? { ...r, ...patch } : r));
 
-  // Reclassify a Gemini goal candidate as a different event type. The original
-  // goal is removed from `candidates` and a new row appears in the target
-  // section's state with the clip + timestamp preserved. The event is tagged
-  // with `_reclassified_from` so the publish handler can log a coach_correction
-  // that feeds the calibration preamble on the NEXT match. Fields on the new
-  // row are intentionally blank — the coach enters them fresh through the
-  // section's own UI. See [[project-review-focus-clips-pipeline]].
-  const reclassifyCandidate = (id, targetType) => {
-    const cand = candidates.find(c => c._id === id);
-    if (!cand) return;
-    const g = cand.gemini || {};
+  // Generalized reclassification: move an event from one section to another.
+  // The clip + timestamp follow the event; type-specific fields are blank on
+  // the new row so the coach enters them fresh in the destination section's UI.
+  // _reclassified_from is preserved so the publish handler can log a
+  // coach_correction (reclassified_<from>_to_<to>) that feeds the calibration
+  // preamble on the NEXT match.
+  const reclassifyEvent = (sourceType, id, targetType) => {
+    if (sourceType === targetType) return;
+    const sourceRows =
+      sourceType === "goal" ? candidates :
+      sourceType === "save" ? saveRows :
+      sourceType === "distribution" ? distRows : null;
+    if (!sourceRows) return;
+    const row = sourceRows.find(r => r._id === id);
+    if (!row) return;
+    const g = row.gemini || {};
+    const clipBundle = {
+      timestamp_seconds: g.timestamp_seconds ?? row.timestamp_seconds,
+      match_clock: g.match_clock ?? row.match_clock,
+      clip_storage_path: g.clip_storage_path,
+      clip_url: g.clip_url,
+    };
+    const provenance = {
+      source: sourceType,
+      gemini_value: sourceType === "goal" ? g : row,
+    };
+
     if (targetType === "distribution") {
       const newRow = {
-        _id: `d-reclass-${cand._id}`,
+        _id: `d-reclass-${id}`,
         keep: true,
-        timestamp_seconds: g.timestamp_seconds,
-        match_clock: g.match_clock,
-        trigger: "",
-        type: "",
-        successful: "",
-        press_state: "",
-        pass_selection: "",
-        direction: "",
-        receiver: "",
-        first_touch: "",
-        notes: "",
-        gemini: {
-          timestamp_seconds: g.timestamp_seconds,
-          match_clock: g.match_clock,
-          clip_storage_path: g.clip_storage_path,
-          clip_url: g.clip_url,
-        },
-        _reclassified_from: { source: "goal", gemini_value: g },
+        timestamp_seconds: clipBundle.timestamp_seconds,
+        match_clock: clipBundle.match_clock,
+        trigger: "", type: "", successful: "", press_state: "",
+        pass_selection: "", direction: "", receiver: "",
+        first_touch: "", target_zone: "", notes: "",
+        gemini: clipBundle,
+        _reclassified_from: provenance,
       };
-      setDistRows(rows => {
-        const next = [...rows, newRow];
-        next.sort((a, b) => (a.timestamp_seconds || 0) - (b.timestamp_seconds || 0));
-        return next;
-      });
-      setCandidates(cs => cs.filter(c => c._id !== id));
+      setDistRows(rs => sortByTs([...rs, newRow]));
     } else if (targetType === "save") {
       const newRow = {
-        _id: `s-reclass-${cand._id}`,
+        _id: `s-reclass-${id}`,
         keep: true,
-        timestamp_seconds: g.timestamp_seconds,
-        match_clock: g.match_clock,
-        shot_origin: "",
-        shot_type: "",
-        on_target: "",
-        gk_action: "",
-        gk_visible: "",
-        outcome: "",
-        body_distance_zone: "",
-        goal_placement_height: "",
-        goal_placement_side: "",
-        notes: "",
-        gemini: {
-          timestamp_seconds: g.timestamp_seconds,
-          match_clock: g.match_clock,
-          clip_storage_path: g.clip_storage_path,
-          clip_url: g.clip_url,
-        },
-        _reclassified_from: { source: "goal", gemini_value: g },
+        timestamp_seconds: clipBundle.timestamp_seconds,
+        match_clock: clipBundle.match_clock,
+        shot_origin: "", shot_type: "", on_target: "", gk_action: "",
+        gk_visible: "", outcome: "", body_distance_zone: "",
+        goal_placement_height: "", goal_placement_side: "",
+        technique: "", dive_family: "", notes: "",
+        gemini: clipBundle,
+        _reclassified_from: provenance,
       };
-      setSaveRows(rows => {
-        const next = [...rows, newRow];
-        next.sort((a, b) => (a.timestamp_seconds || 0) - (b.timestamp_seconds || 0));
-        return next;
-      });
-      setCandidates(cs => cs.filter(c => c._id !== id));
+      setSaveRows(rs => sortByTs([...rs, newRow]));
+    } else if (targetType === "goal") {
+      // Reclassifying TO a goal candidate goes into extraGoals (coach-added),
+      // since `candidates` is reserved for AI-detected goal candidates with
+      // their original gemini context.
+      const tsSecs = clipBundle.timestamp_seconds;
+      const mm = Math.floor((tsSecs || 0) / 60);
+      const ss = String(Math.floor((tsSecs || 0) % 60)).padStart(2, "0");
+      const newRow = {
+        _id: `g-reclass-${id}`,
+        coach_added: true,
+        keep: true,
+        scored_by_us: null,
+        timestamp_str: `${mm}:${ss}`,
+        timestamp_seconds: tsSecs,
+        goal_zone: "", shot_origin: "", goal_source: "",
+        shot_type: "", gk_positioning: "", goal_rank: "",
+        half: null, notes: "",
+        clip_storage_path: clipBundle.clip_storage_path,
+        clip_url: clipBundle.clip_url,
+        _reclassified_from: provenance,
+      };
+      setExtraGoals(arr => [...arr, newRow]);
     }
+
+    // Remove from the source section
+    if (sourceType === "goal") setCandidates(cs => cs.filter(c => c._id !== id));
+    else if (sourceType === "save") setSaveRows(rs => rs.filter(r => r._id !== id));
+    else if (sourceType === "distribution") setDistRows(rs => rs.filter(r => r._id !== id));
   };
+
+  // Backwards-compat wrapper kept for FocusModeGoals which still calls the
+  // old shape (id, targetType).
+  const reclassifyCandidate = (id, targetType) => reclassifyEvent("goal", id, targetType);
+
+  function sortByTs(rows) {
+    return [...rows].sort((a, b) => (a.timestamp_seconds || 0) - (b.timestamp_seconds || 0));
+  }
 
   // ---- Phase A2 keyboard navigation ----
   // Map sections to their current event list + setter so handlers can act
@@ -418,9 +441,9 @@ export default function ReviewPage() {
         return;
       }
 
-      // In focus mode for the goals section, let GoalFocusCard own per-event
-      // keys. We still handle Tab (section switching) below.
-      if (reviewMode === "focus" && activeFocus.section === "goals") {
+      // In focus mode, the focus card owns per-event keys (arrows, Enter, r,
+      // numpad). We still handle Tab for cross-section navigation.
+      if (reviewMode === "focus") {
         if (e.key !== "Tab") return;
       }
 
@@ -614,6 +637,7 @@ export default function ReviewPage() {
               direction: r.direction || null,
               receiver: r.receiver || null,
               first_touch: r.first_touch || null,
+              target_zone: r.target_zone || null,
               notes: r.notes || null,
             },
           })),
@@ -633,7 +657,27 @@ export default function ReviewPage() {
               body_distance_zone: r.body_distance_zone || null,
               goal_placement_height: r.goal_placement_height || null,
               goal_placement_side: r.goal_placement_side || null,
+              technique: r.technique || null,
+              dive_family: r.dive_family || null,
               notes: r.notes || null,
+            },
+          })),
+        ...extraGoals
+          .filter(g => g._reclassified_from)
+          .map(g => ({
+            from: g._reclassified_from.source,
+            to: "goal",
+            gemini_value: g._reclassified_from.gemini_value,
+            coach_value: {
+              timestamp_seconds: g.timestamp_seconds,
+              scored_by_us: g.scored_by_us,
+              goal_zone: g.goal_zone || null,
+              shot_origin: g.shot_origin || null,
+              goal_source: g.goal_source || null,
+              shot_type: g.shot_type || null,
+              gk_positioning: g.gk_positioning || null,
+              goal_rank: g.goal_rank || null,
+              notes: g.notes || null,
             },
           })),
       ],
@@ -653,6 +697,10 @@ export default function ReviewPage() {
       body_distance_zone: r.body_distance_zone || null,
       goal_placement_height: r.goal_placement_height || null,
       goal_placement_side: r.goal_placement_side || null,
+      goal_zone: r.goal_zone || null,
+      // v3 focus-card additions (schema 2026-06-01):
+      technique: r.technique || null,
+      dive_family: r.dive_family || null,
       coach_added: !!r.coach_added,
       shot_description: r.shot_description || null,
       gk_observations: r.gk_observations || null,
@@ -673,6 +721,8 @@ export default function ReviewPage() {
       direction: r.direction || null,
       receiver: r.receiver || null,
       first_touch: r.first_touch || null,
+      // v3 focus-card addition (schema 2026-06-01):
+      target_zone: r.target_zone || null,
       notes: r.notes || null,
       confidence: r.gemini?.confidence || null,
     }));
@@ -986,11 +1036,37 @@ export default function ReviewPage() {
           <button onClick={() => addExtraGoal(false)} style={{ padding: "8px 14px", borderRadius: 8, border: `1px dashed ${t.red}66`, background: "transparent", color: t.red, fontSize: 12, fontFamily: font, cursor: "pointer" }}>+ Add a goal opponent scored</button>
         </div>
 
-        {/* SAVES TABLE — Phase 2.1 */}
-        <SavesTable rows={saveRows} onChange={setSaveRows} t={t} font={font} activeId={activeFocus.section === 'saves' ? activeId : null} />
+        {/* SAVES — Focus or Bulk */}
+        <h3 style={{ fontSize: 13, fontWeight: 700, color: t.bright, letterSpacing: 0.4, margin: "24px 0 10px" }}>SAVES</h3>
+        {reviewMode === "focus" ? (
+          <div style={{ marginBottom: 24 }}>
+            <FocusModeSaves
+              rows={saveRows}
+              onChange={updateSave}
+              onReclassify={(id, target) => reclassifyEvent("save", id, target)}
+              videoUrl={job?.video_url}
+              theme={t}
+            />
+          </div>
+        ) : (
+          <SavesTable rows={saveRows} onChange={setSaveRows} t={t} font={font} activeId={activeFocus.section === 'saves' ? activeId : null} />
+        )}
 
-        {/* DISTRIBUTION TABLE — Phase 2.2 */}
-        <DistributionTable rows={distRows} onChange={setDistRows} t={t} font={font} activeId={activeFocus.section === 'distribution' ? activeId : null} />
+        {/* DISTRIBUTION — Focus or Bulk */}
+        <h3 style={{ fontSize: 13, fontWeight: 700, color: t.bright, letterSpacing: 0.4, margin: "24px 0 10px" }}>DISTRIBUTION</h3>
+        {reviewMode === "focus" ? (
+          <div style={{ marginBottom: 24 }}>
+            <FocusModeDistribution
+              rows={distRows}
+              onChange={updateDist}
+              onReclassify={(id, target) => reclassifyEvent("distribution", id, target)}
+              videoUrl={job?.video_url}
+              theme={t}
+            />
+          </div>
+        ) : (
+          <DistributionTable rows={distRows} onChange={setDistRows} t={t} font={font} activeId={activeFocus.section === 'distribution' ? activeId : null} />
+        )}
 
         {/* PUBLISH */}
         {error && <div style={{ color: t.red, fontSize: 12, marginBottom: 12 }}>{error}</div>}
