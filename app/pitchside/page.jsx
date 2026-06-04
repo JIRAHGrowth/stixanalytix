@@ -340,85 +340,6 @@ export default function PitchsidePage() {
       }
       if (!resolvedClubId) throw new Error("Unable to determine your club. Please reload and try again.");
 
-      const { error: matchError } = await supabase
-        .from("matches")
-        .upsert({
-          id: matchId,
-          coach_id: coachId,
-          keeper_id: selectedKeeperId,
-          club_id: resolvedClubId,
-          logged_by: user.id,
-          logged_by_name: profile?.full_name || user.email,
-          session_type: sessionType,
-          opponent: sessionType === "training" ? null : opponent,
-          venue: homeAway?.toLowerCase() || "home",
-          match_date: matchDate,
-          goals_for: goalsFor, goals_against: totalGA,
-          result: sessionType === "training" ? null : result,
-        minutes_played: minutesPlayed ? parseInt(minutesPlayed) : null,
-          shots_on_target: totalSOT, saves: totalSaves,
-          goals_conceded: totalGA, save_percentage: savePct,
-          saves_catch: countAction("Catch") + countAction("Save – Catch"),
-          saves_parry: countAction("Parry") + countAction("Save – Parry"),
-      saves_dive: countAction("Smother") + countAction("Save – Smother"),
-          saves_block: countAction("Block"),
-          saves_tip: countAction("Deflect"),
-          saves_punch: countAction("Punch"),
-          crosses_claimed: crossClaimed, crosses_punched: crossPunched,
-          crosses_missed: crossMissed, crosses_total: crossEvents.length,
-          dist_gk_short_att: sumHE("dGkShort"), dist_gk_short_suc: sumHE("dGkShort") - sumHE("dGkShortFail"),
-          dist_gk_long_att: sumHE("dGkLong"), dist_gk_long_suc: sumHE("dGkLong") - sumHE("dGkLongFail"),
-          dist_throws_att: sumHE("dThrow"), dist_throws_suc: sumHE("dThrow") - sumHE("dThrowFail"),
-          dist_passes_att: sumHE("dPass"), dist_passes_suc: sumHE("dPass") - sumHE("dPassFail"),
-          dist_under_pressure_att: sumHE("dPressure"), dist_under_pressure_suc: sumHE("dPressure") - sumHE("dPressureFail"),
-          one_v_one_faced: oneV1.length, one_v_one_won: oneV1Won,
-          errors_leading_to_goal: errorsToGoal,
-          sweeper_clearances: sumHE("swClear"), sweeper_interceptions: sumHE("swIntercept"),
-          sweeper_tackles: sumHE("swTackle"),
-          rebounds_controlled: sumH("rbControlled"), rebounds_dangerous: sumH("rbDangerous"),
-          notes: allNotes || null,
-          was_subbed: wasSub, sub_reason: subReason || null,
-          sub_minute: subMinute ? parseInt(subMinute) : null,
-        }, { onConflict: "id" });
-
-      if (matchError) throw matchError;
-
-      // Replace child rows by match_id so retries are idempotent.
-      const { error: goalDelErr } = await supabase.from("goals_conceded").delete().eq("match_id", matchId);
-      if (goalDelErr) throw goalDelErr;
-      if (goalEvents.length > 0) {
-        const goalRows = goalEvents.map(g => ({
-          match_id: matchId, coach_id: coachId,
-          goal_zone: g.goalZone || null, shot_origin: g.origin || null,
-          goal_source: g.type === "Corner" ? "Corner" : g.type === "Penalty" ? "Penalty" : "Open Play",
-          goal_rank: g.rank || null, shot_type: g.method || null,
-          gk_positioning: g.gkPosition || null,
-          half: g.half === "H1" ? 1 : g.half === "H2" ? 2 : null,
-        }));
-        const { error: goalsError } = await supabase.from("goals_conceded").insert(goalRows);
-        if (goalsError) throw goalsError;
-      }
-
-      const shotRows = events.map(e => ({
-        match_id: matchId,
-        keeper_id: selectedKeeperId,
-        coach_id: coachId,
-        shot_origin: e.origin || null,
-        gk_action: e.gkAction || null,
-        goal_zone: e.isGoal ? (e.goalZone || null) : null,
-        is_goal: !!e.isGoal,
-        is_off_target: !!e.offTarget,
-        shot_type: e.isGoal ? (e.method || null) : null,
-        event_type: e.type || null,
-        half: e.half || null,
-      }));
-      const { error: shotDelErr } = await supabase.from("shot_events").delete().eq("match_id", matchId);
-      if (shotDelErr) throw shotDelErr;
-      if (shotRows.length) {
-        const { error: shotInsErr } = await supabase.from("shot_events").insert(shotRows);
-        if (shotInsErr) throw shotInsErr;
-      }
-
       const attrKeys = {
         "Game Rating": "game_rating", "Shot Stopping": "shot_stopping",
         "Handling": "handling", "Positioning": "positioning",
@@ -429,22 +350,98 @@ export default function PitchsidePage() {
         "Command of Box": "command_of_box", "Composure": "composure",
         "Compete Level": "compete_level",
       };
-      const attrRow = { match_id: matchId, keeper_id: selectedKeeperId, coach_id: coachId };
-      Object.entries(attrKeys).forEach(([label, col]) => { attrRow[col] = attrs[label] || null; });
-      const { error: attrDelErr } = await supabase.from("match_attributes").delete().eq("match_id", matchId);
-      if (attrDelErr) throw attrDelErr;
-      const { error: attrError } = await supabase.from("match_attributes").insert(attrRow);
-      if (attrError) throw attrError;
 
-      const rkRow = { match_id: matchId, coach_id: coachId, keeper_id: selectedKeeperId, author_id: user.id, author_role: "coach", submitted_at: new Date().toISOString(), updated_at: new Date().toISOString() };
-      Object.entries(attrKeys).forEach(([label, col]) => { rkRow[col] = attrs[label] || null; });
-      const { error: rkErr } = await supabase.from("match_rankings").upsert(rkRow, { onConflict: "match_id,keeper_id,author_role" });
-      if (rkErr) throw rkErr;
+      const matchPayload = {
+        id: matchId,
+        coach_id: coachId,
+        keeper_id: selectedKeeperId,
+        club_id: resolvedClubId,
+        logged_by: user.id,
+        logged_by_name: profile?.full_name || user.email,
+        session_type: sessionType,
+        opponent: sessionType === "training" ? null : opponent,
+        venue: homeAway?.toLowerCase() || "home",
+        match_date: matchDate,
+        goals_for: goalsFor, goals_against: totalGA,
+        result: sessionType === "training" ? null : result,
+        minutes_played: minutesPlayed ? parseInt(minutesPlayed) : null,
+        shots_on_target: totalSOT, saves: totalSaves,
+        goals_conceded: totalGA, save_percentage: savePct,
+        saves_catch: countAction("Catch") + countAction("Save – Catch"),
+        saves_parry: countAction("Parry") + countAction("Save – Parry"),
+        saves_dive: countAction("Smother") + countAction("Save – Smother"),
+        saves_block: countAction("Block"),
+        saves_tip: countAction("Deflect"),
+        saves_punch: countAction("Punch"),
+        crosses_claimed: crossClaimed, crosses_punched: crossPunched,
+        crosses_missed: crossMissed, crosses_total: crossEvents.length,
+        dist_gk_short_att: sumHE("dGkShort"), dist_gk_short_suc: sumHE("dGkShort") - sumHE("dGkShortFail"),
+        dist_gk_long_att: sumHE("dGkLong"), dist_gk_long_suc: sumHE("dGkLong") - sumHE("dGkLongFail"),
+        dist_throws_att: sumHE("dThrow"), dist_throws_suc: sumHE("dThrow") - sumHE("dThrowFail"),
+        dist_passes_att: sumHE("dPass"), dist_passes_suc: sumHE("dPass") - sumHE("dPassFail"),
+        dist_under_pressure_att: sumHE("dPressure"), dist_under_pressure_suc: sumHE("dPressure") - sumHE("dPressureFail"),
+        one_v_one_faced: oneV1.length, one_v_one_won: oneV1Won,
+        errors_leading_to_goal: errorsToGoal,
+        sweeper_clearances: sumHE("swClear"), sweeper_interceptions: sumHE("swIntercept"),
+        sweeper_tackles: sumHE("swTackle"),
+        rebounds_controlled: sumH("rbControlled"), rebounds_dangerous: sumH("rbDangerous"),
+        notes: allNotes || null,
+        was_subbed: wasSub, sub_reason: subReason || null,
+        sub_minute: subMinute ? parseInt(subMinute) : null,
+      };
 
-      if (allNotes && allNotes.trim()) {
-        const { error: noteErr } = await supabase.from("match_notes").upsert({ match_id: matchId, coach_id: coachId, keeper_id: selectedKeeperId, author_id: user.id, author_role: "coach", note_text: allNotes.trim(), submitted_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { onConflict: "match_id,keeper_id,author_role" });
-        if (noteErr) throw noteErr;
-      }
+      const goalsPayload = goalEvents.map(g => ({
+        match_id: matchId, coach_id: coachId,
+        goal_zone: g.goalZone || null, shot_origin: g.origin || null,
+        goal_source: g.type === "Corner" ? "Corner" : g.type === "Penalty" ? "Penalty" : "Open Play",
+        goal_rank: g.rank || null, shot_type: g.method || null,
+        gk_positioning: g.gkPosition || null,
+        half: g.half === "H1" ? 1 : g.half === "H2" ? 2 : null,
+      }));
+
+      const shotsPayload = events.map(e => ({
+        match_id: matchId, keeper_id: selectedKeeperId, coach_id: coachId,
+        shot_origin: e.origin || null,
+        gk_action: e.gkAction || null,
+        goal_zone: e.isGoal ? (e.goalZone || null) : null,
+        is_goal: !!e.isGoal,
+        is_off_target: !!e.offTarget,
+        shot_type: e.isGoal ? (e.method || null) : null,
+        event_type: e.type || null,
+        half: e.half || null,
+      }));
+
+      const attrsPayload = { match_id: matchId, keeper_id: selectedKeeperId, coach_id: coachId };
+      Object.entries(attrKeys).forEach(([label, col]) => { attrsPayload[col] = attrs[label] || null; });
+
+      const nowIso = new Date().toISOString();
+      const rankingPayload = {
+        match_id: matchId, coach_id: coachId, keeper_id: selectedKeeperId,
+        author_id: user.id, author_role: "coach",
+        submitted_at: nowIso, updated_at: nowIso,
+      };
+      Object.entries(attrKeys).forEach(([label, col]) => { rankingPayload[col] = attrs[label] || null; });
+
+      const notePayload = (allNotes && allNotes.trim())
+        ? {
+            match_id: matchId, coach_id: coachId, keeper_id: selectedKeeperId,
+            author_id: user.id, author_role: "coach",
+            note_text: allNotes.trim(),
+            submitted_at: nowIso, updated_at: nowIso,
+          }
+        : null;
+
+      // One atomic call — all writes commit together or roll back together.
+      // Idempotent on retry because matchIdRef stays stable across attempts.
+      const { error: rpcError } = await supabase.rpc("save_pitchside_match", {
+        p_match: matchPayload,
+        p_goals: goalsPayload,
+        p_shots: shotsPayload,
+        p_attrs: attrsPayload,
+        p_ranking: rankingPayload,
+        p_note: notePayload,
+      });
+      if (rpcError) throw rpcError;
 
       // Success — release the matchId so the next save starts a fresh record.
       matchIdRef.current = null;
