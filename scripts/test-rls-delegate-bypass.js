@@ -244,8 +244,69 @@ async function run() {
         club_id: crypto.randomUUID(),
         session_type: "match",
       }, "D-scoped cannot INSERT match for out-of-scope keeper_B");
+
+      // --- D-dash (dashboard_access=true, dashboard_keepers=[keeperA]) ---
+      // RLS spec: SELECT allowed when keeper_id in pitchside_keepers OR
+      // (in dashboard_keepers AND dashboard_access=true). INSERT only via
+      // pitchside_keepers. So D-dash should READ keeperA's data but write
+      // nothing.
+      console.log("\n--- D-dash (pitchside=[], dashboard=[keeperA], dashboard_access=true) ---");
+      const dCreds = await makeDelegate({
+        coachId: target.coachId,
+        name: "dash",
+        pitchsideKeepers: [],
+        dashboardKeepers: [target.keeperA.id],
+        dashboardAccess: true,
+      });
+      userIds.push(dCreds.userId);
+      const { client: dClient, userId: dUid } = await signInAs(dCreds);
+
+      // Positive: in-scope keeper visible
+      const { data: dKA } = await dClient.from("keepers").select("id").eq("id", target.keeperA.id);
+      record("D-dash CAN read in-scope keeper_A", "info", (dKA || []).length === 1,
+        `rows=${(dKA || []).length}`);
+
+      // Critical negatives: out-of-scope keeper invisible
+      const { data: dKB } = await dClient.from("keepers").select("id").eq("id", target.keeperB.id);
+      record("D-dash cannot read out-of-scope keeper_B", "critical", (dKB || []).length === 0,
+        `rows=${(dKB || []).length}`);
+
+      // Dashboard-relevant tables: out-of-scope keeperB must return 0 rows
+      await expectEmpty(dClient, "matches", { keeper_id: target.keeperB.id }, "D-dash cannot read keeper_B matches");
+      await expectEmpty(dClient, "match_attributes", { keeper_id: target.keeperB.id }, "D-dash cannot read keeper_B match_attributes");
+      await expectEmpty(dClient, "match_rankings", { keeper_id: target.keeperB.id }, "D-dash cannot read keeper_B match_rankings");
+      await expectEmpty(dClient, "match_notes", { keeper_id: target.keeperB.id }, "D-dash cannot read keeper_B match_notes");
+      await expectEmpty(dClient, "shot_events", { keeper_id: target.keeperB.id }, "D-dash cannot read keeper_B shot_events");
+
+      // Write attempts: dashboard role must not grant any write capability
+      await expectInsertBlocked(dClient, "matches", {
+        id: crypto.randomUUID(),
+        coach_id: target.coachId,
+        keeper_id: target.keeperA.id, // even in-scope-for-read keeper
+        club_id: crypto.randomUUID(),
+        session_type: "match",
+      }, "D-dash cannot INSERT match for in-scope keeper_A (dashboard ≠ write)");
+
+      await expectInsertBlocked(dClient, "matches", {
+        id: crypto.randomUUID(),
+        coach_id: target.coachId,
+        keeper_id: target.keeperB.id,
+        club_id: crypto.randomUUID(),
+        session_type: "match",
+      }, "D-dash cannot INSERT match for out-of-scope keeper_B");
+
+      // Escalation: D-dash tries to add keeperB to its own dashboard_keepers
+      await expectUpdateBlocked(dClient, "delegates", { delegate_user_id: dUid }, {
+        dashboard_keepers: [target.keeperA.id, target.keeperB.id],
+        pitchside_keepers: [target.keeperA.id],
+      }, "D-dash cannot self-escalate to add keeper_B");
+
+      // Reading the in-scope keeper's match data should succeed (positive check)
+      const { data: kaMatches } = await dClient.from("matches").select("id, keeper_id").eq("keeper_id", target.keeperA.id).limit(5);
+      record("D-dash CAN read keeper_A's matches (rows OK, no leak)", "info",
+        !!kaMatches, `rows=${(kaMatches || []).length} (positive — non-zero only if matches exist)`);
     } else {
-      console.log("\n(Skipping D-scoped tests — coach only has 1 keeper.)");
+      console.log("\n(Skipping D-scoped and D-dash tests — coach only has 1 keeper.)");
     }
 
   } finally {
