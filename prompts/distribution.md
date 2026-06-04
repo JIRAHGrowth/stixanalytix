@@ -128,7 +128,10 @@ For each distribution event, report these fields:
 - `receiver`: `defender` / `midfielder` / `forward` / `out_of_play` / `opponent`. Best-judgement based on which player picked up the ball.
 - `first_touch`: how the GK handled the ball before releasing — `clean`, `heavy`, `two_touches`, `mishit`. Optional but useful for technique assessment.
 - `notes`: 1-2 sentences for any coaching-relevant observation. Optional.
-- `confidence`: `high`, `medium`, or `low`.
+- `confidence`: ONE of `high`, `medium`, or `low` — assigned by the following criteria, not by gut feel. Downstream filtering uses this field, so calibrate it honestly. The model has a known training bias toward `high` on every event; treat that bias as something you must override.
+  - `high` — **All four of the following are true:** (a) the release was clean (ball travelled ≥5 yards in a single action, not a settling touch or intermediate touch); (b) `trigger` is unambiguous from the preceding sequence (you saw the goal kick set up / saw the save / saw the backpass arrive); (c) `type` is clearly visible (foot strike vs hand throw vs drop-kick — all distinguishable); (d) `direction` AND `receiver` are observable.
+  - `medium` — Release is clearly the analyzed GK and ≥5 yards, BUT one of: `trigger` is ambiguous, `type` is unclear (e.g. hand vs foot off-frame), `direction` is observable but `receiver` is not (ball goes to contested area), or `press_state: unclear` because the GK is partially obscured.
+  - `low` — You suspect this is a distribution but evidence is thin: the GK's contact with the ball is brief and might be a settling touch, the ball doesn't travel a clear distance before the camera cuts, or you cannot tell if it was the analyzed GK vs the opposition GK. Note: Rule A in reconciliation drops `low` distribution events — use it intentionally as a "this looked plausible but I am not sure" signal, not as a default.
 
 # Self-check before you return
 

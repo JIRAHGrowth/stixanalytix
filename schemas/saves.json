@@ -1,0 +1,36 @@
+{
+  "$comment": "Gemini response-schema contract for the saves prompt. See schemas/goals.json header for the sync discipline.",
+  "type": "OBJECT",
+  "properties": {
+    "saves": {
+      "type": "ARRAY",
+      "items": {
+        "type": "OBJECT",
+        "properties": {
+          "timestamp_seconds":      { "type": "INTEGER" },
+          "match_clock":            { "type": "STRING" },
+          "shot_origin":            { "type": "STRING" },
+          "shot_type":              { "type": "STRING" },
+          "on_target":              { "type": "STRING" },
+          "gk_action":              { "type": "STRING" },
+          "gk_visible":             { "type": "STRING" },
+          "outcome":                { "type": "STRING" },
+          "body_distance_zone":     { "type": "STRING" },
+          "goal_placement_height":  { "type": "STRING" },
+          "goal_placement_side":    { "type": "STRING" },
+          "shot_description":       { "type": "STRING" },
+          "preceding_attack":       { "type": "STRING" },
+          "gk_observations":        { "type": "STRING" },
+          "confidence":             { "type": "STRING" }
+        },
+        "required": [
+          "timestamp_seconds", "match_clock", "shot_origin", "shot_type",
+          "on_target", "gk_action", "gk_visible", "outcome",
+          "body_distance_zone", "goal_placement_height", "goal_placement_side",
+          "shot_description", "preceding_attack", "gk_observations", "confidence"
+        ]
+      }
+    }
+  },
+  "required": ["saves"]
+}

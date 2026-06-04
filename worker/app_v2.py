@@ -48,6 +48,7 @@ IMAGE = (
         "fastapi[standard]>=0.115.0",
     )
     .add_local_dir("prompts", remote_path="/root/prompts")
+    .add_local_dir("schemas", remote_path="/root/schemas")
 )
 
 app = modal.App("stixanalytix-worker-vertex")
@@ -55,122 +56,24 @@ secret = modal.Secret.from_name("stix-env-vertex")
 
 
 # ============================================================================
-# Response schemas — duplicated from worker/app.py for canary isolation.
-# Consolidation into a shared worker/lib_core.py happens post-cutover.
+# Response schemas — loaded from schemas/*.json so this canary stays in sync
+# with the production worker (worker/app.py) and the JS test harness.
 # ============================================================================
 
-GOALS_RESPONSE_SCHEMA = {
-    "type": "OBJECT",
-    "properties": {
-        "goals": {
-            "type": "ARRAY",
-            "items": {
-                "type": "OBJECT",
-                "properties": {
-                    "timestamp_seconds": {"type": "INTEGER"},
-                    "match_clock": {"type": "STRING"},
-                    "scoring_team": {"type": "STRING"},
-                    "conceding_team": {"type": "STRING"},
-                    "scoreboard_before": {"type": "STRING"},
-                    "scoreboard_after": {"type": "STRING"},
-                    "attack_type": {"type": "STRING"},
-                    "buildup": {"type": "STRING"},
-                    "shot_type": {"type": "STRING"},
-                    "shot_location": {"type": "STRING"},
-                    "goal_placement_height": {"type": "STRING"},
-                    "goal_placement_side": {"type": "STRING"},
-                    "gk_observations": {"type": "STRING"},
-                    "evidence_kickoff_after": {"type": "STRING"},
-                    "evidence_celebration": {"type": "STRING"},
-                    "evidence_scoreboard": {"type": "STRING"},
-                    # Phase 2.6 — direct shooter-kit observation (mirrors worker/app.py).
-                    "evidence_shooter_color": {"type": "STRING"},
-                    "confidence": {"type": "STRING"},
-                },
-                "required": [
-                    "timestamp_seconds", "match_clock", "scoring_team",
-                    "conceding_team", "scoreboard_before", "scoreboard_after",
-                    "attack_type", "buildup", "shot_type", "shot_location",
-                    "goal_placement_height", "goal_placement_side",
-                    "gk_observations",
-                    "evidence_kickoff_after", "evidence_celebration", "evidence_scoreboard",
-                    "evidence_shooter_color",
-                    "confidence",
-                ],
-            },
-        }
-    },
-    "required": ["goals"],
-}
+def _load_schema(name: str) -> dict:
+    for base in ("/root/schemas", os.path.join(os.path.dirname(__file__), "..", "schemas")):
+        path = os.path.join(base, f"{name}.json")
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                schema = json.load(f)
+            schema.pop("$comment", None)
+            return schema
+    raise FileNotFoundError(f"schemas/{name}.json not found in /root/schemas or repo-root schemas/")
 
-SAVES_RESPONSE_SCHEMA = {
-    "type": "OBJECT",
-    "properties": {
-        "saves": {
-            "type": "ARRAY",
-            "items": {
-                "type": "OBJECT",
-                "properties": {
-                    "timestamp_seconds": {"type": "INTEGER"},
-                    "match_clock": {"type": "STRING"},
-                    "shot_origin": {"type": "STRING"},
-                    "shot_type": {"type": "STRING"},
-                    "on_target": {"type": "STRING"},
-                    "gk_action": {"type": "STRING"},
-                    "gk_visible": {"type": "STRING"},
-                    "outcome": {"type": "STRING"},
-                    "body_distance_zone": {"type": "STRING"},
-                    "goal_placement_height": {"type": "STRING"},
-                    "goal_placement_side": {"type": "STRING"},
-                    "shot_description": {"type": "STRING"},
-                    # Phase 2.6 — antecedent-attack requirement (mirrors worker/app.py).
-                    "preceding_attack": {"type": "STRING"},
-                    "gk_observations": {"type": "STRING"},
-                    "confidence": {"type": "STRING"},
-                },
-                "required": [
-                    "timestamp_seconds", "match_clock", "shot_origin", "shot_type",
-                    "on_target", "gk_action", "gk_visible", "outcome",
-                    "body_distance_zone", "goal_placement_height", "goal_placement_side",
-                    "shot_description", "preceding_attack", "gk_observations", "confidence",
-                ],
-            },
-        }
-    },
-    "required": ["saves"],
-}
 
-DISTRIBUTION_RESPONSE_SCHEMA = {
-    "type": "OBJECT",
-    "properties": {
-        "distribution": {
-            "type": "ARRAY",
-            "items": {
-                "type": "OBJECT",
-                "properties": {
-                    "timestamp_seconds": {"type": "INTEGER"},
-                    "match_clock": {"type": "STRING"},
-                    "trigger": {"type": "STRING"},
-                    "type": {"type": "STRING"},
-                    "successful": {"type": "STRING"},
-                    "press_state": {"type": "STRING"},
-                    "pass_selection": {"type": "STRING"},
-                    "direction": {"type": "STRING"},
-                    "receiver": {"type": "STRING"},
-                    "first_touch": {"type": "STRING"},
-                    "notes": {"type": "STRING"},
-                    "confidence": {"type": "STRING"},
-                },
-                "required": [
-                    "timestamp_seconds", "match_clock", "trigger", "type",
-                    "successful", "press_state", "direction", "receiver",
-                    "confidence",
-                ],
-            },
-        }
-    },
-    "required": ["distribution"],
-}
+GOALS_RESPONSE_SCHEMA = _load_schema("goals")
+SAVES_RESPONSE_SCHEMA = _load_schema("saves")
+DISTRIBUTION_RESPONSE_SCHEMA = _load_schema("distribution")
 
 
 # ============================================================================

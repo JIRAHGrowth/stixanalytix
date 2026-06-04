@@ -1,0 +1,32 @@
+{
+  "$comment": "Gemini response-schema contract for the distribution prompt. See schemas/goals.json header for the sync discipline.",
+  "type": "OBJECT",
+  "properties": {
+    "distribution": {
+      "type": "ARRAY",
+      "items": {
+        "type": "OBJECT",
+        "properties": {
+          "timestamp_seconds":  { "type": "INTEGER" },
+          "match_clock":        { "type": "STRING" },
+          "trigger":            { "type": "STRING" },
+          "type":               { "type": "STRING" },
+          "successful":         { "type": "STRING" },
+          "press_state":        { "type": "STRING" },
+          "pass_selection":     { "type": "STRING" },
+          "direction":          { "type": "STRING" },
+          "receiver":           { "type": "STRING" },
+          "first_touch":        { "type": "STRING" },
+          "notes":              { "type": "STRING" },
+          "confidence":         { "type": "STRING" }
+        },
+        "required": [
+          "timestamp_seconds", "match_clock", "trigger", "type",
+          "successful", "press_state", "direction", "receiver",
+          "confidence"
+        ]
+      }
+    }
+  },
+  "required": ["distribution"]
+}

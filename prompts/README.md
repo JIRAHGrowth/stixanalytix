@@ -19,8 +19,8 @@ Referenced from:
 ## Rules of editing
 
 1. **The prompt files are the contract.** Do not inline-duplicate the prompt text in code. Every consumer reads from the file.
-2. **The response schema lives with the consumer code**, not here. If you add a field to the prompt, add it to the consumer's `RESPONSE_SCHEMA` in the same change — the schema is the parser's contract, the prompt is the model's contract, and they must match.
-3. **Change carries over to the next run automatically.** No code change needed to iterate.
+2. **The response schema lives in [`schemas/`](../schemas/), one file per prompt.** [`schemas/goals.json`](../schemas/goals.json), [`schemas/saves.json`](../schemas/saves.json), [`schemas/distribution.json`](../schemas/distribution.json) are imported by the Python worker (`worker/app.py`, `worker/app_v2.py`) AND the JS test harness (`scripts/test-gemini-match.js`) so a field can't be in the prompt while missing from one consumer. If you add a field to a prompt, edit the matching `schemas/*.json` in the same commit.
+3. **Change carries over to the next run automatically.** No code change needed to iterate prompt prose.
 4. **Log material prompt changes in the changelog below** so future chats can see what we've tried. Keep entries short.
 
 ## Template variables
@@ -31,6 +31,8 @@ Some prompts use `{{double_brace}}` placeholders. The consumer is responsible fo
 
 ## Changelog
 
+- **2026-06-04** — Confidence calibration. Replaced the single line `- confidence: "high", "medium", or "low".` in [goals.md](goals.md), [saves.md](saves.md), and [distribution.md](distribution.md) with explicit tier criteria keyed off fields each prompt already requires (evidence-field count + shooter-color + timestamp tolerance for goals; preceding-attack specificity + gk_visible + on_target + body_distance_zone for saves; release cleanliness + trigger/type/direction/receiver observability for distribution). Each tier description names the known training bias toward "high" and tells the model to override it. Paired with [worker/app.py](../worker/app.py) reconciliation Rule A becoming a per-event-type confidence floor (currently `low` for all three types).
+- **2026-06-04** — Unified the response schemas into [`schemas/*.json`](../schemas/) (one file per prompt) and loaded them from both `worker/app.py` and `scripts/test-gemini-match.js`. The JS test harness was previously stale (missing the four `evidence_*` fields added in Phase 2.6) — that drift is now structurally impossible. Also fixed the editing rule above (response schema no longer "lives with the consumer code").
 - **2026-05-26** — Prompt v3 (all three) + reconciliation Rules F/G. Driven by the judah-2026-05-23-pfc match (KCITY 15-0 W) where the model produced 14 goals / 55 saves / 50 dist vs ground truth 15 / 4 / 15. Three independent fixes:
   - **goals.md** — added per-chunk kit-anchor preamble (Step 0a/0b/0c), known-model-bias warning, mandatory `evidence_shooter_color` field, team-bias self-audit step. Forces the model to commit to the shooter's observed kit colour rather than infer scoring_team from celebrations or kickoffs. Targets the 6/14 wrong-team flips this match exposed (100% of "analyzed-team conceded" labels were wrong; 50% of "opposition conceded" labels were wrong — directional bias confirmed).
   - **saves.md** — removed the "0 saves in a chunk means you missed something" floor that was forcing hallucinations on dominant-win matches (this match: 51 of 55 saves were inventions). Added match-shape awareness (one-sided matches expect 0-3 saves). Added mandatory `preceding_attack` field — a save requires a describable opposition attack sequence. Added explicit anti-examples (backpass collection, loose-ball pickup, distribution moments are NOT saves).

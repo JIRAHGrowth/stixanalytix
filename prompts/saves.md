@@ -234,7 +234,10 @@ Do NOT output. This was not a shot at the analyzed team's goal — it was a pass
 - `shot_description`: short sentence — type of shot (volley/tap-in/driven/curled/header/etc.) and channel attacked.
 - `preceding_attack`: 1-2 sentences describing the opposition attack sequence in the 3-5 seconds BEFORE the shot. Example: "{{opponent_color}} #7 received the ball wide right, beat the full-back inside, drove to the byline and pulled back across the six-yard box to #9 who struck first time." If you cannot describe the opposition attack, do NOT log the event — it is a GK touch or non-event, not a save.
 - `gk_observations`: 1-2 sentences using canonical technique vocabulary (smother / K-barrier / strong parry / starfish / set-set / etc.) where applicable. Off-camera = say so.
-- `confidence`: `high`, `medium`, or `low`.
+- `confidence`: ONE of `high`, `medium`, or `low` — assigned by the following criteria, not by gut feel. Downstream filtering uses this field, so calibrate it honestly. The model has a known training bias toward `high` on every event; treat that bias as something you must override.
+  - `high` — **All three of the following are true:** (a) `preceding_attack` describes a SPECIFIC opposition attack sequence with named channels/players/actions (not generic "opposition attacked"); (b) `gk_visible: yes` AND the moment of contact is on-screen; (c) `on_target: yes` AND `body_distance_zone` is identifiable (A, B, or C — not `unclear`).
+  - `medium` — Exactly one of: `preceding_attack` is observable but lacks specifics (e.g. "winger crossed in"), OR `gk_visible: partial`, OR `on_target: unclear`, OR `body_distance_zone: unclear`.
+  - `low` — Save is inferred from incomplete frames: loose-ball pickup with no clear opposition shot, ambiguous touch you suspect was a save, or `gk_visible: no` with the outcome inferred from the next frame. Note: most events you would have marked `low` should instead be dropped per the "describe a real opposition attack" rule above.
 
 # Self-check before you return
 

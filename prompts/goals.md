@@ -137,7 +137,10 @@ For each confirmed goal, report these fields:
 
 **These three fields are the schema-level enforcement of the two-of-three rule.** Be honest. The system will reject any goal where fewer than 2 of these fields contain an affirmative observation. If you cannot honestly fill 2 of them, do not output the goal — it is a near-miss or hallucination.
 
-- `confidence`: "high", "medium", or "low".
+- `confidence`: ONE of "high", "medium", or "low" — assigned by the following criteria, not by gut feel. Downstream filtering uses this field, so calibrate it honestly. The model has a known training bias toward "high" on every event; treat that bias as something you must override.
+  - `high` — **All three of the following are true:** (a) all three of `evidence_kickoff_after` / `evidence_celebration` / `evidence_scoreboard` are affirmative observations (NOT `not_observed`, `scoreboard_not_visible`, or `scoreboard_unchanged`); (b) `evidence_shooter_color` is a confident description of the shooter's observed kit (NOT `shooter_not_visible`); (c) `timestamp_seconds` is anchored to the moment the ball crosses the line within ±2 seconds.
+  - `medium` — Exactly 2 of the three core evidence fields are affirmative, OR `evidence_shooter_color` is `shooter_not_visible`, OR you can only localise `timestamp_seconds` within ±5 seconds.
+  - `low` — Only 1 evidence field is affirmative (this should already be rejected by Rule D — if you emit anyway, mark `low`), OR `timestamp_seconds` uncertainty exceeds ±5 seconds.
 
 # Self-check before you return
 

@@ -1,0 +1,42 @@
+{
+  "$comment": "Gemini response-schema contract for the goals prompt. Loaded by worker/app.py (Python) and scripts/test-gemini-match.js (JS). Types use Gemini Python SDK conventions (uppercase). JS loader converts to SchemaType enum. Update this file AND prompts/goals.md in the same change — prompts/README.md changelog tracks both.",
+  "type": "OBJECT",
+  "properties": {
+    "goals": {
+      "type": "ARRAY",
+      "items": {
+        "type": "OBJECT",
+        "properties": {
+          "timestamp_seconds":       { "type": "INTEGER" },
+          "match_clock":             { "type": "STRING" },
+          "scoring_team":            { "type": "STRING" },
+          "conceding_team":          { "type": "STRING" },
+          "scoreboard_before":       { "type": "STRING" },
+          "scoreboard_after":        { "type": "STRING" },
+          "attack_type":             { "type": "STRING" },
+          "buildup":                 { "type": "STRING" },
+          "shot_type":               { "type": "STRING" },
+          "shot_location":           { "type": "STRING" },
+          "goal_placement_height":   { "type": "STRING" },
+          "goal_placement_side":     { "type": "STRING" },
+          "gk_observations":         { "type": "STRING" },
+          "evidence_kickoff_after":  { "type": "STRING" },
+          "evidence_celebration":    { "type": "STRING" },
+          "evidence_scoreboard":     { "type": "STRING" },
+          "evidence_shooter_color":  { "type": "STRING" },
+          "confidence":              { "type": "STRING" }
+        },
+        "required": [
+          "timestamp_seconds", "match_clock", "scoring_team", "conceding_team",
+          "scoreboard_before", "scoreboard_after", "attack_type", "buildup",
+          "shot_type", "shot_location", "goal_placement_height",
+          "goal_placement_side", "gk_observations",
+          "evidence_kickoff_after", "evidence_celebration", "evidence_scoreboard",
+          "evidence_shooter_color",
+          "confidence"
+        ]
+      }
+    }
+  },
+  "required": ["goals"]
+}

@@ -38,39 +38,33 @@ if (VIDEOS[arg]) {
   process.exit(1);
 }
 
-// Prompt loaded from prompts/goals.md — single source of truth.
-// See prompts/README.md for editing rules.
+// Prompt + schema both load from the repo — single source of truth.
+// Prompt body: prompts/goals.md.  Response contract: schemas/goals.json.
+// See prompts/README.md for the sync discipline (edit both in the same change).
 const PROMPT = fs.readFileSync(path.join(__dirname, '..', 'prompts', 'goals.md'), 'utf8');
 
-const RESPONSE_SCHEMA = {
-  type: SchemaType.OBJECT,
-  properties: {
-    goals: {
-      type: SchemaType.ARRAY,
-      items: {
-        type: SchemaType.OBJECT,
-        properties: {
-          timestamp_seconds: { type: SchemaType.INTEGER },
-          match_clock: { type: SchemaType.STRING },
-          scoring_team: { type: SchemaType.STRING },
-          conceding_team: { type: SchemaType.STRING },
-          scoreboard_before: { type: SchemaType.STRING },
-          scoreboard_after: { type: SchemaType.STRING },
-          attack_type: { type: SchemaType.STRING },
-          buildup: { type: SchemaType.STRING },
-          shot_type: { type: SchemaType.STRING },
-          shot_location: { type: SchemaType.STRING },
-          goal_placement_height: { type: SchemaType.STRING },
-          goal_placement_side: { type: SchemaType.STRING },
-          gk_observations: { type: SchemaType.STRING },
-          confidence: { type: SchemaType.STRING },
-        },
-        required: ['timestamp_seconds', 'match_clock', 'scoring_team', 'conceding_team', 'scoreboard_before', 'scoreboard_after', 'attack_type', 'buildup', 'shot_type', 'shot_location', 'goal_placement_height', 'goal_placement_side', 'gk_observations', 'confidence'],
-      },
-    },
-  },
-  required: ['goals'],
+// schemas/*.json uses Gemini's Python convention ("OBJECT" / "STRING" etc.).
+// The JS SDK takes the SchemaType enum, so we tree-walk and convert.
+const TYPE_MAP = {
+  OBJECT: SchemaType.OBJECT, ARRAY: SchemaType.ARRAY,
+  STRING: SchemaType.STRING, INTEGER: SchemaType.INTEGER,
+  NUMBER: SchemaType.NUMBER, BOOLEAN: SchemaType.BOOLEAN,
 };
+function toSchemaTypeEnum(node) {
+  if (Array.isArray(node)) return node.map(toSchemaTypeEnum);
+  if (node && typeof node === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(node)) {
+      if (k === '$comment') continue;
+      out[k] = (k === 'type' && typeof v === 'string' && TYPE_MAP[v] != null) ? TYPE_MAP[v] : toSchemaTypeEnum(v);
+    }
+    return out;
+  }
+  return node;
+}
+const RESPONSE_SCHEMA = toSchemaTypeEnum(
+  JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'schemas', 'goals.json'), 'utf8'))
+);
 
 function fmtTime(seconds) {
   const m = Math.floor(seconds / 60);

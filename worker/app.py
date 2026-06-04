@@ -27,144 +27,113 @@ IMAGE = (
     )
     .add_local_file("worker/chunking.py", remote_path="/root/chunking.py")
     .add_local_dir("prompts", remote_path="/root/prompts")
+    .add_local_dir("schemas", remote_path="/root/schemas")
 )
 
 app = modal.App("stixanalytix-worker")
 secret = modal.Secret.from_name("stix-env")
 
 
-GOALS_RESPONSE_SCHEMA = {
-    "type": "OBJECT",
-    "properties": {
-        "goals": {
-            "type": "ARRAY",
-            "items": {
-                "type": "OBJECT",
-                "properties": {
-                    "timestamp_seconds": {"type": "INTEGER"},
-                    "match_clock": {"type": "STRING"},
-                    "scoring_team": {"type": "STRING"},
-                    "conceding_team": {"type": "STRING"},
-                    "scoreboard_before": {"type": "STRING"},
-                    "scoreboard_after": {"type": "STRING"},
-                    "attack_type": {"type": "STRING"},
-                    "buildup": {"type": "STRING"},
-                    "shot_type": {"type": "STRING"},
-                    "shot_location": {"type": "STRING"},
-                    "goal_placement_height": {"type": "STRING"},
-                    "goal_placement_side": {"type": "STRING"},
-                    "gk_observations": {"type": "STRING"},
-                    # Phase 2.4 — structured evidence forces the model to commit
-                    # to verification per the two-of-three rule in prompts/goals.md.
-                    # Reconciliation drops goals where fewer than 2 of these are
-                    # affirmative, matching the press_state schema-rename technique
-                    # that broke Gemini's training bias on under_pressure.
-                    "evidence_kickoff_after": {"type": "STRING"},     # "kickoff at MM:SS" or "not_observed"
-                    "evidence_celebration": {"type": "STRING"},       # description of celebration or "not_observed"
-                    "evidence_scoreboard": {"type": "STRING"},        # "X-Y -> X-Y+1" or "scoreboard_not_visible" or "scoreboard_unchanged"
-                    # Phase 2.6 — direct observation of the shooter's kit colour at the moment
-                    # of contact. Breaks the "infer scoring_team from celebration/kickoff"
-                    # failure mode that produced 6/14 wrong-team flips on judah-2026-05-23-pfc.
-                    "evidence_shooter_color": {"type": "STRING"},     # plain description of observed shooter kit, or "shooter_not_visible"
-                    "confidence": {"type": "STRING"},
-                },
-                "required": [
-                    "timestamp_seconds", "match_clock", "scoring_team",
-                    "conceding_team", "scoreboard_before", "scoreboard_after",
-                    "attack_type", "buildup", "shot_type", "shot_location",
-                    "goal_placement_height", "goal_placement_side",
-                    "gk_observations",
-                    "evidence_kickoff_after", "evidence_celebration", "evidence_scoreboard",
-                    "evidence_shooter_color",
-                    "confidence",
-                ],
-            },
-        }
-    },
-    "required": ["goals"],
-}
+# Response schemas — single source of truth lives in schemas/*.json so the
+# Python worker and the JS test harness (scripts/test-gemini-match.js) parse
+# from the same contract. Update the JSON file AND the matching prompt in
+# the same change; see prompts/README.md for the discipline.
+def _load_schema(name: str) -> dict:
+    """Load a response schema from /root/schemas (Modal) or schemas/ (local)."""
+    import json as _json
+    for base in ("/root/schemas", os.path.join(os.path.dirname(__file__), "..", "schemas")):
+        path = os.path.join(base, f"{name}.json")
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                schema = _json.load(f)
+            schema.pop("$comment", None)
+            return schema
+    raise FileNotFoundError(f"schemas/{name}.json not found in /root/schemas or repo-root schemas/")
 
-# Phase 2.1 — every save event facing the analyzed team's goal.
-# Reflects the existing pitchside vocabulary so the dashboard can read both
-# manually-logged and auto-tagged events identically.
-SAVES_RESPONSE_SCHEMA = {
-    "type": "OBJECT",
-    "properties": {
-        "saves": {
-            "type": "ARRAY",
-            "items": {
-                "type": "OBJECT",
-                "properties": {
-                    "timestamp_seconds": {"type": "INTEGER"},
-                    "match_clock": {"type": "STRING"},
-                    "shot_origin": {"type": "STRING"},      # 6yard / boxL / boxC / boxR / outL / outC / outR / cornerL / cornerR / unclear
-                    "shot_type": {"type": "STRING"},        # Foot / Header / Deflection
-                    "on_target": {"type": "STRING"},        # yes / no / unclear
-                    "gk_action": {"type": "STRING"},        # Catch / Block / Parry / Deflect / Punch / Missed / Goal / unclear
-                    "gk_visible": {"type": "STRING"},       # yes / partial / no
-                    "outcome": {"type": "STRING"},          # held / rebound_safe / rebound_dangerous / corner / out_of_play / goal
-                    "body_distance_zone": {"type": "STRING"},  # A (near body) / B (within 2 yards) / C (full extension) / unclear — Mike Salmon framing
-                    "goal_placement_height": {"type": "STRING"},  # top / mid / low / unclear (where the shot WOULD have gone if not saved)
-                    "goal_placement_side": {"type": "STRING"},    # left_third / centre / right_third / unclear (GK perspective)
-                    "shot_description": {"type": "STRING"},
-                    # Phase 2.6 — antecedent-attack requirement. Drives Rule F:
-                    # without a describable opposition attack, the event is a GK
-                    # touch, not a save. Targets the 92.7% FP rate seen on the
-                    # judah-2026-05-23-pfc dominant-win match.
-                    "preceding_attack": {"type": "STRING"},
-                    "gk_observations": {"type": "STRING"},
-                    "confidence": {"type": "STRING"},       # high / medium / low
-                },
-                "required": [
-                    "timestamp_seconds", "match_clock", "shot_origin", "shot_type",
-                    "on_target", "gk_action", "gk_visible", "outcome",
-                    "body_distance_zone", "goal_placement_height", "goal_placement_side",
-                    "shot_description", "preceding_attack", "gk_observations", "confidence",
-                ],
-            },
-        }
-    },
-    "required": ["saves"],
-}
 
-# Phase 2.2 — every distribution event by the analyzed team's GK.
-# Field set mirrors prompts/distribution.md and the dashboard's distribution
-# section. STRING used everywhere even for booleans so Gemini can return
-# "unclear" when it can't tell — schema validators don't accept mixed types.
-DISTRIBUTION_RESPONSE_SCHEMA = {
-    "type": "OBJECT",
-    "properties": {
-        "distribution": {
-            "type": "ARRAY",
-            "items": {
-                "type": "OBJECT",
-                "properties": {
-                    "timestamp_seconds": {"type": "INTEGER"},
-                    "match_clock": {"type": "STRING"},
-                    "trigger": {"type": "STRING"},             # goal_kick / after_save / backpass / loose_ball / throw_in_to_gk / free_kick_to_gk
-                    "type": {"type": "STRING"},                # gk_short / gk_long / throw / pass / drop_kick
-                    "successful": {"type": "STRING"},          # true / false / unclear
-                    # Phase 2.4 — renamed from under_pressure(bool) to press_state(enum)
-                    # Gemini's boolean default-to-true bias was unbreakable via prompt;
-                    # a new field name with explicit selection forces the model to pick.
-                    "press_state": {"type": "STRING"},         # unpressed / pressed / unclear
-                    "pass_selection": {"type": "STRING"},      # see prompt
-                    "direction": {"type": "STRING"},           # left / centre / right / backwards
-                    "receiver": {"type": "STRING"},            # defender / midfielder / forward / out_of_play / opponent
-                    "first_touch": {"type": "STRING"},         # clean / heavy / two_touches / mishit
-                    "notes": {"type": "STRING"},
-                    "confidence": {"type": "STRING"},          # high / medium / low
-                },
-                "required": [
-                    "timestamp_seconds", "match_clock", "trigger", "type",
-                    "successful", "press_state", "direction", "receiver",
-                    "confidence",
-                ],
-            },
-        }
-    },
-    "required": ["distribution"],
-}
+GOALS_RESPONSE_SCHEMA = _load_schema("goals")
+SAVES_RESPONSE_SCHEMA = _load_schema("saves")
+DISTRIBUTION_RESPONSE_SCHEMA = _load_schema("distribution")
+
+
+# === pipeline_runs instrumentation ==================================================
+# Per-stage rows in the pipeline_runs table give us (a) resume-from-checkpoint
+# on chunked jobs and (b) queryable timings + token usage. All three helpers
+# below swallow their own errors — instrumentation must never break the run.
+
+def _pipeline_log_start(sb, job_id, stage, chunk_index=None, prompt_kind=None,
+                        pass_index=None, model_name=None):
+    """Insert a 'running' row, return its UUID (or None on failure).
+
+    Also emits a structured JSON line so log scrapers can correlate stages
+    without going to Postgres.
+    """
+    import json as _json
+    from datetime import datetime as _dt
+    try:
+        res = sb.table("pipeline_runs").insert({
+            "video_job_id": job_id,
+            "stage": stage,
+            "chunk_index": chunk_index,
+            "prompt_kind": prompt_kind,
+            "pass_index": pass_index,
+            "model_name": model_name,
+            "status": "running",
+        }).execute()
+        run_id = res.data[0]["id"] if res.data else None
+        print(_json.dumps({
+            "evt": "pipeline_start",
+            "job_id": job_id, "run_id": run_id, "stage": stage,
+            "chunk_index": chunk_index, "prompt_kind": prompt_kind,
+            "pass_index": pass_index, "model_name": model_name,
+            "ts": _dt.utcnow().isoformat() + "Z",
+        }), flush=True)
+        return run_id
+    except Exception as e:
+        print(f"[pipeline_runs] start log failed (non-fatal): {e}", flush=True)
+        return None
+
+
+def _pipeline_log_finish(sb, run_id, status, *, duration_ms=None,
+                          usage_metadata=None, result_payload=None,
+                          error_message=None):
+    """Mark a started row as completed/failed/skipped + persist outputs."""
+    import json as _json
+    from datetime import datetime as _dt
+    if not run_id:
+        return
+    try:
+        sb.table("pipeline_runs").update({
+            "status": status,
+            "finished_at": _dt.utcnow().isoformat() + "Z",
+            "duration_ms": duration_ms,
+            "usage_metadata": usage_metadata,
+            "result_payload": result_payload,
+            "error_message": error_message,
+        }).eq("id", run_id).execute()
+        print(_json.dumps({
+            "evt": "pipeline_finish",
+            "run_id": run_id, "status": status,
+            "duration_ms": duration_ms,
+            "ts": _dt.utcnow().isoformat() + "Z",
+            "tokens_total": (usage_metadata or {}).get("total_token_count"),
+            "error": error_message,
+        }), flush=True)
+    except Exception as e:
+        print(f"[pipeline_runs] finish log failed (non-fatal): {e}", flush=True)
+
+
+def _pipeline_load_completed(sb, job_id):
+    """Return the list of 'completed' rows for this job — fuel for resume."""
+    try:
+        res = sb.table("pipeline_runs").select(
+            "stage,chunk_index,prompt_kind,pass_index,"
+            "usage_metadata,result_payload,duration_ms"
+        ).eq("video_job_id", job_id).eq("status", "completed").execute()
+        return res.data or []
+    except Exception as e:
+        print(f"[pipeline_runs] load_completed failed (non-fatal): {e}", flush=True)
+        return []
 
 
 def _filter_low_signal_saves(saves: list) -> list:
@@ -231,17 +200,41 @@ def _reconcile_events(goals: list, saves: list, distribution: list) -> tuple:
     def _has_ts(e):
         return isinstance(e.get("timestamp_seconds"), (int, float))
 
-    # === A: confidence threshold on distribution ===
-    # Only drop "low" confidence — empirically (eval 2026-05-04), dropping
-    # "medium" too cut recall in half because Gemini tags real but
-    # hard-to-classify distributions as medium. Medium confidence on the
-    # type field is fine; the event still happened.
+    # === A: per-event-type confidence floor ===
+    # Drop events whose confidence falls below the floor for that event type.
+    # Floors are empirical:
+    #   - distribution: "low" floor (drop only "low"). Validated 2026-05-04:
+    #     dropping "medium" too cut recall in half because Gemini tags real
+    #     but hard-to-classify distributions as medium.
+    #   - goals: "low" floor. Goals with <2 evidence fields are already
+    #     dropped by Rule D, so a "low" goal that survives is suspect.
+    #   - saves: "low" floor. The saves prompt instructs the model to drop
+    #     events it would mark "low" (they're GK touches, not saves), so
+    #     this is belt-and-suspenders for cases where the model emits anyway.
+    # 2026-06-04: prompts now contain explicit per-tier criteria, so these
+    # floors will start to fire as the model produces variable confidence.
+    CONFIDENCE_FLOOR = {"goals": "low", "saves": "low", "distribution": "low"}
+
+    def _below_floor(event: dict, kind: str) -> bool:
+        floor = CONFIDENCE_FLOOR.get(kind)
+        if not floor:
+            return False
+        c = str(event.get("confidence", "")).strip().lower()
+        return c == floor
+
     n0 = len(distribution or [])
-    distribution = [
-        d for d in (distribution or [])
-        if str(d.get("confidence", "")).strip().lower() != "low"
-    ]
-    a_dropped = n0 - len(distribution)
+    distribution = [d for d in (distribution or []) if not _below_floor(d, "distribution")]
+    a_dist_dropped = n0 - len(distribution)
+
+    n0 = len(goals or [])
+    goals = [g for g in (goals or []) if not _below_floor(g, "goals")]
+    a_goals_dropped = n0 - len(goals)
+
+    n0 = len(saves or [])
+    saves = [s for s in (saves or []) if not _below_floor(s, "saves")]
+    a_saves_dropped = n0 - len(saves)
+
+    a_dropped = a_dist_dropped + a_goals_dropped + a_saves_dropped
 
     # === C: goal scoreboard delta check ===
     n0 = len(goals or [])
@@ -418,7 +411,7 @@ def _reconcile_events(goals: list, saves: list, distribution: list) -> tuple:
     g_dropped = n0_dist_g - len(distribution)
 
     print(
-        f"[reconcile] A:{a_dropped} dist (low/med conf) "
+        f"[reconcile] A:{a_dropped} (G:{a_goals_dropped} S:{a_saves_dropped} D:{a_dist_dropped} confidence<floor) "
         f"| C:{c_dropped} goals (scoreboard unchanged) "
         f"| D:{d_dropped} goals (evidence count <2) "
         f"| B1:{b1_dropped} saves (Goal-action near a goal) "
@@ -736,16 +729,26 @@ def process(job_id: str) -> dict:
         spatial_calibration = _build_spatial_calibration(meta)
 
         # === Download the source video to /tmp ===
+        download_run_id = _pipeline_log_start(sb, job_id, "download")
         download_start = time.time()
         print(f"[download] fetching video from storage...", flush=True)
-        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
-            r = requests.get(job["video_url"], stream=True, timeout=600)
-            r.raise_for_status()
-            for chunk in r.iter_content(chunk_size=1024 * 1024):
-                f.write(chunk)
-            video_path = f.name
-        size_mb = os.path.getsize(video_path) / (1024 * 1024)
-        print(f"[download] {size_mb:.1f} MB in {time.time() - download_start:.0f}s", flush=True)
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
+                r = requests.get(job["video_url"], stream=True, timeout=600)
+                r.raise_for_status()
+                for chunk in r.iter_content(chunk_size=1024 * 1024):
+                    f.write(chunk)
+                video_path = f.name
+            size_mb = os.path.getsize(video_path) / (1024 * 1024)
+            print(f"[download] {size_mb:.1f} MB in {time.time() - download_start:.0f}s", flush=True)
+            _pipeline_log_finish(sb, download_run_id, "completed",
+                duration_ms=int((time.time() - download_start) * 1000),
+                result_payload={"size_mb": round(size_mb, 1)})
+        except Exception as dl_err:
+            _pipeline_log_finish(sb, download_run_id, "failed",
+                duration_ms=int((time.time() - download_start) * 1000),
+                error_message=str(dl_err))
+            raise
 
         # === Optional chunking path ===
         # Set match_metadata.use_chunking = true to slice the video into ~10-min
@@ -808,17 +811,69 @@ def process(job_id: str) -> dict:
                     ("distribution", dist_template, DISTRIBUTION_RESPONSE_SCHEMA, all_dist, dist_passes)
                 )
 
+            # Resume support — load anything this job already completed (e.g. on
+            # a retry of a job that died mid-chunk). Skipped passes pull their
+            # events from result_payload instead of re-running Gemini.
+            done_runs = _pipeline_load_completed(sb, job_id)
+            done_keys = set()
+            replay = {}
+            for r in done_runs:
+                if r.get("stage") != "chunk_prompt":
+                    continue
+                ci, pk, pi = r.get("chunk_index"), r.get("prompt_kind"), r.get("pass_index")
+                if ci is None or pk is None:
+                    continue
+                key = (ci, pk, pi or 0)
+                done_keys.add(key)
+                payload = r.get("result_payload") or {}
+                replay[key] = payload.get(pk, []) if isinstance(payload, dict) else []
+                u = r.get("usage_metadata") or {}
+                if u:
+                    chunk_usages.append({
+                        "chunk": ci,
+                        "kind": pk if (r.get("pass_index") or 0) == 0 else f"{pk}#{(r.get('pass_index') or 0) + 1}",
+                        "resumed": True,
+                        **u,
+                    })
+            if done_keys:
+                print(f"[resume] skipping {len(done_keys)} passes already completed in a prior run", flush=True)
+
             for c in chunks:
+                # If every pass for this chunk is already done, skip the
+                # upload entirely and replay accumulated events into sinks.
+                needed = [
+                    (prompt_kind, pass_idx)
+                    for (prompt_kind, _t, _s, _sink, n) in prompt_passes
+                    for pass_idx in range(max(1, n))
+                    if (c.index, prompt_kind, pass_idx) not in done_keys
+                ]
+                if not needed:
+                    print(f"[chunk {c.index}] all {sum(max(1, n) for *_, n in prompt_passes)} passes resumed from prior run — skipping upload + generation", flush=True)
+                    for (prompt_kind, _t, _s, sink, n) in prompt_passes:
+                        for pass_idx in range(max(1, n)):
+                            sink.extend(replay.get((c.index, prompt_kind, pass_idx), []))
+                    continue
+
+                upload_run_id = _pipeline_log_start(sb, job_id, "chunk_upload", chunk_index=c.index)
+                upload_t0 = time.time()
                 print(f"[chunk {c.index}] uploading...", flush=True)
-                upl = genai.upload_file(path=c.path, mime_type="video/mp4")
-                wait_start = time.time()
-                while upl.state.name == "PROCESSING":
-                    if time.time() - wait_start > 10 * 60:
-                        raise RuntimeError(f"Gemini chunk {c.index} indexing exceeded 10 min")
-                    time.sleep(5)
-                    upl = genai.get_file(upl.name)
-                if upl.state.name != "ACTIVE":
-                    raise RuntimeError(f"Chunk {c.index} ended in state {upl.state.name}")
+                try:
+                    upl = genai.upload_file(path=c.path, mime_type="video/mp4")
+                    wait_start = time.time()
+                    while upl.state.name == "PROCESSING":
+                        if time.time() - wait_start > 10 * 60:
+                            raise RuntimeError(f"Gemini chunk {c.index} indexing exceeded 10 min")
+                        time.sleep(5)
+                        upl = genai.get_file(upl.name)
+                    if upl.state.name != "ACTIVE":
+                        raise RuntimeError(f"Chunk {c.index} ended in state {upl.state.name}")
+                    _pipeline_log_finish(sb, upload_run_id, "completed",
+                        duration_ms=int((time.time() - upload_t0) * 1000))
+                except Exception as up_err:
+                    _pipeline_log_finish(sb, upload_run_id, "failed",
+                        duration_ms=int((time.time() - upload_t0) * 1000),
+                        error_message=str(up_err))
+                    raise
 
                 # Inject the chunk's offset into the prompt so Gemini knows the
                 # segment is part of a longer match and how to interpret times.
@@ -845,23 +900,43 @@ def process(job_id: str) -> dict:
                     )
                     for pass_idx in range(max(1, n_passes)):
                         pass_label = f"{prompt_kind}" if n_passes <= 1 else f"{prompt_kind}#{pass_idx + 1}"
-                        print(f"[chunk {c.index}/{pass_label}] generating...", flush=True)
-                        resp = model.generate_content([upl, rendered])
+                        if (c.index, prompt_kind, pass_idx) in done_keys:
+                            print(f"[chunk {c.index}/{pass_label}] resuming from prior run", flush=True)
+                            sink.extend(replay.get((c.index, prompt_kind, pass_idx), []))
+                            continue
+
+                        run_id = _pipeline_log_start(sb, job_id, "chunk_prompt",
+                            chunk_index=c.index, prompt_kind=prompt_kind,
+                            pass_index=pass_idx, model_name=model_name)
+                        pass_t0 = time.time()
                         try:
-                            parsed = json.loads(resp.text)
-                        except json.JSONDecodeError:
-                            parsed = None
-                        events = (parsed or {}).get(prompt_kind, []) if parsed else []
-                        chunk_mod.offset_timestamps(events, c.start_seconds)
-                        sink.extend(events)
-                        usage = getattr(resp, "usage_metadata", None)
-                        if usage is not None:
-                            chunk_usages.append({
-                                "chunk": c.index, "kind": pass_label,
-                                "total_token_count": getattr(usage, "total_token_count", None),
-                                "prompt_token_count": getattr(usage, "prompt_token_count", None),
-                                "candidates_token_count": getattr(usage, "candidates_token_count", None),
-                            })
+                            print(f"[chunk {c.index}/{pass_label}] generating...", flush=True)
+                            resp = model.generate_content([upl, rendered])
+                            try:
+                                parsed = json.loads(resp.text)
+                            except json.JSONDecodeError:
+                                parsed = None
+                            events = (parsed or {}).get(prompt_kind, []) if parsed else []
+                            chunk_mod.offset_timestamps(events, c.start_seconds)
+                            sink.extend(events)
+                            usage = getattr(resp, "usage_metadata", None)
+                            usage_dict = None
+                            if usage is not None:
+                                usage_dict = {
+                                    "total_token_count": getattr(usage, "total_token_count", None),
+                                    "prompt_token_count": getattr(usage, "prompt_token_count", None),
+                                    "candidates_token_count": getattr(usage, "candidates_token_count", None),
+                                }
+                                chunk_usages.append({"chunk": c.index, "kind": pass_label, **usage_dict})
+                            _pipeline_log_finish(sb, run_id, "completed",
+                                duration_ms=int((time.time() - pass_t0) * 1000),
+                                usage_metadata=usage_dict,
+                                result_payload={prompt_kind: events})
+                        except Exception as gen_err:
+                            _pipeline_log_finish(sb, run_id, "failed",
+                                duration_ms=int((time.time() - pass_t0) * 1000),
+                                error_message=str(gen_err))
+                            raise
 
             # Dedupe overlap-zone duplicates
             all_goals = chunk_mod.dedupe_events(all_goals, tolerance_sec=15, key_fields=["scoring_team", "shot_type"])
@@ -872,17 +947,42 @@ def process(job_id: str) -> dict:
             all_saves = _filter_low_signal_saves(all_saves)
 
             # Cross-event reconciliation (Phase 2.3 — A+B+C)
-            all_goals, all_saves, all_dist = _reconcile_events(all_goals, all_saves, all_dist)
+            rec_run_id = _pipeline_log_start(sb, job_id, "reconcile")
+            rec_t0 = time.time()
+            in_g, in_s, in_d = len(all_goals), len(all_saves), len(all_dist)
+            try:
+                all_goals, all_saves, all_dist = _reconcile_events(all_goals, all_saves, all_dist)
+                _pipeline_log_finish(sb, rec_run_id, "completed",
+                    duration_ms=int((time.time() - rec_t0) * 1000),
+                    result_payload={
+                        "in": {"goals": in_g, "saves": in_s, "dist": in_d},
+                        "out": {"goals": len(all_goals), "saves": len(all_saves), "dist": len(all_dist)},
+                    })
+            except Exception as rec_err:
+                _pipeline_log_finish(sb, rec_run_id, "failed",
+                    duration_ms=int((time.time() - rec_t0) * 1000),
+                    error_message=str(rec_err))
+                raise
 
             # Generate per-event review clips from the source video. Mutates
             # each event in place to add `clip_storage_path`. The Next.js API
             # signs paths to URLs at request time.
+            clip_run_id = _pipeline_log_start(sb, job_id, "clips")
             print("[clips] generating per-event review clips...", flush=True)
             clip_start = time.time()
-            n_g = _generate_clips_for_events(video_path, all_goals, "goal", job_id, sb)
-            n_s = _generate_clips_for_events(video_path, all_saves, "save", job_id, sb)
-            n_d = _generate_clips_for_events(video_path, all_dist, "dist", job_id, sb)
-            print(f"[clips] produced {n_g} goal / {n_s} save / {n_d} dist clips in {time.time() - clip_start:.0f}s", flush=True)
+            try:
+                n_g = _generate_clips_for_events(video_path, all_goals, "goal", job_id, sb)
+                n_s = _generate_clips_for_events(video_path, all_saves, "save", job_id, sb)
+                n_d = _generate_clips_for_events(video_path, all_dist, "dist", job_id, sb)
+                print(f"[clips] produced {n_g} goal / {n_s} save / {n_d} dist clips in {time.time() - clip_start:.0f}s", flush=True)
+                _pipeline_log_finish(sb, clip_run_id, "completed",
+                    duration_ms=int((time.time() - clip_start) * 1000),
+                    result_payload={"goal_clips": n_g, "save_clips": n_s, "dist_clips": n_d})
+            except Exception as clip_err:
+                _pipeline_log_finish(sb, clip_run_id, "failed",
+                    duration_ms=int((time.time() - clip_start) * 1000),
+                    error_message=str(clip_err))
+                raise
 
             # Persist as if this had been one merged Gemini call
             sb.table("video_jobs").update({
