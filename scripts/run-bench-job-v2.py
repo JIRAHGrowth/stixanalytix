@@ -208,17 +208,26 @@ def _build_generate_config(
     schema: dict,
     media_resolution: gtypes.MediaResolution,
     cached_content_name: str | None,
+    model: str,
 ) -> gtypes.GenerateContentConfig:
-    """Build the GenerateContentConfig. thinking_budget=0 is the right setting
-    for deterministic JSON extraction (per Google's SFT tuning docs) — thinking
-    is wasted output tokens here. cached_content (if set) prepends a Vertex
-    cache containing the video+chunk_metadata so video tokens aren't re-billed
-    per call."""
+    """Build the GenerateContentConfig.
+
+    thinking_budget=0 disables thinking — right for deterministic JSON
+    extraction per Google's SFT tuning docs, but only Flash variants support
+    setting it to 0. Pro models reject thinking_budget=0 with INVALID_ARGUMENT
+    on Vertex, so we omit thinking_config for them and let the default apply.
+
+    cached_content (if set) prepends a Vertex cache containing the video +
+    chunk_metadata so video tokens aren't re-billed per call.
+    """
+    thinking_config = None
+    if "flash" in model.lower():
+        thinking_config = gtypes.ThinkingConfig(thinking_budget=0)
     return gtypes.GenerateContentConfig(
         response_mime_type="application/json",
         response_schema=schema,
         media_resolution=media_resolution,
-        thinking_config=gtypes.ThinkingConfig(thinking_budget=0),
+        thinking_config=thinking_config,
         cached_content=cached_content_name,
     )
 
@@ -306,7 +315,7 @@ def run_one_chunk_prompt(
             gtypes.Part(text=prompt),
         ]
 
-    config = _build_generate_config(schema, media_resolution, cached_content_name)
+    config = _build_generate_config(schema, media_resolution, cached_content_name, model)
     return _generate_with_retry(
         client, model, contents, config,
         label=f"chunk {chunk.index} {prompt_path.name}",
