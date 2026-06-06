@@ -138,20 +138,34 @@ function UploadPage() {
     const folder = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
     const objectPath = `${user.id}/${folder}/${safeName}`;
-    const endpoint = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/upload/resumable`;
+    // Use the direct-storage hostname (project-id.storage.supabase.co), not the
+    // API-gateway hostname (project-id.supabase.co). Supabase recommends this
+    // for large uploads — it bypasses the front-door proxy entirely, which
+    // (a) is faster on multi-GB streams and (b) sidesteps a known papercut
+    // where the gateway path returns "Invalid Compact JWS" on tus create.
+    const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+    const storageUrl = baseUrl.replace(/^https:\/\/([a-z0-9-]+)\.supabase\.co/i, "https://$1.storage.supabase.co");
+    const endpoint = `${storageUrl}/storage/v1/upload/resumable`;
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
     const upload = new tus.Upload(file, {
       endpoint,
       // ~5 min total retry budget — large match videos take 15-30 min and
       // home Wi-Fi blips routinely exceed the previous ~38s ceiling.
       retryDelays: [0, 3000, 5000, 10000, 20000, 30000, 60000, 120000],
+      // `apikey` is required alongside `authorization` on the storage tus
+      // endpoint — Supabase's React/Uppy example sets both, and storage
+      // returns "Invalid Compact JWS" when apikey is missing because some
+      // code paths try to JWT-decode the apikey header.
       headers: {
         authorization: `Bearer ${token}`,
+        apikey: anonKey,
         "x-upsert": "false",
       },
       onBeforeRequest: async (req) => {
         const fresh = await getFreshToken(supabase);
         req.setHeader("authorization", `Bearer ${fresh}`);
+        req.setHeader("apikey", anonKey);
       },
       uploadDataDuringCreation: true,
       removeFingerprintOnSuccess: true,
