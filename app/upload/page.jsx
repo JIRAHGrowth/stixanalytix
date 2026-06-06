@@ -204,9 +204,19 @@ function UploadPage() {
       chunkSize: 6 * 1024 * 1024,
       // status 0 = no response received (network drop). Retry; don't fall
       // through to onError, which kills the whole upload.
+      //
+      // 409 = Upload-Offset conflict. Happens when a PATCH actually succeeded
+      // server-side but the response was lost in transit — tus's automatic
+      // retry then re-sends the same chunk at a stale offset and storage
+      // rejects with 409. The tus protocol's recovery for this is exactly
+      // what tus-js-client does on retry: it sends a HEAD to learn the real
+      // server offset before re-issuing the PATCH. So we mark 409 as
+      // retryable and the library self-heals. Without this, a single
+      // mid-upload blip on a multi-GB file aborts the whole thing.
       onShouldRetry: (err) => {
         const status = err?.originalResponse?.getStatus?.();
         if (status === 0 || status === undefined) return true;
+        if (status === 409) return true;
         return status >= 500 || status === 408 || status === 429;
       },
       onError: (err) => {
