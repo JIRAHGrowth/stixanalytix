@@ -132,6 +132,17 @@ function UploadPage() {
     try { await getFreshToken(supabase, { forceRefresh: true }); }
     catch (e) { return reject(e); }
 
+    // Defensive: clear any tus URL-storage entries from previous failed
+    // uploads. tus-js-client only uses these if findPreviousUploads() is
+    // called (which we don't), but if a future change introduces resume
+    // behavior, we don't want a half-finished old upload to be silently
+    // resumed mid-session.
+    try {
+      Object.keys(localStorage)
+        .filter(k => k.startsWith("tus::"))
+        .forEach(k => localStorage.removeItem(k));
+    } catch { /* private mode / quota — non-fatal */ }
+
     const folder = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
     const objectPath = `${user.id}/${folder}/${safeName}`;
@@ -172,7 +183,16 @@ function UploadPage() {
         req.setHeader("authorization", `Bearer ${fresh}`);
         req.setHeader("apikey", anonKey);
       },
-      uploadDataDuringCreation: true,
+      // uploadDataDuringCreation:false intentionally — when true, the initial
+      // POST carries the first 6 MB chunk AND creates the upload. On any
+      // retry of that POST (CF blip, slow response, anything network-y), the
+      // server can process the chunk twice and advance its offset by 12 MB
+      // while the client only counts 6 MB — the next PATCH then arrives at
+      // a stale offset and storage returns "409 Upload-Offset conflict".
+      // Splitting create (POST, no body) from data (PATCH-only) eliminates
+      // that race entirely. Costs one extra round-trip per upload (~ms on
+      // a multi-GB upload, irrelevant).
+      uploadDataDuringCreation: false,
       removeFingerprintOnSuccess: true,
       metadata: {
         bucketName: "match-videos",
