@@ -127,12 +127,9 @@ function UploadPage() {
     // Stitched match videos on home Wi-Fi can upload longer than the ~1 hour
     // access-token TTL, and the upload page may have been idle for hours
     // before click. We FORCE a server-fresh token at start (bypassing the
-    // localStorage cache, which can hand back a corrupted/truncated token
-    // after a cross-tab race and trigger "Invalid Compact JWS" 403s from
-    // storage) AND re-stamp the Authorization header on every tus request
-    // via onBeforeRequest.
-    let token;
-    try { token = await getFreshToken(supabase, { forceRefresh: true }); }
+    // localStorage cache) so the session is warm before tus starts, and
+    // re-fetch a fresh token on every tus request via onBeforeRequest below.
+    try { await getFreshToken(supabase, { forceRefresh: true }); }
     catch (e) { return reject(e); }
 
     const folder = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -154,27 +151,20 @@ function UploadPage() {
       return reject(new Error("NEXT_PUBLIC_SUPABASE_ANON_KEY is not set in this environment. Check .env.local."));
     }
 
-    // Temporary diagnostic logging while we chase a persistent
-    // "Invalid Compact JWS" failure from storage. Strip once resolved.
-    const jwtParts = (s) => (typeof s === "string" ? s.split(".").length : "n/a");
-    const preview = (s) => (typeof s === "string" ? `${s.length}ch/${jwtParts(s)}seg/${s.slice(0, 12)}…${s.slice(-6)}` : `<${typeof s}>`);
-    console.log("[tus upload] endpoint:", endpoint);
-    console.log("[tus upload] token preview:", preview(token));
-    console.log("[tus upload] anonKey preview:", preview(anonKey));
-    console.log("[tus upload] objectPath:", objectPath);
-
     const upload = new tus.Upload(file, {
       endpoint,
       // ~5 min total retry budget — large match videos take 15-30 min and
       // home Wi-Fi blips routinely exceed the previous ~38s ceiling.
       retryDelays: [0, 3000, 5000, 10000, 20000, 30000, 60000, 120000],
-      // `apikey` is required alongside `authorization` on the storage tus
-      // endpoint — Supabase's React/Uppy example sets both, and storage
-      // returns "Invalid Compact JWS" when apikey is missing because some
-      // code paths try to JWT-decode the apikey header.
+      // Auth headers are deliberately NOT set here. tus-js-client uses
+      // XMLHttpRequest.setRequestHeader under the hood, which by the XHR
+      // spec APPENDS (", ") instead of replacing when called twice for the
+      // same header name. Setting `authorization` / `apikey` here AND in
+      // onBeforeRequest produced `Bearer <jwt>, Bearer <jwt>` on the wire,
+      // which storage rejected as "Invalid Compact JWS". Set auth ONLY in
+      // onBeforeRequest — it runs once per request and gives us the
+      // freshest token even across hours-long uploads.
       headers: {
-        authorization: `Bearer ${token}`,
-        apikey: anonKey,
         "x-upsert": "false",
       },
       onBeforeRequest: async (req) => {
