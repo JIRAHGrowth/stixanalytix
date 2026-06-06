@@ -126,10 +126,13 @@ function UploadPage() {
 
     // Stitched match videos on home Wi-Fi can upload longer than the ~1 hour
     // access-token TTL, and the upload page may have been idle for hours
-    // before click. We resolve a fresh token at start AND re-stamp the
-    // Authorization header on every tus request via onBeforeRequest.
+    // before click. We FORCE a server-fresh token at start (bypassing the
+    // localStorage cache, which can hand back a corrupted/truncated token
+    // after a cross-tab race and trigger "Invalid Compact JWS" 403s from
+    // storage) AND re-stamp the Authorization header on every tus request
+    // via onBeforeRequest.
     let token;
-    try { token = await getFreshToken(supabase); }
+    try { token = await getFreshToken(supabase, { forceRefresh: true }); }
     catch (e) { return reject(e); }
 
     const folder = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -167,7 +170,18 @@ function UploadPage() {
         if (status === 0 || status === undefined) return true;
         return status >= 500 || status === 408 || status === 429;
       },
-      onError: (err) => reject(new Error(`Upload failed: ${err.message || err}`)),
+      onError: (err) => {
+        const msg = err?.message || String(err);
+        // Storage rejects malformed/stale tokens with "Invalid Compact JWS"
+        // (403). It can only happen if both the forced refresh at upload
+        // start AND every per-request re-stamp also returned a bad token —
+        // i.e. the local session is genuinely broken. Tell the user how to
+        // recover instead of leaking the raw JWS error.
+        if (/Invalid Compact JWS|AccessDenied/i.test(msg)) {
+          return reject(new Error("Upload failed: your sign-in has expired. Sign out (top right) and sign back in, then retry the upload."));
+        }
+        reject(new Error(`Upload failed: ${msg}`));
+      },
       onProgress: (loaded, total) => {
         setUploadProgress(Math.round((loaded / total) * 100));
       },
