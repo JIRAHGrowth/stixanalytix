@@ -148,6 +148,21 @@ function UploadPage() {
     const endpoint = `${storageUrl}/storage/v1/upload/resumable`;
     const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+    // Hard-fail if anon key is missing — otherwise we'd silently send
+    // `apikey: undefined` and storage would return "Invalid Compact JWS".
+    if (!anonKey) {
+      return reject(new Error("NEXT_PUBLIC_SUPABASE_ANON_KEY is not set in this environment. Check .env.local."));
+    }
+
+    // Temporary diagnostic logging while we chase a persistent
+    // "Invalid Compact JWS" failure from storage. Strip once resolved.
+    const jwtParts = (s) => (typeof s === "string" ? s.split(".").length : "n/a");
+    const preview = (s) => (typeof s === "string" ? `${s.length}ch/${jwtParts(s)}seg/${s.slice(0, 12)}…${s.slice(-6)}` : `<${typeof s}>`);
+    console.log("[tus upload] endpoint:", endpoint);
+    console.log("[tus upload] token preview:", preview(token));
+    console.log("[tus upload] anonKey preview:", preview(anonKey));
+    console.log("[tus upload] objectPath:", objectPath);
+
     const upload = new tus.Upload(file, {
       endpoint,
       // ~5 min total retry budget — large match videos take 15-30 min and
@@ -186,14 +201,15 @@ function UploadPage() {
       },
       onError: (err) => {
         const msg = err?.message || String(err);
-        // Storage rejects malformed/stale tokens with "Invalid Compact JWS"
-        // (403). It can only happen if both the forced refresh at upload
-        // start AND every per-request re-stamp also returned a bad token —
-        // i.e. the local session is genuinely broken. Tell the user how to
-        // recover instead of leaking the raw JWS error.
-        if (/Invalid Compact JWS|AccessDenied/i.test(msg)) {
-          return reject(new Error("Upload failed: your sign-in has expired. Sign out (top right) and sign back in, then retry the upload."));
-        }
+        // Diagnostic dump — we want to see the FULL upstream error while
+        // chasing the persistent "Invalid Compact JWS" failure.
+        try {
+          const status = err?.originalResponse?.getStatus?.();
+          const body = err?.originalResponse?.getBody?.();
+          const reqUrl = err?.originalRequest?.getURL?.();
+          const reqMethod = err?.originalRequest?.getMethod?.();
+          console.error("[tus upload] error:", { status, body, reqMethod, reqUrl, msg });
+        } catch {}
         reject(new Error(`Upload failed: ${msg}`));
       },
       onProgress: (loaded, total) => {
