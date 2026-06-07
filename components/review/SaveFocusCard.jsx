@@ -74,7 +74,33 @@ export default function SaveFocusCard({
             </span>
           )}
         </div>
-        <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {/* Keeper attribution — "Opp" rows are kept as training data but
+              excluded from the analyzed keeper's dashboard rollups. */}
+          <div style={{ display: "flex", border: `1px solid ${r.keeper_team === "opp" ? t.orange : t.green}55`, borderRadius: 6, overflow: "hidden" }}>
+            <button
+              type="button"
+              onClick={() => set({ keeper_team: "us" })}
+              title="This save was by OUR keeper — counts toward stats"
+              style={{
+                padding: "5px 10px", fontSize: 11, fontWeight: 700, fontFamily: FONT,
+                background: r.keeper_team === "us" ? t.green : "transparent",
+                color: r.keeper_team === "us" ? "#fff" : t.dim,
+                border: "none", cursor: "pointer",
+              }}
+            >Ours</button>
+            <button
+              type="button"
+              onClick={() => set({ keeper_team: "opp" })}
+              title="This save was by the OPPOSITION keeper — preserved as training data, excluded from stats"
+              style={{
+                padding: "5px 10px", fontSize: 11, fontWeight: 700, fontFamily: FONT,
+                background: r.keeper_team === "opp" ? t.orange : "transparent",
+                color: r.keeper_team === "opp" ? "#fff" : t.dim,
+                border: "none", cursor: "pointer",
+              }}
+            >Opp</button>
+          </div>
           <button type="button" onClick={onPrev} disabled={index === 0} style={btnGhost(t, index === 0)}>← Prev</button>
           <button type="button" onClick={onNext} disabled={index >= total - 1} style={btnGhost(t, index >= total - 1)}>Skip →</button>
         </div>

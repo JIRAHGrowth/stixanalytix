@@ -320,6 +320,10 @@ export async function POST(request, { params }) {
           shot_description: s.shot_description || null,
           gk_observations: s.gk_observations || null,
           coach_notes: s.notes || null,
+          // 2026-06-06 — keeper-team attribution. 'us' / 'opp' / null.
+          // Review UI defaults from Gemini's call; coach can correct.
+          // null is treated as 'us' on dashboard reads (back-compat).
+          keeper_team: (s.keeper_team === 'us' || s.keeper_team === 'opp') ? s.keeper_team : null,
         };
       });
       const { error: seErr } = await admin.from('shot_events').insert(shotRows);
@@ -356,6 +360,8 @@ export async function POST(request, { params }) {
         notes: d.notes || null,
         confidence: d.confidence || null,
         source: 'video',
+        // 2026-06-06 — keeper-team attribution. See shot_events comment above.
+        keeper_team: (d.keeper_team === 'us' || d.keeper_team === 'opp') ? d.keeper_team : null,
       }));
       const { error: dErr } = await admin.from('distribution_events').insert(distRows);
       if (dErr) {

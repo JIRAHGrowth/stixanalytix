@@ -18,12 +18,13 @@
           "receiver":           { "type": "STRING" },
           "first_touch":        { "type": "STRING" },
           "notes":              { "type": "STRING" },
-          "confidence":         { "type": "STRING" }
+          "confidence":         { "type": "STRING" },
+          "keeper_team":        { "type": "STRING" }
         },
         "required": [
           "timestamp_seconds", "match_clock", "trigger", "type",
           "successful", "press_state", "direction", "receiver",
-          "confidence"
+          "confidence", "keeper_team"
         ]
       }
     }

@@ -21,13 +21,15 @@
           "shot_description":       { "type": "STRING" },
           "preceding_attack":       { "type": "STRING" },
           "gk_observations":        { "type": "STRING" },
-          "confidence":             { "type": "STRING" }
+          "confidence":             { "type": "STRING" },
+          "keeper_team":            { "type": "STRING" }
         },
         "required": [
           "timestamp_seconds", "match_clock", "shot_origin", "shot_type",
           "on_target", "gk_action", "gk_visible", "outcome",
           "body_distance_zone", "goal_placement_height", "goal_placement_side",
-          "shot_description", "preceding_attack", "gk_observations", "confidence"
+          "shot_description", "preceding_attack", "gk_observations", "confidence",
+          "keeper_team"
         ]
       }
     }

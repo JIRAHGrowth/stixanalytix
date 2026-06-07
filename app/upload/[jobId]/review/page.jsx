@@ -145,6 +145,11 @@ export default function ReviewPage() {
           receiver: d.receiver || "",
           first_touch: d.first_touch || "",
           notes: d.notes || "",
+          // 2026-06-06 — keeper-team attribution. Default to Gemini's call
+          // when it gave us one; otherwise default to "us" since most
+          // events should be the analyzed keeper's. "unclear" from Gemini
+          // collapses to "us" so the coach starts from a reasonable guess.
+          keeper_team: (d.keeper_team === 'us' || d.keeper_team === 'opp') ? d.keeper_team : 'us',
           gemini: d,
         };
       });
@@ -169,6 +174,8 @@ export default function ReviewPage() {
         goal_placement_height: s.goal_placement_height || "",
         goal_placement_side: s.goal_placement_side || "",
         notes: "",
+        // 2026-06-06 — keeper-team attribution. See distribution mapper above.
+        keeper_team: (s.keeper_team === 'us' || s.keeper_team === 'opp') ? s.keeper_team : 'us',
         // raw Gemini context preserved for review-diff and reference
         gemini: s,
         });
