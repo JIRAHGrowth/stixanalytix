@@ -25,7 +25,9 @@ export default function GoalHeatmap({ zones, title, theme }) {
           const label = ZONE_LABELS[z] || z;
           return (
             <div key={z} style={{
-              aspectRatio: "1.2", display: "flex", flexDirection: "column",
+              // Each cell 3:1 → 3 cols × 3 rows = 9 wide : 3 tall = 3:1 overall,
+              // matching a real soccer goal frame (24 ft × 8 ft).
+              aspectRatio: "3", display: "flex", flexDirection: "column",
               alignItems: "center", justifyContent: "center",
               background: v > 0 ? "rgba(239,68,68," + intensity + ")" : t.bg,
               borderRight: z.includes("R") ? "none" : "1px solid " + t.border,

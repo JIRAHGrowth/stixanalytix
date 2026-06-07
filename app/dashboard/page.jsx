@@ -24,7 +24,7 @@ import {
   fetchRankingContent as fetchRankingContentQ,
 } from "@/lib/queries";
 import {
-  pct, dec, computeZoneConversion,
+  pct, dec, computeZoneConversion, computeZoneConversionUnified,
   aggregateMatches, aggregateGoals, aggregateAttrs,
   aggregateQuarterly, buildMatchLog, genAlerts,
 } from "@/lib/stats";
@@ -562,8 +562,23 @@ export default function DashboardPage() {
     const last5 = sorted.slice(0, 5);
     const l5Ids = new Set(last5.map(m => m.id));
     const l5Goals = kGoals.filter(g => l5Ids.has(g.match_id));
-    const l5Attrs = kAttrs.filter(a => l5Ids.has(a.match_id));
     const l5ShotEvents = kShotEvents.filter(se => l5Ids.has(se.match_id));
+
+    // Attributes "last 5" used to be `kAttrs.filter(a => l5Ids.has(a.match_id))` —
+    // i.e. attribute rows that happen to belong to the 5 most recent matches.
+    // If the coach didn't complete the post-match rating screen for some of
+    // those matches, the window silently shrank to 2 or 3 rows and the
+    // average divided by that smaller count without telling anyone.
+    // Now we take the 5 most recent matches that ACTUALLY HAVE attribute
+    // rows. That matches the coach's mental model ("show me my last 5
+    // ratings") and the bars/radar reflect a full 5-game window.
+    const matchById = new Map(kMatches.map(m => [m.id, m]));
+    const l5Attrs = [...kAttrs]
+      .map(a => ({ attr: a, match: matchById.get(a.match_id) }))
+      .filter(x => x.match)
+      .sort((a, b) => new Date(b.match.match_date) - new Date(a.match.match_date))
+      .slice(0, 5)
+      .map(x => x.attr);
     return {
       matches: kMatches,
       sorted,
@@ -575,6 +590,7 @@ export default function DashboardPage() {
       l5Goals: aggregateGoals(l5Goals),
       sznAttrs: aggregateAttrs(kAttrs),
       l5Attrs: aggregateAttrs(l5Attrs),
+      l5AttrsCount: l5Attrs.length,
       last5Matches: last5,
       rawGoals: kGoals,
       rawL5Goals: l5Goals,
@@ -972,33 +988,42 @@ export default function DashboardPage() {
             <Sec title="Zone Threat Analysis">
               {(() => {
                 const shotEvts = d ? (isL5 ? d.l5ShotEvents : d.seasonShotEvents) : [];
-                const zones = computeZoneConversion(shotEvts || []);
-                if (!shotEvts || shotEvts.length === 0) return (
-                  <Card><div style={{ textAlign: "center", padding: 24, color: t.dim, fontSize: 12 }}>Available for matches logged after March 2026. Log a match in Pitchside to see zone conversion data.</div></Card>
-                );
+                const goalsForCard = d ? (isL5 ? d.rawL5Goals : d.rawGoals) : [];
+                const zones = computeZoneConversionUnified(shotEvts || [], goalsForCard || []);
                 if (zones.length === 0) return (
-                  <Card><div style={{ textAlign: "center", padding: 24, color: t.dim, fontSize: 12 }}>No shot origin data recorded yet.</div></Card>
+                  <Card><div style={{ textAlign: "center", padding: 24, color: t.dim, fontSize: 12 }}>No shot-origin data yet. Log a match in Pitchside or upload a video to populate this view.</div></Card>
                 );
-                const maxShots = Math.max(...zones.map(function(z) { return z.shots; }));
+                const maxShots = Math.max.apply(null, zones.map(function(z) { return z.shots || 0; }).concat([1]));
+                const maxGoals = Math.max.apply(null, zones.map(function(z) { return z.goals || 0; }).concat([1]));
+                const hasLegacyOnly = zones.some(function(z) { return z.rate === null; });
                 return (
                   <Card>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: t.text, marginBottom: 12 }}>Of all shots faced from each zone, what percentage resulted in goals?</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: t.text, marginBottom: 12 }}>Where goals are coming from, and how dangerous each zone has been.</div>
                     {zones.map(function(z) {
-                      var pctVal = (z.rate * 100);
-                      var barColor = pctVal < 15 ? t.green : pctVal < 25 ? t.gold : t.red;
+                      var hasRate = z.rate !== null;
+                      var pctVal = hasRate ? z.rate * 100 : null;
+                      var barColor = !hasRate ? t.dim : pctVal < 15 ? t.green : pctVal < 25 ? t.gold : t.red;
+                      // When no shots are tracked for this zone (legacy data),
+                      // size the bar by goal count instead so the row still shows magnitude.
+                      var barWidth = z.shots > 0
+                        ? (z.shots / maxShots * 100)
+                        : (z.goals / maxGoals * 100);
                       return (
                         <div key={z.zone} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                           <div style={{ width: 110, fontSize: 11, color: t.dim, flexShrink: 0 }}>{z.name}</div>
                           <div style={{ flex: 1, height: 18, background: t.bg, borderRadius: 4, overflow: "hidden", position: "relative" }}>
-                            <div style={{ height: "100%", width: (z.shots / maxShots * 100) + "%", background: barColor, borderRadius: 4, opacity: 0.7 }} />
+                            <div style={{ height: "100%", width: barWidth + "%", background: barColor, borderRadius: 4, opacity: 0.7 }} />
                           </div>
-                          <div style={{ width: 40, fontSize: 11, color: t.dim, textAlign: "right" }}>{z.shots} shot{z.shots !== 1 ? "s" : ""}</div>
-                          <div style={{ width: 35, fontSize: 11, color: t.text, textAlign: "right" }}>{z.goals} GA</div>
-                          <div style={{ width: 40, fontSize: 12, fontWeight: 700, color: barColor, textAlign: "right" }}>{pctVal.toFixed(1)}%</div>
+                          <div style={{ width: 60, fontSize: 11, color: t.dim, textAlign: "right" }}>{z.shots > 0 ? (z.shots + " shot" + (z.shots !== 1 ? "s" : "")) : "—"}</div>
+                          <div style={{ width: 45, fontSize: 11, color: t.text, textAlign: "right" }}>{z.goals} GA</div>
+                          <div style={{ width: 45, fontSize: 12, fontWeight: 700, color: barColor, textAlign: "right" }}>{hasRate ? pctVal.toFixed(1) + "%" : "—"}</div>
                         </div>
                       );
                     })}
-                    <div style={{ marginTop: 8, fontSize: 10, color: t.dim }}>Sorted by conversion rate (highest vulnerability first). Green &lt;15% | Gold 15–25% | Red &gt;25%</div>
+                    <div style={{ marginTop: 8, fontSize: 10, color: t.dim }}>
+                      Sorted by GA, then by conversion rate. Green &lt;15% | Gold 15–25% | Red &gt;25%.
+                      {hasLegacyOnly && " — \"—\" rate = goal logged before per-shot data was captured (pre-2026-03)."}
+                    </div>
                   </Card>
                 );
               })()}
@@ -1436,7 +1461,9 @@ export default function DashboardPage() {
                 {dAttrs ? (
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14, marginBottom: 14 }}>
                     <Card>
-                      <div style={{ fontSize: 10, color: t.dim, marginBottom: 6 }}>Core Attributes — Season vs Last 5</div>
+                      <div style={{ fontSize: 10, color: t.dim, marginBottom: 6 }}>
+                        Core Attributes — Season vs Last {d.l5AttrsCount || 0} Rated
+                      </div>
                       <ResponsiveContainer width="100%" height={260}>
                         <RadarChart data={CORE_ATTRS.map(k => ({ attr: ATTR_LABELS[k], Season: d.sznAttrs?.[k] || 0, "Last 5": d.l5Attrs?.[k] || 0, fullMark: 5 }))}>
                           <PolarGrid stroke={t.border} />
