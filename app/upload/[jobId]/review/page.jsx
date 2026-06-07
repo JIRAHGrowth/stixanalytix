@@ -910,6 +910,7 @@ export default function ReviewPage() {
               videoUrl={job?.video_url}
               meta={meta}
               theme={t}
+              isActive={activeFocus.section === "goals"}
             />
           </div>
         ) : (<>
@@ -1046,6 +1047,7 @@ export default function ReviewPage() {
               onReclassify={(id, target) => reclassifyEvent("save", id, target)}
               videoUrl={job?.video_url}
               theme={t}
+              isActive={activeFocus.section === "saves"}
             />
           </div>
         ) : (
@@ -1062,6 +1064,7 @@ export default function ReviewPage() {
               onReclassify={(id, target) => reclassifyEvent("distribution", id, target)}
               videoUrl={job?.video_url}
               theme={t}
+              isActive={activeFocus.section === "distribution"}
             />
           </div>
         ) : (

@@ -27,6 +27,7 @@ export default function FocusModeGoals({
   videoUrl,
   meta,
   theme,
+  isActive = true, // arrows/enter/r/numpad fire only when this section is focused
 }) {
   const t = theme || tDark;
   const [index, setIndex] = useState(0);
@@ -51,8 +52,13 @@ export default function FocusModeGoals({
     go(1);
   }, [c, onChange, go]);
 
-  // Keyboard shortcuts scoped to focus mode
+  // Keyboard shortcuts scoped to focus mode AND to the section that's
+  // currently active. All three FocusMode* components mount simultaneously
+  // and each registers its own window keydown listener; without the
+  // isActive gate, one ArrowRight fired by the parent would step all three
+  // sections' cursors in lockstep.
   useEffect(() => {
+    if (!isActive) return;
     const handler = (e) => {
       const tag = (e.target?.tagName || "").toUpperCase();
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || e.target?.isContentEditable) return;
@@ -74,7 +80,7 @@ export default function FocusModeGoals({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [c, go, onChange, onConfirm, onReject]);
+  }, [isActive, c, go, onChange, onConfirm, onReject]);
 
   if (total === 0) {
     return (

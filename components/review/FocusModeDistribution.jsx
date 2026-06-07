@@ -16,6 +16,7 @@ export default function FocusModeDistribution({
   onReclassify,    // (id, targetType) => void  optional
   videoUrl,
   theme,
+  isActive = true,
 }) {
   const t = theme || tDark;
   const [index, setIndex] = useState(0);
@@ -40,7 +41,9 @@ export default function FocusModeDistribution({
     go(1);
   }, [row, onChange, go]);
 
+  // Keyboard handler gated on isActive — see FocusModeGoals for rationale.
   useEffect(() => {
+    if (!isActive) return;
     const handler = (e) => {
       const tag = (e.target?.tagName || "").toUpperCase();
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || e.target?.isContentEditable) return;
@@ -52,7 +55,7 @@ export default function FocusModeDistribution({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [row, go, onConfirm, onReject]);
+  }, [isActive, row, go, onConfirm, onReject]);
 
   if (total === 0) {
     return (

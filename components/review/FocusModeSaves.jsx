@@ -22,6 +22,7 @@ export default function FocusModeSaves({
   onReclassify,
   videoUrl,
   theme,
+  isActive = true,
 }) {
   const t = theme || tDark;
   const [index, setIndex] = useState(0);
@@ -46,7 +47,9 @@ export default function FocusModeSaves({
     go(1);
   }, [row, onChange, go]);
 
+  // Keyboard handler gated on isActive — see FocusModeGoals for rationale.
   useEffect(() => {
+    if (!isActive) return;
     const handler = (e) => {
       const tag = (e.target?.tagName || "").toUpperCase();
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || e.target?.isContentEditable) return;
@@ -60,7 +63,7 @@ export default function FocusModeSaves({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [row, go, onChange, onConfirm, onReject]);
+  }, [isActive, row, go, onChange, onConfirm, onReject]);
 
   if (total === 0) {
     return (
