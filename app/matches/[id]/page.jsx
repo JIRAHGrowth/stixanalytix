@@ -8,6 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 import { tDark } from "@/lib/theme";
 import { ZONE_LABELS, ORIGIN_LABELS, GK_ACTION_SEVERITY, FONT } from "@/lib/constants";
 import { fetchMatchById, fetchMatchDetailBundle } from "@/lib/queries";
+import VideoClip from "@/components/review/VideoClip";
 
 const t = tDark;
 const font = FONT;
@@ -16,10 +17,12 @@ const ACTION_COLORS = Object.fromEntries(
   Object.entries(GK_ACTION_SEVERITY).map(([k, v]) => [k, t[v]])
 );
 
+const SAVE_ACTIONS = ["Catch", "Block", "Parry", "Deflect", "Punch"];
+
 function fmtTs(s) {
   if (s == null) return null;
   const m = Math.floor(s / 60);
-  const r = s % 60;
+  const r = Math.floor(s % 60);
   return `${m}:${String(r).padStart(2, '0')}`;
 }
 
@@ -33,6 +36,10 @@ export default function MatchDetailPage() {
   const [keeper, setKeeper] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // Per-event clips: indexed by timestamp_seconds → signed URL. Populated
+  // from the source video_jobs.gemini_output for video-tagged matches.
+  const [clipsByTs, setClipsByTs] = useState({});
+  const [videoSourceUrl, setVideoSourceUrl] = useState(null);
 
   useEffect(() => {
     if (!user || !id) return;
@@ -55,16 +62,86 @@ export default function MatchDetailPage() {
       setSaves(se);
       setKeeper(k);
       setLoading(false);
+
+      // Load clips for video-tagged matches. The published match doesn't
+      // carry clip references on shot_events / goals_conceded — those live
+      // on the originating video_jobs.gemini_output. We look up the source
+      // job by published_match_id, collect every clip_storage_path across
+      // goals/saves/distribution, sign them in one batch, and index by
+      // timestamp_seconds so each event card can pull its own clip.
+      if (matchData.logged_via === "video") {
+        const { data: jobs } = await supabase
+          .from("video_jobs")
+          .select("storage_path, gemini_output")
+          .eq("published_match_id", id)
+          .limit(1);
+        const job = jobs?.[0];
+        if (job && mounted) {
+          const parsed = job.gemini_output || {};
+          const allEvents = [
+            ...(parsed.parsed?.goals || []),
+            ...(parsed.saves?.parsed?.saves || []),
+            ...(parsed.distribution?.parsed?.distribution || []),
+          ];
+          const paths = allEvents
+            .map(e => e.clip_storage_path)
+            .filter(Boolean);
+          let urlByPath = {};
+          if (paths.length) {
+            const { data: signedList } = await supabase.storage
+              .from("match-videos")
+              .createSignedUrls(paths, 7200);
+            if (Array.isArray(signedList)) {
+              signedList.forEach(s => {
+                if (s?.path && s?.signedUrl) urlByPath[s.path] = s.signedUrl;
+              });
+            }
+          }
+          const byTs = {};
+          allEvents.forEach(e => {
+            if (e.timestamp_seconds == null) return;
+            const url = e.clip_storage_path ? urlByPath[e.clip_storage_path] : null;
+            if (!url) return;
+            byTs[Math.round(e.timestamp_seconds)] = url;
+          });
+          if (mounted) setClipsByTs(byTs);
+
+          // Source fallback for any event without a pre-cut clip.
+          if (job.storage_path) {
+            const { data: srcSigned } = await supabase.storage
+              .from("match-videos")
+              .createSignedUrl(job.storage_path, 7200);
+            if (mounted && srcSigned?.signedUrl) setVideoSourceUrl(srcSigned.signedUrl);
+          }
+        }
+      }
     })();
     return () => { mounted = false; };
   }, [user, id, supabase]);
 
-  const onTargetCount = useMemo(() => saves.filter(s => s.on_target === "yes").length, [saves]);
-  const fullSavesCount = useMemo(() => saves.filter(s => ["Catch", "Block", "Parry", "Deflect", "Punch"].includes(s.gk_action)).length, [saves]);
+  // — LIVE STATS — Compute everything from the raw event tables. The stale
+  // matches.{shots_faced, saves, save_percentage} columns are ignored on
+  // display: they're written at publish-time and never updated when shot
+  // events are edited, so they drift away from the source rows and the
+  // three tiles stop reconciling (24 / 22 / 75% was the symptom).
+  //
+  // shot_events stores save attempts only (one row per shot the keeper
+  // engaged with); goals_conceded stores the goals. To count "shots
+  // faced" we union both. Save % uses the football-standard "on target"
+  // denominator so the math is honest (off-target rockets that flew
+  // wide aren't credited as saves).
+  const onTargetSaveCount = useMemo(
+    () => saves.filter(s => s.on_target === "yes" && SAVE_ACTIONS.includes(s.gk_action)).length,
+    [saves]
+  );
+  const offTargetCount = useMemo(() => saves.filter(s => s.on_target === "no").length, [saves]);
   const goalsAgainstCount = useMemo(() => goalsConceded.length, [goalsConceded]);
   const shotsFaced = useMemo(() => saves.length + goalsAgainstCount, [saves, goalsAgainstCount]);
-  const shotsOnTarget = useMemo(() => onTargetCount + goalsAgainstCount, [onTargetCount, goalsAgainstCount]);
-  const savePctOnTarget = shotsOnTarget > 0 ? fullSavesCount / shotsOnTarget : null;
+  const shotsOnTarget = useMemo(
+    () => (saves.length - offTargetCount) + goalsAgainstCount,
+    [saves, offTargetCount, goalsAgainstCount]
+  );
+  const savePct = shotsOnTarget > 0 ? onTargetSaveCount / shotsOnTarget : null;
 
   if (authLoading || loading) {
     return (
@@ -84,6 +161,11 @@ export default function MatchDetailPage() {
 
   const result = match.result;
   const resultColor = result === "Win" ? t.green : result === "Loss" ? t.red : t.dim;
+
+  const clipForTs = (ts) => {
+    if (ts == null) return null;
+    return clipsByTs[Math.round(ts)] || null;
+  };
 
   return (
     <div style={{ minHeight: "100vh", background: t.bg, fontFamily: font, color: t.text }}>
@@ -117,13 +199,29 @@ export default function MatchDetailPage() {
             </div>
           </div>
 
-          {/* Top stats strip */}
+          {/* Top stats strip — all live from raw events; no stale matches.* columns */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 12, marginTop: 24, paddingTop: 20, borderTop: `1px solid ${t.border}` }}>
-            <Stat label="Shots faced" value={match.shots_faced ?? shotsFaced} sub={`${saves.length} saves + ${goalsAgainstCount} goals`} />
-            <Stat label="On target" value={match.shots_on_target ?? shotsOnTarget} sub={`${onTargetCount} on-target saves + ${goalsAgainstCount} goals`} />
-            <Stat label="Saves" value={match.saves ?? fullSavesCount} sub="Catch / Parry / Block / Deflect / Punch" />
-            <Stat label="Save %" value={match.save_percentage != null ? `${(match.save_percentage * 100).toFixed(0)}%` : (savePctOnTarget != null ? `${(savePctOnTarget * 100).toFixed(0)}%` : "—")} sub="of shots on target" />
-            <Stat label="Clean sheet" value={(match.goals_against ?? 0) === 0 ? "✓" : "—"} />
+            <Stat
+              label="Shots faced"
+              value={shotsFaced}
+              sub={`${shotsOnTarget} on target · ${shotsFaced - shotsOnTarget} off`}
+            />
+            <Stat
+              label="On target"
+              value={shotsOnTarget}
+              sub={`${shotsOnTarget - goalsAgainstCount} saved · ${goalsAgainstCount} goals`}
+            />
+            <Stat
+              label="Saves"
+              value={onTargetSaveCount}
+              sub="On-target shots stopped"
+            />
+            <Stat
+              label="Save %"
+              value={savePct != null ? `${(savePct * 100).toFixed(0)}%` : "—"}
+              sub="Saves / shots on target"
+            />
+            <Stat label="Clean sheet" value={goalsAgainstCount === 0 ? "✓" : "—"} />
           </div>
         </div>
 
@@ -131,7 +229,13 @@ export default function MatchDetailPage() {
         {goalsScored.length > 0 && (
           <Section title={`Goals scored (${goalsScored.length})`}>
             {goalsScored.map(g => (
-              <EventCard key={g.id} time={g.timestamp_seconds} accent={t.green}>
+              <EventCard
+                key={g.id}
+                time={g.timestamp_seconds}
+                accent={t.green}
+                clipUrl={clipForTs(g.timestamp_seconds)}
+                sourceUrl={videoSourceUrl}
+              >
                 <div style={{ fontSize: 13, color: t.bright, fontWeight: 600 }}>
                   {g.attack_type ? labelize(g.attack_type) : "Open play"}
                 </div>
@@ -146,7 +250,13 @@ export default function MatchDetailPage() {
         {goalsConceded.length > 0 && (
           <Section title={`Goals conceded (${goalsConceded.length})`} accent={t.red}>
             {goalsConceded.map(g => (
-              <EventCard key={g.id} time={g.timestamp_seconds} accent={t.red}>
+              <EventCard
+                key={g.id}
+                time={g.timestamp_seconds}
+                accent={t.red}
+                clipUrl={clipForTs(g.timestamp_seconds)}
+                sourceUrl={videoSourceUrl}
+              >
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
                   {g.goal_source && <Pill color={t.red}>{g.goal_source}</Pill>}
                   {g.shot_origin && <Pill>{ORIGIN_LABELS[g.shot_origin] || g.shot_origin}</Pill>}
@@ -169,7 +279,14 @@ export default function MatchDetailPage() {
               {saves.map(s => {
                 const actionColor = ACTION_COLORS[s.gk_action] || t.dim;
                 return (
-                  <EventCard key={s.id} time={s.timestamp_seconds} accent={actionColor} compact>
+                  <EventCard
+                    key={s.id}
+                    time={s.timestamp_seconds}
+                    accent={actionColor}
+                    compact
+                    clipUrl={clipForTs(s.timestamp_seconds)}
+                    sourceUrl={videoSourceUrl}
+                  >
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
                       {s.gk_action && <Pill color={actionColor}>{s.gk_action}</Pill>}
                       {s.shot_origin && <Pill>{ORIGIN_LABELS[s.shot_origin] || s.shot_origin}</Pill>}
@@ -229,13 +346,40 @@ function Section({ title, accent, children }) {
   );
 }
 
-function EventCard({ time, accent, children, compact }) {
+function EventCard({ time, accent, children, compact, clipUrl, sourceUrl }) {
+  const [showClip, setShowClip] = useState(false);
+  const hasClip = Boolean(clipUrl) || (sourceUrl && time != null);
   return (
     <div style={{ background: t.card, border: `1px solid ${t.border}`, borderLeft: `3px solid ${accent || t.border}`, borderRadius: 10, padding: compact ? 12 : 14, marginBottom: compact ? 0 : 10 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
         <div style={{ fontSize: 11, color: t.dim, letterSpacing: 0.4, fontWeight: 600 }}>{fmtTs(time) || "—"}</div>
+        {hasClip && (
+          <button
+            type="button"
+            onClick={() => setShowClip(s => !s)}
+            style={{
+              padding: "3px 9px", fontSize: 11, fontWeight: 600,
+              background: showClip ? t.accent + "22" : "transparent",
+              color: showClip ? t.accent : t.dim,
+              border: `1px solid ${showClip ? t.accent + "55" : t.border}`,
+              borderRadius: 5, cursor: "pointer", fontFamily: FONT,
+            }}
+          >
+            {showClip ? "▾ Hide clip" : "▶ Play clip"}
+          </button>
+        )}
       </div>
       {children}
+      {showClip && hasClip && (
+        <div style={{ marginTop: 10 }}>
+          <VideoClip
+            clipUrl={clipUrl}
+            sourceUrl={sourceUrl}
+            timestampSeconds={time}
+            theme={t}
+          />
+        </div>
+      )}
     </div>
   );
 }
