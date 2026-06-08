@@ -2,11 +2,12 @@
 import { ZONE_LABELS } from "@/lib/constants";
 import { tDark } from "@/lib/theme";
 
-const ZONE_POSITIONS = {
-  "High L": { x: 5, y: 5 }, "High C": { x: 38, y: 5 }, "High R": { x: 71, y: 5 },
-  "Mid L": { x: 5, y: 35 }, "Mid C": { x: 38, y: 35 }, "Mid R": { x: 71, y: 35 },
-  "Low L": { x: 5, y: 62 }, "Low C": { x: 38, y: 62 }, "Low R": { x: 71, y: 62 },
-};
+// Goal-frame heatmap. 3:1 aspect ratio matches a real soccer goal
+// (24 ft × 8 ft). Top / left / right borders are drawn thick in
+// `t.bright` to read as the crossbar + posts of a goal frame; the
+// bottom edge is left open since the goal line is just paint on the
+// ground, not a structural bar. Internal cell dividers are thin and
+// dim so the goal frame stays the dominant shape on the eye.
 
 export default function GoalHeatmap({ zones, title, theme }) {
   const t = theme || tDark;
@@ -18,44 +19,58 @@ export default function GoalHeatmap({ zones, title, theme }) {
   return (
     <div>
       {title && <div style={{ fontSize: 11, color: t.dim, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>{title}</div>}
-      {/*
-        Aspect-ratio belongs on the CONTAINER, not on each cell. Real goal is
-        24 ft × 8 ft = 3:1. Putting aspectRatio:3 on each cell forced every
-        cell to be 3× wider than tall, but cell content (number/percent/label)
-        had a minimum height; with 3 columns at 1fr each + overflow:hidden,
-        the right column got pushed past the maxWidth and clipped (cosmetic
-        regression: Top Right / Mid Right / Low Right vanished from the grid).
-        Container-level aspect-ratio + 3 equal grid rows + 3 equal grid
-        columns makes each cell intrinsically 3:1 without any cell-level
-        constraint, AND the third column stays visible.
-      */}
       <div style={{
         display: "grid",
         gridTemplateColumns: "1fr 1fr 1fr",
         gridTemplateRows: "1fr 1fr 1fr",
-        gap: 2,
-        border: "2px solid " + t.border,
-        borderRadius: 6,
-        overflow: "hidden",
+        gap: 0,
         width: "100%",
-        maxWidth: 480,
+        maxWidth: 540,
         aspectRatio: "3 / 1",
         margin: "0 auto",
+        // Goal frame: crossbar (top) + posts (left, right). No bottom —
+        // the goal line is the ground.
+        borderTop: `4px solid ${t.bright}`,
+        borderLeft: `4px solid ${t.bright}`,
+        borderRight: `4px solid ${t.bright}`,
+        borderBottom: "none",
+        borderTopLeftRadius: 3,
+        borderTopRightRadius: 3,
+        overflow: "hidden",
       }}>
-        {grid.flat().map(z => {
+        {grid.flat().map((z, i) => {
           const v = zones[z] || 0;
-          const intensity = v > 0 ? 0.25 + (v / maxVal) * 0.75 : 0;
+          const intensity = v > 0 ? 0.22 + (v / maxVal) * 0.68 : 0;
           const label = ZONE_LABELS[z] || z;
+          const col = i % 3;
+          const row = Math.floor(i / 3);
           return (
             <div key={z} style={{
-              display: "flex", flexDirection: "column",
-              alignItems: "center", justifyContent: "center",
-              background: v > 0 ? "rgba(239,68,68," + intensity + ")" : t.bg,
-              borderRight: z.includes("R") ? "none" : "1px solid " + t.border,
-              borderBottom: z.includes("Low") ? "none" : "1px solid " + t.border,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              background: v > 0 ? `rgba(239,68,68,${intensity})` : "transparent",
+              // Subtle internal grid lines — only between cells, never on
+              // the outer goal-frame edges (the thick border handles those).
+              borderRight: col < 2 ? `1px solid ${t.border}` : "none",
+              borderBottom: row < 2 ? `1px solid ${t.border}` : "none",
+              padding: "4px 6px",
+              minHeight: 0,
             }}>
-              <div style={{ fontSize: 18, fontWeight: 800, color: v > 0 ? t.bright : t.dim }}>{v}{v > 0 && <div style={{ fontSize: 7, color: t.dim, marginTop: -1 }}>{(v / Math.max(1, Object.values(zones).reduce(function(a,b){return a+b},0)) * 100).toFixed(0)}%</div>}</div>
-              <div style={{ fontSize: 8, color: v > 0 ? "rgba(255,255,255,0.65)" : t.dim, marginTop: 2 }}>{label}</div>
+              <div style={{
+                fontSize: 15,
+                fontWeight: 800,
+                lineHeight: 1,
+                color: v > 0 ? "#fff" : t.dim,
+              }}>{v}</div>
+              <div style={{
+                fontSize: 9,
+                color: v > 0 ? "rgba(255,255,255,0.72)" : t.dim,
+                marginTop: 3,
+                letterSpacing: 0.2,
+                lineHeight: 1,
+              }}>{label}</div>
             </div>
           );
         })}
