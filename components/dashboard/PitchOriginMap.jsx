@@ -82,7 +82,7 @@ export default function PitchOriginMap({ origins, title, theme }) {
 
   return (
     <div style={{ textTransform: "none" }}>
-      <svg viewBox={`0 0 ${PITCH_W} ${PITCH_H}`} style={{ width: "100%", maxWidth: 460, display: "block", margin: "0 auto" }}>
+      <svg viewBox={`0 0 ${PITCH_W} ${PITCH_H}`} style={{ width: "100%", maxWidth: 420, display: "block", margin: "0 auto" }}>
         {/* — pitch background — */}
         <rect x={MARGIN} y={MARGIN} width={PITCH_W - MARGIN * 2} height={PITCH_H - MARGIN * 2}
               rx="1" fill={t.bg} stroke={lineMain} strokeWidth={STROKE_PITCH} />
@@ -114,17 +114,21 @@ export default function PitchOriginMap({ origins, title, theme }) {
         <text x={cx} y={MARGIN - GOAL_DEPTH - 0.7} textAnchor="middle" fill={t.dim}
               fontSize="2.2" fontWeight="700" letterSpacing="0.6">GOAL</text>
 
-        {/* — zone overlays — */}
+        {/* — zone overlays —
+            Font sizes are in viewBox units (canvas is 100 wide); at a rendered
+            width of ~420 px each viewBox unit ≈ 4.2 px. Values at 3.5 vbu
+            render ~14-15 px (in line with the dashboard's small-stat scale);
+            labels at 1.8 vbu render ~7-8 px (compact, like a chart axis). */}
         {vizZones.map(z => {
           const cxZ = z.x + z.w / 2;
           const cyZ = z.y + z.h / 2;
           const isNarrow = z.w <= 12;
           const isTall = z.h > 30;
-          const lblFont = isNarrow ? 2 : (z.w > 30 ? 2.6 : 2.4);
-          const valFont = z.val > 0 ? (isNarrow ? 4.5 : 6) : 0;
+          const lblFont = isNarrow ? 1.6 : (z.w > 30 ? 2.0 : 1.8);
+          const valFont = z.val > 0 ? (isNarrow ? 2.8 : 3.6) : 0;
           const intensity = z.val > 0 ? (0.18 + (z.val / vizMax) * 0.55) : 0;
-          const valY = isTall ? (z.y + z.h * 0.30) : (cyZ - 1.5);
-          const lblY = isTall ? (z.y + z.h * 0.45) : (cyZ + 3);
+          const valY = isTall ? (z.y + z.h * 0.32) : (cyZ - 1.1);
+          const lblY = isTall ? (z.y + z.h * 0.46) : (cyZ + 2.4);
           return (
             <g key={z.key}>
               {z.val > 0 && (

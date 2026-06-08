@@ -25,7 +25,10 @@ export default function GoalHeatmap({ zones, title, theme }) {
         gridTemplateRows: "1fr 1fr 1fr",
         gap: 0,
         width: "100%",
-        maxWidth: 540,
+        // maxWidth deliberately smaller than the surrounding Card so the
+        // goal frame sits with visible breathing room on both sides
+        // rather than touching the card edges.
+        maxWidth: 420,
         aspectRatio: "3 / 1",
         margin: "0 auto",
         // Goal frame: crossbar (top) + posts (left, right). No bottom —
