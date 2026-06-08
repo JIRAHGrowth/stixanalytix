@@ -18,16 +18,37 @@ export default function GoalHeatmap({ zones, title, theme }) {
   return (
     <div>
       {title && <div style={{ fontSize: 11, color: t.dim, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>{title}</div>}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 2, border: "2px solid " + t.border, borderRadius: 6, overflow: "hidden", maxWidth: 260, margin: "0 auto" }}>
+      {/*
+        Aspect-ratio belongs on the CONTAINER, not on each cell. Real goal is
+        24 ft × 8 ft = 3:1. Putting aspectRatio:3 on each cell forced every
+        cell to be 3× wider than tall, but cell content (number/percent/label)
+        had a minimum height; with 3 columns at 1fr each + overflow:hidden,
+        the right column got pushed past the maxWidth and clipped (cosmetic
+        regression: Top Right / Mid Right / Low Right vanished from the grid).
+        Container-level aspect-ratio + 3 equal grid rows + 3 equal grid
+        columns makes each cell intrinsically 3:1 without any cell-level
+        constraint, AND the third column stays visible.
+      */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr 1fr",
+        gridTemplateRows: "1fr 1fr 1fr",
+        gap: 2,
+        border: "2px solid " + t.border,
+        borderRadius: 6,
+        overflow: "hidden",
+        width: "100%",
+        maxWidth: 480,
+        aspectRatio: "3 / 1",
+        margin: "0 auto",
+      }}>
         {grid.flat().map(z => {
           const v = zones[z] || 0;
           const intensity = v > 0 ? 0.25 + (v / maxVal) * 0.75 : 0;
           const label = ZONE_LABELS[z] || z;
           return (
             <div key={z} style={{
-              // Each cell 3:1 → 3 cols × 3 rows = 9 wide : 3 tall = 3:1 overall,
-              // matching a real soccer goal frame (24 ft × 8 ft).
-              aspectRatio: "3", display: "flex", flexDirection: "column",
+              display: "flex", flexDirection: "column",
               alignItems: "center", justifyContent: "center",
               background: v > 0 ? "rgba(239,68,68," + intensity + ")" : t.bg,
               borderRight: z.includes("R") ? "none" : "1px solid " + t.border,
