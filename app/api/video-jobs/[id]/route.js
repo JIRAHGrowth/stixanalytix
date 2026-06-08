@@ -19,16 +19,21 @@ export async function GET(_req, { params }) {
   const r = await authedJob(supabase, id);
   if (r.error) return NextResponse.json({ error: r.error }, { status: r.status });
 
-  // Signed URLs are minted at 2-hour TTL when the video is first uploaded.
-  // Any subsequent visit to the review screen is almost certainly past that
-  // window, so re-mint here for in-browser playback. The DB copy is left as
-  // the original (audit trail); we only override the response payload.
+  // Signed URLs are minted at 24-hour TTL. Review sessions in the wild stay
+  // open for hours (coach pauses, gets pulled into a conversation, comes
+  // back). Anything shorter and the next click-to-play hits an expired URL
+  // and the browser reports the file as SRC_NOT_SUPPORTED (code 4) because
+  // it parses the Supabase 400 response as a malformed MP4. The page also
+  // re-fetches this endpoint periodically to keep URLs fresh across day-long
+  // sessions. The DB copy is left as the original (audit trail); we only
+  // override the response payload.
+  const SIGNED_TTL_SECONDS = 60 * 60 * 24; // 24h
   let job = r.job;
   const admin = createAdminClient();
 
   if (job.storage_path) {
     const { data: signed, error: signErr } = await admin.storage
-      .from('match-videos').createSignedUrl(job.storage_path, 7200);
+      .from('match-videos').createSignedUrl(job.storage_path, SIGNED_TTL_SECONDS);
     if (!signErr && signed?.signedUrl) {
       job = { ...job, video_url: signed.signedUrl };
     }
@@ -48,7 +53,7 @@ export async function GET(_req, { params }) {
     }));
     if (collect.length > 0) {
       const { data: signedList, error: bulkErr } = await admin.storage
-        .from('match-videos').createSignedUrls(collect, 7200);
+        .from('match-videos').createSignedUrls(collect, SIGNED_TTL_SECONDS);
       if (!bulkErr && Array.isArray(signedList)) {
         const urlByPath = {};
         signedList.forEach(s => { if (s?.path && s?.signedUrl) urlByPath[s.path] = s.signedUrl; });

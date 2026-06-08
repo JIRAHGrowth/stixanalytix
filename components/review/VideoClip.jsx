@@ -131,7 +131,7 @@ export default function VideoClip({ clipUrl, sourceUrl, timestampSeconds, theme,
             Try opening the video file directly →
           </a>
           <div style={{ marginTop: 6, color: "#ffaaaa99", fontSize: 10 }}>
-            Code 2 = network/CORS · Code 3 = decode error · Code 4 = format/codec not supported by your browser
+            Code 2 = network/CORS · Code 3 = decode error · Code 4 = format unrecognized — usually a stale signed URL (refresh the page) or an upstream HTTP error returning HTML where the browser expected an MP4 header
           </div>
         </div>
       )}

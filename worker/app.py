@@ -479,15 +479,19 @@ def _generate_event_clip(video_path: str, event: dict, event_type: str,
     out_path = tempfile.mktemp(suffix=".mp4")
     try:
         # `-ss` BEFORE `-i` is the fast input seek (keyframe-aligned).
-        # We re-encode the short window with ultrafast h264 so the cut is
-        # frame-accurate and `+faststart` puts the moov atom at the front
-        # for instant browser playback. Audio re-encoded to AAC 96k to keep
-        # the file small; voice tracks are fine at this bitrate.
+        # Downscale to 720p and cap fps at 30 — phone match video is often 4K60
+        # which produces 25–40 MB clips at any CRF unless we shrink it first.
+        # `veryfast` (not ultrafast) gives ~5× better compression for only ~20%
+        # more CPU; ultrafast was the original cause of the 30 MB outputs.
+        # Audio re-encoded to AAC 96k; voice tracks are fine at this bitrate.
+        # `+faststart` puts the moov atom at the front for instant browser play.
         result = subprocess.run(
             [
                 "ffmpeg", "-ss", str(start), "-i", video_path,
                 "-t", str(duration),
-                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "26",
+                "-vf", "scale=-2:720",
+                "-r", "30",
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "26",
                 "-c:a", "aac", "-b:a", "96k",
                 "-movflags", "+faststart",
                 "-y", out_path,
@@ -498,9 +502,15 @@ def _generate_event_clip(video_path: str, event: dict, event_type: str,
             err = (result.stderr or b"").decode("utf-8", errors="replace")[:400]
             print(f"[clip] ffmpeg failed for {event_type}#{index} @ {start}s: {err}", flush=True)
             return None
-        if not os.path.exists(out_path) or os.path.getsize(out_path) < 1024:
+        out_size = os.path.getsize(out_path) if os.path.exists(out_path) else 0
+        if out_size < 1024:
             print(f"[clip] {event_type}#{index} produced empty file", flush=True)
             return None
+        # Guardrail: review playback assumes 1–3 MB clips. If we ever drift back
+        # above 8 MB the browser starts timing out — surface it loudly so we
+        # catch encoder regressions instead of shipping a bucket full of bricks.
+        if out_size > 8 * 1024 * 1024:
+            print(f"[clip] WARN {event_type}#{index} = {out_size // 1024 // 1024} MB (target ≤8); check encoder args", flush=True)
 
         storage_path = f"{CLIPS_PREFIX}/{job_id}/{event_type}_{index:03d}.mp4"
         with open(out_path, "rb") as f:

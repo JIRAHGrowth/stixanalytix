@@ -181,6 +181,36 @@ export default function ReviewPage() {
         });
       });
 
+      // Build a fresh path → signed-URL map from THIS request's API response.
+      // The draft we may restore below was serialized with whatever URLs were
+      // live when it was saved, and signed-URL tokens expire (Supabase rejects
+      // with "exp claim timestamp check failed" → browser sees a 400/JSON body
+      // where it expected MP4 → SRC_NOT_SUPPORTED). We have to overwrite any
+      // cached clip_url on restored events with the freshly-minted one.
+      const freshClipUrlByPath = {};
+      [...cands, ...initialSaves, ...initialDist].forEach(item => {
+        const path = item.gemini?.clip_storage_path;
+        const url = item.gemini?.clip_url;
+        if (path && url) freshClipUrlByPath[path] = url;
+      });
+      const refreshClipUrls = (events) => events.map(e => {
+        // AI-detected events keep clip_storage_path under .gemini
+        if (e?.gemini?.clip_storage_path) {
+          const fresh = freshClipUrlByPath[e.gemini.clip_storage_path];
+          if (fresh && fresh !== e.gemini.clip_url) {
+            return { ...e, gemini: { ...e.gemini, clip_url: fresh } };
+          }
+        }
+        // Coach-added / reclassified rows carry clip_storage_path at top level
+        if (e?.clip_storage_path) {
+          const fresh = freshClipUrlByPath[e.clip_storage_path];
+          if (fresh && fresh !== e.clip_url) {
+            return { ...e, clip_url: fresh };
+          }
+        }
+        return e;
+      });
+
       // Restore from localStorage if a draft exists for this job. Drafts are
       // tied to the job_id and the gemini_output count so we don't restore an
       // out-of-date draft against a re-analyzed job.
@@ -196,10 +226,10 @@ export default function ReviewPage() {
             (draft.distRows?.length ?? 0) === initialDist.length &&
             draft._jobId === jobId
           ) {
-            setCandidates(draft.candidates);
-            setSaveRows(draft.saveRows);
-            setDistRows(draft.distRows || initialDist);
-            setExtraGoals(draft.extraGoals || []);
+            setCandidates(refreshClipUrls(draft.candidates));
+            setSaveRows(refreshClipUrls(draft.saveRows));
+            setDistRows(refreshClipUrls(draft.distRows || initialDist));
+            setExtraGoals(refreshClipUrls(draft.extraGoals || []));
             setScoreOverride(draft.scoreOverride || null);
             setSavedAt(draft._savedAt || null);
             restoredFromDraft = true;

@@ -90,7 +90,7 @@ export default function MatchDetailPage() {
           if (paths.length) {
             const { data: signedList } = await supabase.storage
               .from("match-videos")
-              .createSignedUrls(paths, 7200);
+              .createSignedUrls(paths, 60 * 60 * 24);
             if (Array.isArray(signedList)) {
               signedList.forEach(s => {
                 if (s?.path && s?.signedUrl) urlByPath[s.path] = s.signedUrl;
@@ -110,7 +110,7 @@ export default function MatchDetailPage() {
           if (job.storage_path) {
             const { data: srcSigned } = await supabase.storage
               .from("match-videos")
-              .createSignedUrl(job.storage_path, 7200);
+              .createSignedUrl(job.storage_path, 60 * 60 * 24);
             if (mounted && srcSigned?.signedUrl) setVideoSourceUrl(srcSigned.signedUrl);
           }
         }
