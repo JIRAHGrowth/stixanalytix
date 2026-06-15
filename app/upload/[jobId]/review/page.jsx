@@ -718,6 +718,96 @@ export default function ReviewPage() {
             },
           })),
       ],
+      // Save candidates — every Gemini-detected save (not coach-added, not
+      // reclassified-in) with the coach's final field values. Publish route
+      // diffs gemini_value vs coach_value to emit per-field corrections.
+      save_candidates: saveRows
+        .filter(r => !r.coach_added && !r._reclassified_from)
+        .map(r => ({
+          gemini_value: r.gemini || null,
+          keep: !!r.keep,
+          coach_value: r.keep ? {
+            shot_origin: r.shot_origin || null,
+            shot_type: r.shot_type || null,
+            on_target: r.on_target || null,
+            gk_action: r.gk_action || null,
+            gk_visible: r.gk_visible || null,
+            outcome: r.outcome || null,
+            body_distance_zone: r.body_distance_zone || null,
+            goal_placement_height: r.goal_placement_height || null,
+            goal_placement_side: r.goal_placement_side || null,
+            goal_zone: r.goal_zone || null,
+            technique: r.technique || null,
+            dive_family: r.dive_family || null,
+            keeper_team: r.keeper_team || null,
+            notes: r.notes || null,
+          } : null,
+        })),
+      // Save extras — saves Gemini missed entirely; coach added via the
+      // "+ Add a save Gemini missed" button. Excludes reclassifications.
+      save_extras: saveRows
+        .filter(r => r.coach_added && !r._reclassified_from)
+        .map(r => ({
+          timestamp_seconds: tsStrToSeconds(r.timestamp_str),
+          timestamp_str: r.timestamp_str || null,
+          fields: {
+            shot_origin: r.shot_origin || null,
+            shot_type: r.shot_type || null,
+            on_target: r.on_target || null,
+            gk_action: r.gk_action || null,
+            gk_visible: r.gk_visible || null,
+            outcome: r.outcome || null,
+            body_distance_zone: r.body_distance_zone || null,
+            goal_placement_height: r.goal_placement_height || null,
+            goal_placement_side: r.goal_placement_side || null,
+            goal_zone: r.goal_zone || null,
+            technique: r.technique || null,
+            dive_family: r.dive_family || null,
+            keeper_team: r.keeper_team || null,
+          },
+          notes: r.notes || null,
+        })),
+      // Distribution candidates — every Gemini-detected distribution (not
+      // coach-added, not reclassified-in) with coach's final field values.
+      dist_candidates: distRows
+        .filter(r => !r.coach_added && !r._reclassified_from)
+        .map(r => ({
+          gemini_value: r.gemini || null,
+          keep: !!r.keep,
+          coach_value: r.keep ? {
+            trigger: r.trigger || null,
+            type: r.type || null,
+            successful: r.successful || null,
+            press_state: r.press_state || null,
+            pass_selection: r.pass_selection || null,
+            direction: r.direction || null,
+            receiver: r.receiver || null,
+            first_touch: r.first_touch || null,
+            target_zone: r.target_zone || null,
+            keeper_team: r.keeper_team || null,
+            notes: r.notes || null,
+          } : null,
+        })),
+      // Distribution extras — distributions Gemini missed entirely.
+      dist_extras: distRows
+        .filter(r => r.coach_added && !r._reclassified_from)
+        .map(r => ({
+          timestamp_seconds: tsStrToSeconds(r.timestamp_str),
+          timestamp_str: r.timestamp_str || null,
+          fields: {
+            trigger: r.trigger || null,
+            type: r.type || null,
+            successful: r.successful || null,
+            press_state: r.press_state || null,
+            pass_selection: r.pass_selection || null,
+            direction: r.direction || null,
+            receiver: r.receiver || null,
+            first_touch: r.first_touch || null,
+            target_zone: r.target_zone || null,
+            keeper_team: r.keeper_team || null,
+          },
+          notes: r.notes || null,
+        })),
     };
 
     // Phase 2.1 — saves payload. Only kept rows go to shot_events. Coach-added

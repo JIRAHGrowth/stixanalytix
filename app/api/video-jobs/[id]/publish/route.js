@@ -545,7 +545,85 @@ function computeCorrections({ geminiOutput, reviewDiff, meta, coachId, videoJobI
     out.push(baseRow(type, rc.gemini_value || null, rc.coach_value || null));
   }
 
+  // 2026-06-15 — saves & distributions now flow through the same correction
+  // path as goals. Prior to this, only goal-related edits became training
+  // signal; every save reclassification (Catch→Parry, on_target yes→no, etc.)
+  // and every missed save/distribution added through the review UI was
+  // silently dropped on the floor. The pipeline below mirrors the goal logic:
+  //   - false_positive_<event>      — coach rejected a Gemini candidate
+  //   - missed_<event>              — coach added an event Gemini missed
+  //   - wrong_<event>_<field>       — coach overrode a populated Gemini field
+  //   - added_<event>_<field>       — coach filled a field Gemini left blank
+  //   - kept_as_is_<event>          — kept with no field-level edits
+  emitCandidateCorrections(out, reviewDiff.save_candidates, 'save', SAVE_FIELDS, baseRow);
+  for (const ex of (reviewDiff.save_extras || [])) {
+    out.push(baseRow('missed_save', null, ex));
+  }
+  emitCandidateCorrections(out, reviewDiff.dist_candidates, 'distribution', DIST_FIELDS, baseRow);
+  for (const ex of (reviewDiff.dist_extras || [])) {
+    out.push(baseRow('missed_distribution', null, ex));
+  }
+
   return out;
+}
+
+// Fields we diff for save corrections. Mirrors the columns the review UI
+// actually exposes for editing. Order matches the focus-card layout so reports
+// scan naturally.
+const SAVE_FIELDS = [
+  'shot_origin', 'shot_type', 'on_target', 'gk_action', 'gk_visible',
+  'outcome', 'body_distance_zone', 'goal_placement_height', 'goal_placement_side',
+  'goal_zone', 'technique', 'dive_family', 'keeper_team',
+];
+
+const DIST_FIELDS = [
+  'trigger', 'type', 'successful', 'press_state', 'pass_selection',
+  'direction', 'receiver', 'first_touch', 'target_zone', 'keeper_team',
+];
+
+// Walk every candidate of one event type and push the appropriate correction
+// rows. Identical control flow for saves and distributions — only the field
+// list and the `eventType` label differ.
+function emitCandidateCorrections(out, candidates, eventType, fields, baseRow) {
+  for (const cand of (candidates || [])) {
+    const gem = cand.gemini_value || {};
+    if (!cand.keep) {
+      out.push(baseRow(`false_positive_${eventType}`, gem, null));
+      continue;
+    }
+    const coach = cand.coach_value || {};
+    let hadEdit = false;
+    for (const f of fields) {
+      const g = normalizeFieldValue(gem[f]);
+      const c = normalizeFieldValue(coach[f]);
+      if (c == null) continue;
+      if (g == null) {
+        out.push(baseRow(`added_${eventType}_${f}`,
+          { full_gemini: gem },
+          { coach_value: c }));
+        hadEdit = true;
+      } else if (String(g).toLowerCase() !== String(c).toLowerCase()) {
+        out.push(baseRow(`wrong_${eventType}_${f}`,
+          { gemini_value: g, full_gemini: gem },
+          { coach_value: c }));
+        hadEdit = true;
+      }
+    }
+    if (!hadEdit) {
+      out.push(baseRow(`kept_as_is_${eventType}`, gem, coach));
+    }
+  }
+}
+
+// Treat empty-string, 'unclear', and missing values as "no value present" so
+// they don't generate noisy "wrong_*" rows when the coach just fills a blank
+// or accepts an uncertain default. 'unclear' is Gemini's hedge — when the
+// coach commits to a definite value, that's an `added_*`, not a `wrong_*`.
+function normalizeFieldValue(v) {
+  if (v == null) return null;
+  const s = String(v).trim();
+  if (s === '' || s.toLowerCase() === 'unclear') return null;
+  return s;
 }
 
 // Mirrors the defaults in app/upload/[jobId]/review/page.jsx — kept here so
