@@ -1,6 +1,6 @@
 /**
- * One-shot: read VERCEL_TOKEN from the current shell, read the Modal trigger
- * URL + secret from .env.local, push them to Vercel as env vars on
+ * One-shot: read VERCEL_TOKEN from the current shell, read Supabase + Modal
+ * env vars from .env.local, and push them to Vercel as encrypted env vars on
  * production/preview/development.
  *
  * Run with the token in your shell, NOT on the command line:
@@ -15,7 +15,13 @@ require('dotenv').config({ path: '.env.local' });
 
 const PROJECT_NAME = 'stixanalytix';
 const TARGETS = ['production', 'preview', 'development'];
-const VARS_TO_PUSH = ['MODAL_TRIGGER_URL', 'MODAL_TRIGGER_SECRET'];
+const VARS_TO_PUSH = [
+  'NEXT_PUBLIC_SUPABASE_URL',
+  'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+  'SUPABASE_SERVICE_ROLE_KEY',
+  'MODAL_TRIGGER_URL',
+  'MODAL_TRIGGER_SECRET',
+];
 
 function die(msg) { console.error('ERROR: ' + msg); process.exit(1); }
 

@@ -40,6 +40,23 @@ Set via Vercel dashboard > Settings > Environment Variables:
 
 These must match your local `.env.local` values.
 
+### Automatic Vercel env push
+If you prefer not to configure these manually in the Vercel dashboard, use the helper script:
+
+```powershell
+$env:VERCEL_TOKEN = "<paste>"
+node scripts/setup-vercel-env.js
+```
+
+The script reads `.env.local` and pushes the following keys to Vercel:
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `MODAL_TRIGGER_URL`
+- `MODAL_TRIGGER_SECRET`
+
+This is a one-shot command that also triggers a production redeploy.
+
 ## How to Deploy
 
 Just push to `main`:
