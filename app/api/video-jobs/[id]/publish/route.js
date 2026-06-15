@@ -39,6 +39,29 @@ function emptyToNull(v) {
   return s ? s : null;
 }
 
+// Path C (2026-06-15) — build an index of clip_storage_path keyed by rounded
+// timestamp_seconds so each relational event row can carry its own clip
+// pointer at insert time. The worker writes clip_storage_path onto every
+// event inside video_jobs.gemini_output; previously that pointer was only
+// queryable via the JSON blob. With the new column on shot_events /
+// distribution_events / goals_conceded / goals_scored, the keeper-card
+// dashboard can pull "best save of last 5" with a single SQL join.
+// Migration: add_clip_storage_path_to_event_tables_2026_06_15.
+function indexClipPaths(events) {
+  const out = new Map();
+  if (!Array.isArray(events)) return out;
+  for (const e of events) {
+    const ts = e?.timestamp_seconds;
+    if (ts == null || !Number.isFinite(ts) || !e?.clip_storage_path) continue;
+    out.set(Math.round(ts), e.clip_storage_path);
+  }
+  return out;
+}
+function clipPathFor(map, ts) {
+  if (ts == null || !Number.isFinite(ts)) return null;
+  return map.get(Math.round(ts)) || null;
+}
+
 function validateConcession(c, i) {
   const errs = [];
   if (c.goal_zone && !VALID_ZONES.has(c.goal_zone)) errs.push(`#${i+1} invalid goal_zone`);
@@ -173,6 +196,13 @@ export async function POST(request, { params }) {
     }
     const profile = (await admin.from('profiles').select('full_name').eq('id', user.id).maybeSingle()).data;
 
+    // Path C: index clip_storage_path off gemini_output so each event row
+    // gets a relational clip pointer alongside its existing JSON pointer.
+    const gOut = job.gemini_output || {};
+    const clipPathBySaveTs = indexClipPaths(gOut?.saves?.parsed?.saves);
+    const clipPathByDistTs = indexClipPaths(gOut?.distribution?.parsed?.distribution);
+    const clipPathByGoalTs = indexClipPaths(gOut?.parsed?.goals);
+
     const matchId = crypto.randomUUID();
 
     const matchRow = {
@@ -223,6 +253,7 @@ export async function POST(request, { params }) {
         shot_description: c.shot_description || null,
         gk_observations: c.gk_observations || null,
         coach_notes: c.notes || null,
+        clip_storage_path: clipPathFor(clipPathByGoalTs, c.timestamp_seconds),
       }));
       const { error: gErr } = await admin.from('goals_conceded').insert(goalRows);
       if (gErr) {
@@ -250,6 +281,7 @@ export async function POST(request, { params }) {
           coach_notes: c.notes || null,
           attack_type: gem.attack_type || null,
           half: null,
+          clip_storage_path: clipPathFor(clipPathByGoalTs, gem.timestamp_seconds),
         };
       });
     const allScoredRows = [
@@ -264,6 +296,7 @@ export async function POST(request, { params }) {
         coach_notes: g.notes || null,
         attack_type: g.attack_type || null,
         half: g.half || null,
+        clip_storage_path: clipPathFor(clipPathByGoalTs, g.timestamp_seconds),
       })),
     ];
     if (allScoredRows.length) {
@@ -324,6 +357,7 @@ export async function POST(request, { params }) {
           // Review UI defaults from Gemini's call; coach can correct.
           // null is treated as 'us' on dashboard reads (back-compat).
           keeper_team: (s.keeper_team === 'us' || s.keeper_team === 'opp') ? s.keeper_team : null,
+          clip_storage_path: clipPathFor(clipPathBySaveTs, s.timestamp_seconds),
         };
       });
       const { error: seErr } = await admin.from('shot_events').insert(shotRows);
@@ -362,6 +396,7 @@ export async function POST(request, { params }) {
         source: 'video',
         // 2026-06-06 — keeper-team attribution. See shot_events comment above.
         keeper_team: (d.keeper_team === 'us' || d.keeper_team === 'opp') ? d.keeper_team : null,
+        clip_storage_path: clipPathFor(clipPathByDistTs, d.timestamp_seconds),
       }));
       const { error: dErr } = await admin.from('distribution_events').insert(distRows);
       if (dErr) {
