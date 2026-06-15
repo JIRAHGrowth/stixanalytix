@@ -117,127 +117,97 @@ function UploadPage() {
     setPickedFile(file);
   };
 
-  // Upload via TUS resumable protocol.
-  // Standard POST uploads to Supabase are capped at 50 MB; TUS lets us go up
-  // to 5 GB (our bucket limit) and gives us native progress + resume on
-  // network blips. Path: <user_id>/<timestamp>_<rand>/<filename>.
+  // Upload via Supabase's S3-compatible endpoint with multipart PUT.
+  //
+  // We previously used TUS (PATCH with application/offset+octet-stream chunks).
+  // That protocol is correct but the verb + content-type combination is rare
+  // enough on the public internet that AV web-shields, corporate proxies and
+  // even some home-router rules silently drop the PATCHes — observed in
+  // production as "tus: failed to upload chunk at offset 0 / [object
+  // ProgressEvent]" with no server-side log entry (Supabase only sees the
+  // HEADs that bracket each retry). The S3 path uses bog-standard PUT with
+  // application/octet-stream, which passes every middlebox that allows file
+  // uploads at all. Same bucket, same RLS, same JWT auth — only the wire
+  // protocol changes. Path: <user_id>/<timestamp>_<rand>/<filename>.
   const uploadFile = (file) => new Promise(async (resolve, reject) => {
-    const tus = await import("tus-js-client");
+    const { S3Client } = await import("@aws-sdk/client-s3");
+    const { Upload } = await import("@aws-sdk/lib-storage");
 
-    // Stitched match videos on home Wi-Fi can upload longer than the ~1 hour
-    // access-token TTL, and the upload page may have been idle for hours
-    // before click. We FORCE a server-fresh token at start (bypassing the
-    // localStorage cache) so the session is warm before tus starts, and
-    // re-fetch a fresh token on every tus request via onBeforeRequest below.
+    const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+    const ref = baseUrl.match(/^https:\/\/([a-z0-9-]+)\.supabase\.co/i)?.[1];
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!ref) return reject(new Error("Could not derive project ref from NEXT_PUBLIC_SUPABASE_URL."));
+    if (!anonKey) return reject(new Error("NEXT_PUBLIC_SUPABASE_ANON_KEY is not set in this environment. Check .env.local."));
+
+    // Warm the session before signing the first request. The page may have
+    // been idle for hours and the access token may already be stale.
     try { await getFreshToken(supabase, { forceRefresh: true }); }
     catch (e) { return reject(e); }
-
-    // Defensive: clear any tus URL-storage entries from previous failed
-    // uploads. tus-js-client only uses these if findPreviousUploads() is
-    // called (which we don't), but if a future change introduces resume
-    // behavior, we don't want a half-finished old upload to be silently
-    // resumed mid-session.
-    try {
-      Object.keys(localStorage)
-        .filter(k => k.startsWith("tus::"))
-        .forEach(k => localStorage.removeItem(k));
-    } catch { /* private mode / quota — non-fatal */ }
 
     const folder = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
     const objectPath = `${user.id}/${folder}/${safeName}`;
-    // Use the direct-storage hostname (project-id.storage.supabase.co), not the
-    // API-gateway hostname (project-id.supabase.co). Supabase recommends this
-    // for large uploads — it bypasses the front-door proxy entirely, which
-    // (a) is faster on multi-GB streams and (b) sidesteps a known papercut
-    // where the gateway path returns "Invalid Compact JWS" on tus create.
-    const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-    const storageUrl = baseUrl.replace(/^https:\/\/([a-z0-9-]+)\.supabase\.co/i, "https://$1.storage.supabase.co");
-    const endpoint = `${storageUrl}/storage/v1/upload/resumable`;
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-    // Hard-fail if anon key is missing — otherwise we'd silently send
-    // `apikey: undefined` and storage would return "Invalid Compact JWS".
-    if (!anonKey) {
-      return reject(new Error("NEXT_PUBLIC_SUPABASE_ANON_KEY is not set in this environment. Check .env.local."));
-    }
+    // Credential PROVIDER (function), not a static object. AWS SDK caches the
+    // returned credentials in memory and re-invokes the provider when the
+    // `expiration` field is past — so on a 30-minute multi-GB upload, every
+    // part that signs after the JWT expires gets re-issued automatically
+    // with a fresh token. Without this, parts uploaded > 1 hour after start
+    // would fail signature validation server-side.
+    const credentials = async () => {
+      const fresh = await getFreshToken(supabase);
+      let expiration;
+      try {
+        const payload = JSON.parse(atob(fresh.split(".")[1]));
+        if (payload?.exp) expiration = new Date(payload.exp * 1000);
+      } catch { /* malformed JWT — let signing fail loudly later */ }
+      return {
+        accessKeyId: ref,           // Supabase: project ref is the access key
+        secretAccessKey: anonKey,   // Supabase: anon key is the S3 secret
+        sessionToken: fresh,        // RLS-scoped user JWT
+        ...(expiration ? { expiration } : {}),
+      };
+    };
 
-    const upload = new tus.Upload(file, {
-      endpoint,
-      // ~5 min total retry budget — large match videos take 15-30 min and
-      // home Wi-Fi blips routinely exceed the previous ~38s ceiling.
-      retryDelays: [0, 3000, 5000, 10000, 20000, 30000, 60000, 120000],
-      // Auth headers are deliberately NOT set here. tus-js-client uses
-      // XMLHttpRequest.setRequestHeader under the hood, which by the XHR
-      // spec APPENDS (", ") instead of replacing when called twice for the
-      // same header name. Setting `authorization` / `apikey` here AND in
-      // onBeforeRequest produced `Bearer <jwt>, Bearer <jwt>` on the wire,
-      // which storage rejected as "Invalid Compact JWS". Set auth ONLY in
-      // onBeforeRequest — it runs once per request and gives us the
-      // freshest token even across hours-long uploads.
-      headers: {
-        "x-upsert": "false",
-      },
-      onBeforeRequest: async (req) => {
-        const fresh = await getFreshToken(supabase);
-        req.setHeader("authorization", `Bearer ${fresh}`);
-        req.setHeader("apikey", anonKey);
-      },
-      // uploadDataDuringCreation:false intentionally — when true, the initial
-      // POST carries the first 6 MB chunk AND creates the upload. On any
-      // retry of that POST (CF blip, slow response, anything network-y), the
-      // server can process the chunk twice and advance its offset by 12 MB
-      // while the client only counts 6 MB — the next PATCH then arrives at
-      // a stale offset and storage returns "409 Upload-Offset conflict".
-      // Splitting create (POST, no body) from data (PATCH-only) eliminates
-      // that race entirely. Costs one extra round-trip per upload (~ms on
-      // a multi-GB upload, irrelevant).
-      uploadDataDuringCreation: false,
-      removeFingerprintOnSuccess: true,
-      metadata: {
-        bucketName: "match-videos",
-        objectName: objectPath,
-        contentType: file.type || "video/mp4",
-        cacheControl: "3600",
-      },
-      // 6 MB chunks — Supabase's required size for resumable uploads.
-      chunkSize: 6 * 1024 * 1024,
-      // status 0 = no response received (network drop). Retry; don't fall
-      // through to onError, which kills the whole upload.
-      //
-      // 409 = Upload-Offset conflict. Happens when a PATCH actually succeeded
-      // server-side but the response was lost in transit — tus's automatic
-      // retry then re-sends the same chunk at a stale offset and storage
-      // rejects with 409. The tus protocol's recovery for this is exactly
-      // what tus-js-client does on retry: it sends a HEAD to learn the real
-      // server offset before re-issuing the PATCH. So we mark 409 as
-      // retryable and the library self-heals. Without this, a single
-      // mid-upload blip on a multi-GB file aborts the whole thing.
-      onShouldRetry: (err) => {
-        const status = err?.originalResponse?.getStatus?.();
-        if (status === 0 || status === undefined) return true;
-        if (status === 409) return true;
-        return status >= 500 || status === 408 || status === 429;
-      },
-      onError: (err) => {
-        const msg = err?.message || String(err);
-        // Diagnostic dump — we want to see the FULL upstream error while
-        // chasing the persistent "Invalid Compact JWS" failure.
-        try {
-          const status = err?.originalResponse?.getStatus?.();
-          const body = err?.originalResponse?.getBody?.();
-          const reqUrl = err?.originalRequest?.getURL?.();
-          const reqMethod = err?.originalRequest?.getMethod?.();
-          console.error("[tus upload] error:", { status, body, reqMethod, reqUrl, msg });
-        } catch {}
-        reject(new Error(`Upload failed: ${msg}`));
-      },
-      onProgress: (loaded, total) => {
-        setUploadProgress(Math.round((loaded / total) * 100));
-      },
-      onSuccess: () => resolve(objectPath),
+    // Direct-storage hostname for large-upload throughput; us-east-1 is the
+    // project's deployment region (S3 SigV4 region must match what the server
+    // expects, even though Supabase doesn't actually use AWS regions).
+    const s3 = new S3Client({
+      region: "us-east-1",
+      endpoint: `https://${ref}.storage.supabase.co/storage/v1/s3`,
+      forcePathStyle: true,
+      credentials,
     });
-    upload.start();
+
+    const upload = new Upload({
+      client: s3,
+      params: {
+        Bucket: "match-videos",
+        Key: objectPath,
+        Body: file,
+        ContentType: file.type || "video/mp4",
+        CacheControl: "3600",
+      },
+      // 8 MB parts × 4 in-flight = ~32 MB inflight, comfortable for home
+      // upload links and well above S3's 5 MB minimum part size.
+      partSize: 8 * 1024 * 1024,
+      queueSize: 4,
+      // Abort the whole multipart upload on failure so we don't leave dangling
+      // parts costing storage. Supabase also auto-aborts after 24h.
+      leavePartsOnError: false,
+    });
+
+    upload.on("httpUploadProgress", (p) => {
+      if (p.total) setUploadProgress(Math.round((p.loaded / p.total) * 100));
+    });
+
+    try {
+      await upload.done();
+      resolve(objectPath);
+    } catch (err) {
+      console.error("[s3 upload] error:", err);
+      reject(new Error(`Upload failed: ${err?.message || String(err)}`));
+    }
   });
 
   // Load keepers + initial job list
