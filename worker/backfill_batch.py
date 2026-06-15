@@ -25,22 +25,29 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env.local")
 import modal
 
 
-# Joshua's 5 older review_needed jobs that pre-date the clip pipeline.
-# Identified via audit on 2026-06-15 — see docs/keeper-card-landing-spec.md.
+# Round 2 (2026-06-15 evening): the 6 PUBLISHED Judah video-jobs that pre-date
+# the clip pipeline. Without these, the matches page falls back to seeking
+# the 1-3 GB source video on every click — what Joshua flagged as "loading
+# circle of death."
 JOBS = [
-    "f5ad42c7-a039-4fca-a1ab-0cb67e99627b",  # 2026-05-22
-    "e052b7d0-5ee9-4031-9655-c59855dca309",  # 2026-05-21
-    "c62b69d3-ca90-4ba0-95d5-38ef61ba4904",  # 2026-05-05
-    "6d171d79-c660-4bad-9605-ada8e52f3c0a",  # 2026-05-05
-    "f0fe8795-4dee-4fe6-910e-6dbc43c6e4bc",  # 2026-05-04
+    "d173e102-f0d7-4259-84c2-afa23550442a",  # 2026-05-31 OUFC 2016
+    "573c54fc-38f3-4a9e-9341-ef821e91405e",  # 2026-05-24 PFC 2016
+    "a0877aa3-b47c-4077-84a7-8f3bced97ac4",  # 2026-05-21 OUFC
+    "cf939885-f9ff-4d7b-bc2e-3d0815f40cb5",  # 2026-05-21 OUFC SOSC
+    "bc00c75c-ffe8-4584-85e2-29f9aa492fa9",  # 2026-05-03 KCITY 2016 Gold
+    "60cfa445-6364-4147-9830-0d1ddeffcb37",  # 2026-05-04 OFC 2016
 ]
 
 
 def main() -> int:
+    # Sequential execution (blocking) — the earlier 5-concurrent run had 3 of
+    # them silently killed by Modal under resource contention. One at a time
+    # is slow but reliable.
     backfill = modal.Function.from_name("stixanalytix-worker", "backfill_clips")
-    for job_id in JOBS:
-        call = backfill.spawn(job_id)
-        print(f"spawned job_id={job_id} call_id={call.object_id}")
+    for i, job_id in enumerate(JOBS, 1):
+        print(f"[{i}/{len(JOBS)}] starting {job_id}...", flush=True)
+        result = backfill.remote(job_id)
+        print(f"[{i}/{len(JOBS)}]   done: {result}", flush=True)
     return 0
 
 
