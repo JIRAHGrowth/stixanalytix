@@ -17,6 +17,7 @@ import { aggregateMatches } from "@/lib/stats";
 import {
   buildKeeperCardData,
   METRIC_LABEL,
+  describeTrend,
 } from "@/lib/keeper-form";
 
 const FONT_DISPLAY = FONT;
@@ -245,15 +246,13 @@ function KeeperHero({ keeper, club, formScore, latestMatch, pendingClipCount, to
 
         <div style={{
           marginTop: 14, fontSize: 11, color: t.text, fontWeight: 300, lineHeight: 1.5,
-          maxWidth: 260,
+          maxWidth: 280,
         }}>
-          Composite of save %, result quality, distribution, and errors.
-          <br/>
-          {formScore.components && (
-            <span style={{ color: t.dim, fontSize: 10 }}>
-              save {formScore.components.save_pct} · result {formScore.components.result_quality}
-              · dist {formScore.components.dist_success} · err {formScore.components.error_penalty}
-            </span>
+          Score blends save %, results, distribution, and errors over the last 5 matches.
+          {formScore.breakdown && (
+            <div style={{ color: t.dim, fontSize: 10, marginTop: 4 }}>
+              {formScore.breakdown.save} · {formScore.breakdown.result} · {formScore.breakdown.dist} · {formScore.breakdown.errors}
+            </div>
           )}
         </div>
       </div>
@@ -363,40 +362,57 @@ function SandwichCard({ title, accent, items, kind, emptyHint }) {
       </div>
 
       {items.length === 0 ? (
-        <div style={{ fontSize: 12, color: t.dim, fontWeight: 300, lineHeight: 1.5, padding: "20px 0" }}>
+        <div style={{ fontSize: 12, color: t.dim, fontWeight: 300, lineHeight: 1.6, padding: "20px 0" }}>
           {emptyHint}
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {items.map((it, i) => (
-            <div key={it.metric} style={{
-              display: "flex", alignItems: "flex-start", gap: 14,
-              paddingBottom: 14,
-              borderBottom: i === items.length - 1 ? "none" : `1px solid ${t.border}`,
-            }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 13, color: t.bright, fontWeight: 600 }}>{it.label}</span>
-                  <span style={{ fontFamily: FONT_DISPLAY, fontSize: 16, color: accent, fontWeight: 700 }}>
-                    {fmtMetricValue(it.metric, it.current)}
-                  </span>
-                  <DeltaPill delta={parseFloat(fmtMetricDelta(it.metric, it.delta).replace(/[+pp]/g, ""))} suffix={isAttribute(it.metric) ? "" : "pp"} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          {items.map((it, i) => {
+            const copy = describeTrend(it);
+            return (
+              <div key={it.metric} style={{
+                paddingBottom: 16,
+                borderBottom: i === items.length - 1 ? "none" : `1px solid ${t.border}`,
+              }}>
+                {/* Headline — full plain-English sentence */}
+                <div style={{
+                  fontSize: 14, fontWeight: 600, color: accent,
+                  lineHeight: 1.35, marginBottom: 6,
+                }}>
+                  {copy.headline}
                 </div>
-                <div style={{ fontSize: 11, color: t.text, fontWeight: 300, lineHeight: 1.5 }}>
-                  {kind === "up" ? "L5 vs prior 5" : "Watch the trend"} ·
-                  prev {fmtMetricValue(it.metric, it.previous)} · n={it.n_current}
+
+                {/* Value vs prior — natural reading */}
+                <div style={{ fontSize: 12, color: t.bright, fontWeight: 500, lineHeight: 1.5 }}>
+                  {copy.valueLine}
                 </div>
-                <div style={{ marginTop: 7, display: "flex", alignItems: "center", gap: 10 }}>
-                  <ModalityBadge modality={it.modality} />
-                  {it.bestClip && (
-                    <span style={{ fontSize: 10, color: t.dim, fontFamily: "monospace" }}>
-                      clip ready
-                    </span>
-                  )}
-                </div>
+
+                {/* Sample size — plain language */}
+                {copy.sample && (
+                  <div style={{ fontSize: 11, color: t.dim, fontWeight: 300, marginTop: 2 }}>
+                    {copy.sample}
+                  </div>
+                )}
+
+                {/* CTA — modality-aware */}
+                {copy.cta && (
+                  <div style={{
+                    marginTop: 9,
+                    display: "inline-flex", alignItems: "center", gap: 6,
+                    fontSize: 11, fontWeight: 600,
+                    color: it.modality === "talk" ? t.gold : it.modality === "reel" ? t.cyan : t.accent,
+                    cursor: it.bestClip || it.modality !== "watch" ? "pointer" : "default",
+                    opacity: (it.modality === "watch" && !it.bestClip) ? 0.5 : 1,
+                  }}>
+                    <span>{it.modality === "talk" ? "💬" : "▶"}</span> {copy.cta}
+                    {it.modality === "watch" && !it.bestClip && (
+                      <span style={{ color: t.dim, fontWeight: 400, marginLeft: 4 }}>· no clip yet</span>
+                    )}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -643,18 +659,24 @@ export default function DashboardPreview() {
               gap: 20, marginTop: 20,
             }}>
               <SandwichCard
-                title="Trending up · Last 5 vs Prior 5"
+                title="What's going well"
                 accent={t.green}
                 items={data.card.trendingUp}
                 kind="up"
-                emptyHint="No significant gains yet — needs n≥8 events or n≥3 rated matches with a meaningful delta."
+                emptyHint={
+                  <>
+                    Not enough match data yet to spot a real trend.
+                    <br/>
+                    We need at least 8 shots faced (or 3 rated matches) with a meaningful change before something shows up here.
+                  </>
+                }
               />
               <SandwichCard
-                title="Focus for next session"
+                title="What to work on next"
                 accent={t.gold}
                 items={data.card.focusAreas}
                 kind="focus"
-                emptyHint="Nothing meaningful trending down. Stay the course."
+                emptyHint="Nothing's slipping in the last 5 matches. Stay the course."
               />
             </div>
 
@@ -736,11 +758,13 @@ function DesignerNotes() {
       fontSize: 11, color: t.dim, lineHeight: 1.7, fontWeight: 300,
     }}>
       <strong style={{ color: t.text, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", fontSize: 9, display: "block", marginBottom: 6 }}>
-        Designer notes
+        How this works
       </strong>
-      Wired to live data via lib/keeper-form.js · Last 5 vs prior 5 window · stability check on
-      median-of-3 · n≥8 ratios / n≥3 attrs · |Δ|≥8pp ratios / |Δ|≥0.5 attrs.
-      Decision-making routes to Talk. Watch items carry their best clip already.
+      The cards compare your goalkeeper's last 5 matches against the 5 matches before that.
+      A trend only shows up if there's enough data behind it (at least 8 shots for a save-related
+      metric, or 3 rated matches for a coach-rating metric) and the change is big enough to mean
+      something. Watch items pull the best clip we have; Reel items will batch 3 clips around the
+      same theme; Talk items are coaching conversations — no clip needed.
     </div>
   );
 }
