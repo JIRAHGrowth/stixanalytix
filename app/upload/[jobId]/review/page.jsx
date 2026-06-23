@@ -219,6 +219,14 @@ export default function ReviewPage() {
         const raw = typeof window !== "undefined" ? window.localStorage.getItem(draftKey) : null;
         if (raw) {
           const draft = JSON.parse(raw);
+          // The coach-typed final score is independent of event-count drift,
+          // so we restore it whenever the draft is for THIS job — even if the
+          // events sanity check below rejects the rest of the draft. Losing a
+          // hand-entered 2-0 because Gemini's output shape changed by one row
+          // is a worse failure than the alternative.
+          if (draft._jobId === jobId && draft.scoreOverride) {
+            setScoreOverride(draft.scoreOverride);
+          }
           // Sanity check the draft matches the current job (same candidate / save / dist counts).
           if (
             draft.candidates?.length === cands.length &&
@@ -230,7 +238,6 @@ export default function ReviewPage() {
             setSaveRows(refreshClipUrls(draft.saveRows));
             setDistRows(refreshClipUrls(draft.distRows || initialDist));
             setExtraGoals(refreshClipUrls(draft.extraGoals || []));
-            setScoreOverride(draft.scoreOverride || null);
             setSavedAt(draft._savedAt || null);
             restoredFromDraft = true;
           }

@@ -101,6 +101,22 @@ export default function DistributionFocusCard({
         </div>
       </div>
 
+      {/* ACTION BAR — moved up from footer so corrections don't require scrolling */}
+      <div style={{
+        padding: "10px 16px", borderBottom: `1px solid ${t.border}`,
+        display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end",
+        background: t.card,
+      }}>
+        <button type="button" onClick={onReject} style={btnReject(t)}>Reject</button>
+        {onReclassify && (
+          <>
+            <button type="button" onClick={() => onReclassify("goal")} style={btnReclassify(t)}>→ Goal</button>
+            <button type="button" onClick={() => onReclassify("save")} style={btnReclassify(t)}>→ Save</button>
+          </>
+        )}
+        <button type="button" onClick={onConfirm} style={btnConfirm(t)}>Confirm & next →</button>
+      </div>
+
       {/* BODY: video + diagram */}
       <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 1fr) minmax(360px, 1.2fr)", gap: 16, padding: 16 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -173,25 +189,13 @@ export default function DistributionFocusCard({
         </div>
       </div>
 
-      {/* FOOTER */}
+      {/* FOOTER — keyboard hint only; action buttons moved up under the header */}
       <div style={{
-        padding: "12px 16px", borderTop: `1px solid ${t.border}`,
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        gap: 12, flexWrap: "wrap", background: t.cardAlt,
+        padding: "10px 16px", borderTop: `1px solid ${t.border}`,
+        background: t.cardAlt,
+        fontSize: 11, color: t.dim, fontFamily: "monospace",
       }}>
-        <div style={{ fontSize: 11, color: t.dim, fontFamily: "monospace" }}>
-          ← prev · → next · Enter confirm · click pitch target zone
-        </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-          <button type="button" onClick={onReject} style={btnReject(t)}>Reject</button>
-          {onReclassify && (
-            <>
-              <button type="button" onClick={() => onReclassify("goal")} style={btnReclassify(t)}>→ Goal</button>
-              <button type="button" onClick={() => onReclassify("save")} style={btnReclassify(t)}>→ Save</button>
-            </>
-          )}
-          <button type="button" onClick={onConfirm} style={btnConfirm(t)}>Confirm & next →</button>
-        </div>
+        ← prev · → next · Enter confirm · click pitch target zone
       </div>
     </div>
   );

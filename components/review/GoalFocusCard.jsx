@@ -78,6 +78,38 @@ export default function GoalFocusCard({
         </div>
       </div>
 
+      {/* ACTION BAR — moved up from footer so corrections don't require scrolling */}
+      <div style={{
+        padding: "10px 16px", borderBottom: `1px solid ${t.border}`,
+        display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end",
+        background: t.card,
+      }}>
+        <button type="button" onClick={onReject} style={btnReject(t)}>Reject</button>
+        {onReclassify && (
+          <>
+            <button
+              type="button"
+              onClick={() => onReclassify("save")}
+              style={btnReclassify(t)}
+              title="This isn't a goal — it's a save. The clip and timestamp move with the event; save fields are blank for fresh entry."
+            >
+              → Save
+            </button>
+            <button
+              type="button"
+              onClick={() => onReclassify("distribution")}
+              style={btnReclassify(t)}
+              title="This isn't a goal — it's a GK distribution event. The clip is reused; you'll enter the distribution fields fresh."
+            >
+              → Distribution
+            </button>
+          </>
+        )}
+        <button type="button" onClick={onConfirm} style={btnConfirm(t)}>
+          Confirm & next →
+        </button>
+      </div>
+
       {/* TOP — Video + diagrams */}
       <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 1fr) minmax(360px, 1.1fr)", gap: 16, padding: 16 }}>
         {/* LEFT: video + Gemini text */}
@@ -190,41 +222,13 @@ export default function GoalFocusCard({
         </div>
       )}
 
-      {/* FOOTER */}
+      {/* FOOTER — keyboard hint only; action buttons moved up under the header */}
       <div style={{
-        padding: "12px 16px", borderTop: `1px solid ${t.border}`,
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        gap: 12, flexWrap: "wrap", background: t.cardAlt,
+        padding: "10px 16px", borderTop: `1px solid ${t.border}`,
+        background: t.cardAlt,
+        fontSize: 11, color: t.dim, fontFamily: "monospace",
       }}>
-        <div style={{ fontSize: 11, color: t.dim, fontFamily: "monospace" }}>
-          ← prev · → next · Enter confirm · Esc reject · numpad 1-9 = goal zone
-        </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-          <button type="button" onClick={onReject} style={btnReject(t)}>Reject</button>
-          {onReclassify && (
-            <>
-              <button
-                type="button"
-                onClick={() => onReclassify("save")}
-                style={btnReclassify(t)}
-                title="This isn't a goal — it's a save. The clip and timestamp move with the event; save fields are blank for fresh entry."
-              >
-                → Save
-              </button>
-              <button
-                type="button"
-                onClick={() => onReclassify("distribution")}
-                style={btnReclassify(t)}
-                title="This isn't a goal — it's a GK distribution event. The clip is reused; you'll enter the distribution fields fresh."
-              >
-                → Distribution
-              </button>
-            </>
-          )}
-          <button type="button" onClick={onConfirm} style={btnConfirm(t)}>
-            Confirm & next →
-          </button>
-        </div>
+        ← prev · → next · Enter confirm · Esc reject · numpad 1-9 = goal zone
       </div>
     </div>
   );
