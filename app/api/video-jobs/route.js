@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
 import { createAdminClient } from '@/lib/supabase-admin';
 import { triggerWorker } from '@/lib/modal-trigger';
+import { identifyProvider } from '@/lib/url-resolver';
 
 const REQUIRED_FIELDS = [
   'keeper_id', 'club_id', 'match_date', 'session_type', 'video_url',
@@ -22,8 +23,16 @@ export async function POST(request) {
     if (body.session_type !== 'training' && (!body.opponent || !body.venue)) {
       return NextResponse.json({ error: 'Match/Friendly requires opponent and venue' }, { status: 400 });
     }
-    try { new URL(body.video_url); }
-    catch { return NextResponse.json({ error: 'video_url is not a valid URL' }, { status: 400 }); }
+    // Cheap URL-shape check via the shared provider registry. Rejects
+    // malformed URLs without spawning the Modal worker. The Python resolver
+    // in worker/resolvers/ is the source of truth for actual resolution.
+    const sourceProvider = identifyProvider(body.video_url);
+    if (!sourceProvider) {
+      return NextResponse.json(
+        { error: 'video_url is not a valid http(s) URL' },
+        { status: 400 },
+      );
+    }
 
     // Verify keeper belongs to this coach (defense in depth on top of RLS)
     const admin = createAdminClient();
@@ -62,6 +71,9 @@ export async function POST(request) {
         club_id: body.club_id,
         video_url: body.video_url,
         storage_path: body.storage_path || null,
+        // Provisional label — the worker overwrites this with the resolver's
+        // authoritative value + full source_metadata once it runs.
+        source_provider: sourceProvider,
         match_metadata: matchMetadata,
         status: 'queued',
       })

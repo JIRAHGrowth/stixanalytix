@@ -26,6 +26,7 @@ IMAGE = (
         "fastapi[standard]>=0.115.0",
     )
     .add_local_file("worker/chunking.py", remote_path="/root/chunking.py")
+    .add_local_dir("worker/resolvers", remote_path="/root/resolvers")
     .add_local_dir("prompts", remote_path="/root/prompts")
     .add_local_dir("schemas", remote_path="/root/schemas")
 )
@@ -738,13 +739,66 @@ def process(job_id: str) -> dict:
         # Spatial calibration based on age group / field size (Phase 2.1)
         spatial_calibration = _build_spatial_calibration(meta)
 
+        # === Resolve source URL → playable URL + provider metadata ===
+        # See worker/resolvers/ for the provider registry. VEO share links get
+        # translated to a signed CDN MP4 here; direct URLs pass through.
+        # Provider metadata (teams, age group, match duration) is persisted on
+        # video_jobs.source_metadata as weak-supervision signal for the
+        # accuracy audit — see project_video_pipeline_phase0_findings context.
+        import sys as _sys
+        if "/root" not in _sys.path:
+            _sys.path.insert(0, "/root")
+        from resolvers import resolve as _resolve_url, ResolveError
+
+        resolve_run_id = _pipeline_log_start(sb, job_id, "resolve")
+        resolve_start = time.time()
+        try:
+            resolved = _resolve_url(job["video_url"])
+            print(
+                f"[resolve] provider={resolved.provider} "
+                f"render={resolved.render_type} duration={resolved.duration_sec}s",
+                flush=True,
+            )
+        except ResolveError as re:
+            # Coach-facing taxonomy: write the friendly message, log the
+            # detail. Preserves retryability via ResolveError.should_retry.
+            _pipeline_log_finish(sb, resolve_run_id, "failed",
+                duration_ms=int((time.time() - resolve_start) * 1000),
+                error_message=f"{type(re).__name__}: {re.detail or re.coach_message}")
+            sb.table("video_jobs").update({
+                "status": "failed",
+                "error_message": re.coach_message,
+                "retry_count": (job.get("retry_count") or 0) + 1,
+                "finished_at": now(),
+            }).eq("id", job_id).execute()
+            return {"job_id": job_id, "status": "failed", "reason": type(re).__name__}
+
+        _pipeline_log_finish(sb, resolve_run_id, "completed",
+            duration_ms=int((time.time() - resolve_start) * 1000),
+            result_payload={
+                "provider": resolved.provider,
+                "render_type": resolved.render_type,
+                "duration_sec": resolved.duration_sec,
+            })
+
+        # Persist provider + structured metadata for the accuracy audit and
+        # for future retries (so we don't hammer VEO's API on every attempt).
+        sb.table("video_jobs").update({
+            "source_provider": resolved.provider,
+            "source_metadata": resolved.provider_metadata,
+        }).eq("id", job_id).execute()
+
         # === Download the source video to /tmp ===
         download_run_id = _pipeline_log_start(sb, job_id, "download")
         download_start = time.time()
-        print(f"[download] fetching video from storage...", flush=True)
+        print(
+            f"[download] fetching from {resolved.provider} "
+            f"({resolved.render_type or 'direct'})...",
+            flush=True,
+        )
         try:
             with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
-                r = requests.get(job["video_url"], stream=True, timeout=600)
+                r = requests.get(resolved.playable_url, stream=True, timeout=600)
                 r.raise_for_status()
                 for chunk in r.iter_content(chunk_size=1024 * 1024):
                     f.write(chunk)
@@ -1378,17 +1432,29 @@ def backfill_clips(job_id: str, force: bool = False) -> dict:
     if not (goals or saves or dist):
         return {"job_id": job_id, "error": "no_events_in_gemini_output"}
 
-    # Resolve a fresh signed download URL — the one stored on the job row is
-    # almost certainly expired (2h TTL).
+    # Resolve a fresh download URL.
+    # - Jobs uploaded via the app have a storage_path → sign a new Supabase URL
+    #   (the URL persisted on the row is almost certainly expired; 2h TTL).
+    # - Jobs from external URLs (VEO, direct MP4) go through the resolver, so
+    #   VEO share links that were fine at ingest time still work here even if
+    #   we're re-running the backfill months later against a fresh signed URL.
     if job.get("storage_path"):
         signed = sb.storage.from_("match-videos").create_signed_url(job["storage_path"], 7200)
         download_url = signed.get("signedURL") or signed.get("signedUrl") or signed.get("url")
         if not download_url:
             return {"job_id": job_id, "error": "could_not_sign_source_url"}
     else:
-        download_url = job.get("video_url")
-        if not download_url:
+        source_url = job.get("video_url")
+        if not source_url:
             return {"job_id": job_id, "error": "no_video_url_or_storage_path"}
+        import sys as _sys
+        if "/root" not in _sys.path:
+            _sys.path.insert(0, "/root")
+        from resolvers import resolve as _resolve_url, ResolveError
+        try:
+            download_url = _resolve_url(source_url).playable_url
+        except ResolveError as re:
+            return {"job_id": job_id, "error": f"resolve_failed: {type(re).__name__}: {re.detail or re.coach_message}"}
 
     print(f"[backfill] downloading source video...", flush=True)
     download_start = time.time()

@@ -454,7 +454,7 @@ function UploadPage() {
               </div>
             )}
 
-            <Field label="Video source" required hint={sourceMode === "file" ? "Pick the .mp4 file from your device. WiFi recommended for files over 500 MB." : "Direct video URL — only works if the URL ends in .mp4 / returns the raw video. XbotGo/Veo/Hudl share links don't work — use 'Upload file' instead."}>
+            <Field label="Video source" required hint={sourceMode === "file" ? "Pick the .mp4 file from your device. WiFi recommended for files over 500 MB." : "Paste a VEO share link (make sure the match is set to public / anyone-with-link), or a direct .mp4 URL. Hudl / XbotGo coming next."}>
               <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
                 <button type="button" onClick={() => setSourceMode("file")} style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: `1px solid ${sourceMode === "file" ? t.accent : t.border}`, background: sourceMode === "file" ? t.accent + "22" : "transparent", color: sourceMode === "file" ? t.accent : t.dim, fontSize: 12, fontWeight: 600, fontFamily: font, cursor: "pointer" }}>📁 Upload file</button>
                 <button type="button" onClick={() => setSourceMode("url")} style={{ flex: 1, padding: "10px 12px", borderRadius: 8, border: `1px solid ${sourceMode === "url" ? t.accent : t.border}`, background: sourceMode === "url" ? t.accent + "22" : "transparent", color: sourceMode === "url" ? t.accent : t.dim, fontSize: 12, fontWeight: 600, fontFamily: font, cursor: "pointer" }}>🔗 Paste URL</button>
