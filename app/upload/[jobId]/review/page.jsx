@@ -1031,6 +1031,68 @@ export default function ReviewPage() {
   const updateExtra = (id, patch) => setExtraGoals(arr => arr.map(c => c._id === id ? { ...c, ...patch } : c));
   const removeExtra = (id) => setExtraGoals(arr => arr.filter(c => c._id !== id));
 
+  // Page-level Add-missed handlers. These exist in addition to the ones inside
+  // SavesTable / DistributionTable so the buttons are visible in Focus mode
+  // too (the Table components only render in Bulk mode). Both keeper_team
+  // variants ("us" / "opp") are exposed so coach can tag opposition-GK saves
+  // and distributions as training data — filtered out of analytics per
+  // saves.md line 1 / distribution.md line 25.
+  const addPageSave = (keeperTeam) => {
+    setSaveRows(arr => [...(arr || []), {
+      _id: `coach_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      coach_added: true,
+      keep: true,
+      keeper_team: keeperTeam,
+      timestamp_str: "",
+      shot_origin: "",
+      shot_type: "Foot",
+      on_target: "yes",
+      gk_action: "Catch",
+      gk_visible: "yes",
+      outcome: "held",
+      body_distance_zone: "",
+      goal_placement_height: "",
+      goal_placement_side: "",
+      shot_description: "",
+      gk_observations: "",
+      notes: "",
+      gemini: { confidence: "—" },
+    }]);
+  };
+  const addPageDist = (keeperTeam) => {
+    setDistRows(arr => [...(arr || []), {
+      _id: `dcoach_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      coach_added: true,
+      keep: true,
+      keeper_team: keeperTeam,
+      timestamp_str: "",
+      trigger: "goal_kick",
+      type: "pass",
+      successful: "true",
+      press_state: "unpressed",
+      pass_selection: "",
+      direction: "",
+      receiver: "defender",
+      first_touch: "",
+      notes: "",
+      gemini: { confidence: "—" },
+    }]);
+  };
+
+  // Bulk unreview for Gemini candidates. Coach's added extras + save/dist
+  // decisions are preserved. Uses a browser confirm because the operation is
+  // deliberate but reversible (any individual candidate can be re-accepted).
+  const resetCandidateGoalsToUnreviewed = () => {
+    if (typeof window === "undefined") return;
+    const kept = candidates.filter(c => c.keep).length;
+    if (!window.confirm(
+      `Reset all ${candidates.length} Gemini goal candidates to keep=false?\n\n` +
+      `Currently ${kept} are marked keep. Your added extra goals stay untouched. ` +
+      `Your save and distribution decisions stay untouched. You'll re-accept only the real goals.`
+    )) return;
+    setCandidates(cs => cs.map(c => ({ ...c, keep: false })));
+  };
+
   if (authLoading || loading) {
     return <div style={{ minHeight: "100vh", background: t.bg, color: t.dim, fontFamily: font, display: "grid", placeItems: "center" }}>Loading…</div>;
   }
@@ -1149,15 +1211,25 @@ export default function ReviewPage() {
         {/* CANDIDATES */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "16px 0 10px", gap: 10, flexWrap: "wrap" }}>
           <h3 style={{ fontSize: 13, fontWeight: 700, color: t.bright, letterSpacing: 0.4, margin: 0 }}>CANDIDATE GOALS</h3>
-          <div role="tablist" style={{ display: "inline-flex", border: `1px solid ${t.border}`, borderRadius: 6, overflow: "hidden", fontFamily: font, fontSize: 11 }}>
-            <button role="tab" aria-selected={reviewMode === "focus"} type="button" onClick={() => switchMode("focus")}
-              style={{ padding: "5px 12px", background: reviewMode === "focus" ? t.accent : "transparent", color: reviewMode === "focus" ? "#fff" : t.dim, border: "none", cursor: "pointer", fontWeight: reviewMode === "focus" ? 700 : 500 }}>
-              Focus
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={resetCandidateGoalsToUnreviewed}
+              title="Set every Gemini candidate to keep=false. Coach-added goals + save/dist decisions stay. Use when Gemini's over-detection is easier to fix by re-accepting the real 1-2 goals than rejecting 15 wrong ones."
+              style={{ padding: "5px 12px", borderRadius: 6, border: `1px solid ${t.border}`, background: "transparent", color: t.dim, fontSize: 11, fontFamily: font, cursor: "pointer", fontWeight: 600 }}
+            >
+              ↺ Reset all to unreviewed
             </button>
-            <button role="tab" aria-selected={reviewMode === "bulk"} type="button" onClick={() => switchMode("bulk")}
-              style={{ padding: "5px 12px", background: reviewMode === "bulk" ? t.accent : "transparent", color: reviewMode === "bulk" ? "#fff" : t.dim, border: "none", cursor: "pointer", fontWeight: reviewMode === "bulk" ? 700 : 500 }}>
-              Bulk
-            </button>
+            <div role="tablist" style={{ display: "inline-flex", border: `1px solid ${t.border}`, borderRadius: 6, overflow: "hidden", fontFamily: font, fontSize: 11 }}>
+              <button role="tab" aria-selected={reviewMode === "focus"} type="button" onClick={() => switchMode("focus")}
+                style={{ padding: "5px 12px", background: reviewMode === "focus" ? t.accent : "transparent", color: reviewMode === "focus" ? "#fff" : t.dim, border: "none", cursor: "pointer", fontWeight: reviewMode === "focus" ? 700 : 500 }}>
+                Focus
+              </button>
+              <button role="tab" aria-selected={reviewMode === "bulk"} type="button" onClick={() => switchMode("bulk")}
+                style={{ padding: "5px 12px", background: reviewMode === "bulk" ? t.accent : "transparent", color: reviewMode === "bulk" ? "#fff" : t.dim, border: "none", cursor: "pointer", fontWeight: reviewMode === "bulk" ? 700 : 500 }}>
+                Bulk
+              </button>
+            </div>
           </div>
         </div>
         {reviewMode === "focus" ? (
@@ -1312,6 +1384,23 @@ export default function ReviewPage() {
         ) : (
           <SavesTable rows={saveRows} onChange={setSaveRows} t={t} font={font} activeId={activeFocus.section === 'saves' ? activeId : null} />
         )}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 4, marginBottom: 8 }}>
+          <button
+            type="button"
+            onClick={() => addPageSave('us')}
+            style={{ padding: "8px 14px", borderRadius: 8, border: `1px dashed ${t.accent}66`, background: "transparent", color: t.accent, fontSize: 12, fontFamily: font, cursor: "pointer" }}
+          >
+            + Add a save (our GK)
+          </button>
+          <button
+            type="button"
+            onClick={() => addPageSave('opp')}
+            style={{ padding: "8px 14px", borderRadius: 8, border: `1px dashed ${t.dim}66`, background: "transparent", color: t.dim, fontSize: 12, fontFamily: font, cursor: "pointer" }}
+            title="Opposition-GK saves. Captured for model training; excluded from the analyzed keeper's stats."
+          >
+            + Add an opponent GK save
+          </button>
+        </div>
 
         {/* DISTRIBUTION — Focus or Bulk */}
         <h3 style={{ fontSize: 13, fontWeight: 700, color: t.bright, letterSpacing: 0.4, margin: "24px 0 10px" }}>DISTRIBUTION</h3>
@@ -1329,6 +1418,23 @@ export default function ReviewPage() {
         ) : (
           <DistributionTable rows={distRows} onChange={setDistRows} t={t} font={font} activeId={activeFocus.section === 'distribution' ? activeId : null} />
         )}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 4, marginBottom: 8 }}>
+          <button
+            type="button"
+            onClick={() => addPageDist('us')}
+            style={{ padding: "8px 14px", borderRadius: 8, border: `1px dashed ${t.accent}66`, background: "transparent", color: t.accent, fontSize: 12, fontFamily: font, cursor: "pointer" }}
+          >
+            + Add a distribution (our GK)
+          </button>
+          <button
+            type="button"
+            onClick={() => addPageDist('opp')}
+            style={{ padding: "8px 14px", borderRadius: 8, border: `1px dashed ${t.dim}66`, background: "transparent", color: t.dim, fontSize: 12, fontFamily: font, cursor: "pointer" }}
+            title="Opposition-GK distributions. Captured for model training; excluded from the analyzed keeper's stats."
+          >
+            + Add an opponent GK distribution
+          </button>
+        </div>
 
         {/* PUBLISH */}
         {error && <div style={{ color: t.red, fontSize: 12, marginBottom: 12 }}>{error}</div>}
