@@ -7,9 +7,9 @@ import { useAuth } from "@/context/AuthContext";
 
 import { tDark } from "@/lib/theme";
 import {
-  GOAL_ZONES, SHOT_ORIGINS, SHOT_TYPES, GOAL_SOURCES, GK_POSITIONING,
+  GOAL_ZONES, OFF_TARGET_ZONES, SHOT_ORIGINS, SHOT_TYPES, GOAL_SOURCES, GK_POSITIONING,
   GOAL_RANKS, GK_ACTIONS_VIDEO, ON_TARGET_OPTIONS, GK_VISIBLE_OPTIONS,
-  OUTCOMES, BODY_ZONES, GMH_OPTIONS, GMS_OPTIONS, FONT,
+  OUTCOMES, BODY_ZONES, GMH_OPTIONS, GMS_OPTIONS, DIST_TARGET_ZONES, FONT,
 } from "@/lib/constants";
 
 const t = tDark;
@@ -973,7 +973,16 @@ export default function ReviewPage() {
     // Phase 2.1 — saves payload. Only kept rows go to shot_events. Coach-added
     // rows convert their MM:SS string into seconds; Gemini-detected rows already
     // have timestamp_seconds.
-    const savesPayload = saveRows.filter(r => r.keep).map(r => ({
+    // Saves payload — feeds shot_events on the DB, which powers the dashboard
+    // heatmap, save-count aggregates, and the scorecard. Merges Gemini-kept
+    // rows (saveRows) with coach-added extras (extraSaves) so the dashboard
+    // sees BOTH — otherwise extras only show up as coach_corrections (training
+    // data) and never reach the analytics surface. keeper_team is preserved
+    // so opposition-GK events are downstream-filterable per keeper.
+    const savesPayload = [
+      ...saveRows.filter(r => r.keep),
+      ...extraSaves.filter(r => r.keep !== false),
+    ].map(r => ({
       timestamp_seconds: r.coach_added ? tsStrToSeconds(r.timestamp_str) : r.timestamp_seconds,
       shot_origin: r.shot_origin || null,
       shot_type: r.shot_type || null,
@@ -985,6 +994,7 @@ export default function ReviewPage() {
       goal_placement_height: r.goal_placement_height || null,
       goal_placement_side: r.goal_placement_side || null,
       goal_zone: r.goal_zone || null,
+      keeper_team: r.keeper_team || null,
       // v3 focus-card additions (schema 2026-06-01):
       technique: r.technique || null,
       dive_family: r.dive_family || null,
@@ -997,7 +1007,14 @@ export default function ReviewPage() {
     // Phase 2.2 — distribution payload. Only kept rows persist to distribution_events.
     // Phase 2.4 — emit press_state (enum) so server's coercePressState resolves it
     // to the legacy under_pressure boolean. Older clients may still send under_pressure.
-    const distPayload = distRows.filter(r => r.keep).map(r => ({
+    // Distribution payload — feeds distribution_events on the DB (dashboard
+    // distribution panel + scorecard). Same merge pattern as savesPayload:
+    // Gemini-kept + coach-added extras. Otherwise extras only exist as
+    // coach_corrections (training) and never reach the analytics surface.
+    const distPayload = [
+      ...distRows.filter(r => r.keep),
+      ...extraDist.filter(r => r.keep !== false),
+    ].map(r => ({
       timestamp_seconds: r.coach_added ? tsStrToSeconds(r.timestamp_str) : r.timestamp_seconds,
       match_clock: r.match_clock || null,
       trigger: r.trigger || null,
@@ -1008,6 +1025,7 @@ export default function ReviewPage() {
       direction: r.direction || null,
       receiver: r.receiver || null,
       first_touch: r.first_touch || null,
+      keeper_team: r.keeper_team || null,
       // v3 focus-card addition (schema 2026-06-01):
       target_zone: r.target_zone || null,
       notes: r.notes || null,
@@ -1659,6 +1677,26 @@ const OPT_PASS_SELECTION = [
   { id: "drilled_into_channel",    label: "Drilled into channel" },
 ];
 
+// "Where the shot went" — feeds the dashboard heatmap. On-target shots use
+// one of the 9 GOAL_ZONES; off-target shots use OFF_TARGET_ZONES; Unclear
+// for anything the coach can't localise.
+const OPT_SHOT_DESTINATION = [
+  ...GOAL_ZONES.map(z => ({ id: z, label: z })),
+  ...OFF_TARGET_ZONES.map(z => ({ id: z, label: z })),
+  { id: "Unclear", label: "Unclear" },
+];
+
+// "Where the ball went" for distributions — same 12-zone map used by
+// DistributionFocusCard so coach-added and Gemini-detected distributions
+// contribute to the same dashboard visualisation.
+const OPT_DIST_TARGET = [
+  ...DIST_TARGET_ZONES.map(z => ({
+    id: z.id,
+    label: `${z.label} (${z.band.toLowerCase()})`,
+  })),
+  { id: "unclear", label: "Unclear" },
+];
+
 // Shared dropdown-of-options helper. Options are {id,label} pairs — display
 // shows the label, state stores the id.
 function OptionSelect({ label, value, options, onValueChange, t, inputStyle }) {
@@ -1707,6 +1745,9 @@ function ExtraSaveCard({ row, onChange, onRemove, t, font, inputStyle, meta }) {
         <OptionSelect label="Outcome"     value={row.outcome}     options={OPT_OUTCOME}     onValueChange={v => onChange({ outcome: v })}     t={t} inputStyle={inputStyle} />
         <OptionSelect label="Body zone"   value={row.body_distance_zone} options={OPT_BODY_ZONE} onValueChange={v => onChange({ body_distance_zone: v })} t={t} inputStyle={inputStyle} />
       </div>
+      <div style={{ marginBottom: 10 }}>
+        <OptionSelect label="Where the shot went" value={row.goal_zone} options={OPT_SHOT_DESTINATION} onValueChange={v => onChange({ goal_zone: v })} t={t} inputStyle={inputStyle} />
+      </div>
       <textarea
         value={row.notes || ""}
         onChange={e => onChange({ notes: e.target.value })}
@@ -1746,8 +1787,9 @@ function ExtraDistCard({ row, onChange, onRemove, t, font, inputStyle }) {
         <OptionSelect label="Receiver"     value={row.receiver}     options={OPT_RECEIVER}     onValueChange={v => onChange({ receiver: v })}     t={t} inputStyle={inputStyle} />
         <OptionSelect label="First touch"  value={row.first_touch}  options={OPT_FIRST_TOUCH}  onValueChange={v => onChange({ first_touch: v })}  t={t} inputStyle={inputStyle} />
       </div>
-      <div style={{ marginBottom: 10 }}>
-        <OptionSelect label="Pass selection (optional)" value={row.pass_selection} options={OPT_PASS_SELECTION} onValueChange={v => onChange({ pass_selection: v })} t={t} inputStyle={inputStyle} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 10 }}>
+        <OptionSelect label="Where the ball went"        value={row.target_zone}    options={OPT_DIST_TARGET}    onValueChange={v => onChange({ target_zone: v })}    t={t} inputStyle={inputStyle} />
+        <OptionSelect label="Pass selection (optional)"  value={row.pass_selection} options={OPT_PASS_SELECTION} onValueChange={v => onChange({ pass_selection: v })} t={t} inputStyle={inputStyle} />
       </div>
       <textarea
         value={row.notes || ""}
