@@ -5,7 +5,7 @@
 // there's no 9-zone goal-mouth grid — but the target zone diagram is fully
 // click-driven, which is faster than a keyboard mapping anyway.
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { tDark } from "@/lib/theme";
 import { FONT } from "@/lib/constants";
 import DistributionFocusCard from "./DistributionFocusCard";
@@ -24,6 +24,18 @@ export default function FocusModeDistribution({
   const total = rows.length;
   const safeIndex = Math.min(index, Math.max(0, total - 1));
   const row = rows[safeIndex];
+
+  // See FocusModeSaves for rationale — auto-jump to a coach-added row when
+  // it's appended so the "+ Add a distribution" button actually surfaces
+  // an editable card instead of silently appending far below.
+  const prevLen = useRef(rows.length);
+  useEffect(() => {
+    if (rows.length > prevLen.current) {
+      const last = rows[rows.length - 1];
+      if (last && last.coach_added) setIndex(rows.length - 1);
+    }
+    prevLen.current = rows.length;
+  }, [rows]);
 
   const go = useCallback((dir) => {
     setIndex(i => Math.max(0, Math.min(total - 1, i + dir)));

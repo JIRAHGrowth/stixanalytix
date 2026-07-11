@@ -1,7 +1,7 @@
 "use client";
 // Focus-mode wrapper for the saves section. Same shape as FocusModeGoals.
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { tDark } from "@/lib/theme";
 import { GOAL_ZONES, FONT } from "@/lib/constants";
 import SaveFocusCard from "./SaveFocusCard";
@@ -30,6 +30,22 @@ export default function FocusModeSaves({
   const total = rows.length;
   const safeIndex = Math.min(index, Math.max(0, total - 1));
   const row = rows[safeIndex];
+
+  // When the coach clicks "+ Add a save (our GK / opponent GK)" on the review
+  // page, the new row is appended to the END of the array. Without this,
+  // focus mode stays on whatever card the coach was viewing and the new row
+  // is invisible far below — which reads as "the button doesn't work."
+  // Detect the append (rows.length grew AND the last row is coach_added) and
+  // jump the index to it so the coach immediately sees the empty card they
+  // just created.
+  const prevLen = useRef(rows.length);
+  useEffect(() => {
+    if (rows.length > prevLen.current) {
+      const last = rows[rows.length - 1];
+      if (last && last.coach_added) setIndex(rows.length - 1);
+    }
+    prevLen.current = rows.length;
+  }, [rows]);
 
   const go = useCallback((dir) => {
     setIndex(i => Math.max(0, Math.min(total - 1, i + dir)));
