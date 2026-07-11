@@ -31,6 +31,45 @@ import FocusModeGoals from "@/components/review/FocusModeGoals";
 import FocusModeSaves from "@/components/review/FocusModeSaves";
 import FocusModeDistribution from "@/components/review/FocusModeDistribution";
 
+// Save-state indicator. Always visible in the review header so the coach
+// KNOWS when their work is durably on the server before walking away.
+// The BC Soccer Amalie incident (2026-07-11) was in part a UX failure:
+// the old badge said "Auto-saved locally" which sounded reassuring but
+// meant nothing survived a re-mount. Now colours + wording map directly
+// to durability guarantees.
+function SaveStateBadge({ state, savedAt, theme, font, isPublished }) {
+  if (isPublished) return null;
+  const t = theme;
+  const fmt = (iso) => iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+  const map = {
+    idle:    { color: t.dim,    bg: 'transparent',        icon: '•',  text: 'No changes yet' },
+    saving:  { color: t.orange, bg: `${t.orange}18`,      icon: '⋯',  text: 'Saving to cloud…' },
+    saved:   { color: t.green,  bg: `${t.green}18`,       icon: '✓',  text: savedAt ? `Saved to cloud · ${fmt(savedAt)}` : 'Saved to cloud' },
+    error:   { color: t.red,    bg: `${t.red}18`,         icon: '⚠',  text: 'Save failed — work is buffered locally, retrying' },
+    offline: { color: t.orange, bg: `${t.orange}18`,      icon: '⚠',  text: 'Offline — work is buffered locally' },
+  };
+  const s = map[state] || map.idle;
+  return (
+    <div
+      title={state === 'saved' ? 'Your work is durably stored on the server. Safe to close the tab.' :
+             state === 'error' ? 'The server write failed. Work is buffered in localStorage; we will retry automatically on your next edit.' :
+             state === 'offline' ? 'No internet connection detected. Work is buffered in localStorage and will flush to the server when you reconnect.' :
+             state === 'saving' ? 'Writing to the server now.' :
+             'No changes yet.'}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        padding: '4px 10px', borderRadius: 999,
+        border: `1px solid ${s.color}55`, background: s.bg,
+        color: s.color, fontSize: 11, fontWeight: 600,
+        fontFamily: font, whiteSpace: 'nowrap',
+      }}
+    >
+      <span>{s.icon}</span>
+      <span>{s.text}</span>
+    </div>
+  );
+}
+
 export default function ReviewPage() {
   const { user, supabase, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -52,8 +91,26 @@ export default function ReviewPage() {
   // Phase 2.2 — distribution review state
   const [distRows, setDistRows] = useState([]);
 
-  // Auto-save status indicator
+  // Auto-save status indicator.
+  //
+  // saveState is the truth for the UI banner:
+  //   'idle'    — no changes since last successful save (or fresh page)
+  //   'saving'  — a POST /draft is in flight
+  //   'saved'   — server acknowledged the write; work is durable
+  //   'error'   — server write failed; localStorage backup was written
+  //   'offline' — client detected offline; only localStorage buffered
+  //
+  // savedAt is the server-authoritative timestamp of the last successful
+  // draft POST. Displayed to the coach so they can visually confirm
+  // work is durable before walking away.
+  //
+  // The old model wrote only to localStorage, which meant a background
+  // JWT refresh could re-mount this effect and overwrite the local draft
+  // with Gemini's raw output — losing 30+ min of coach edits (BC Soccer
+  // Amalie incident, 2026-07-11). Fix: server is source of truth.
+  // localStorage is only a fallback buffer for offline / server errors.
   const [savedAt, setSavedAt] = useState(null);
+  const [saveState, setSaveState] = useState('idle');
   const draftKey = `stix-review-draft-${jobId}`;
 
   // Phase A2 — keyboard navigation. activeFocus tracks the currently
@@ -211,44 +268,73 @@ export default function ReviewPage() {
         return e;
       });
 
-      // Restore from localStorage if a draft exists for this job. Drafts are
-      // tied to the job_id and the gemini_output count so we don't restore an
-      // out-of-date draft against a re-analyzed job.
+      // Restore priority: server draft > localStorage fallback > Gemini raw.
+      //
+      // Server draft is authoritative — it's the last state the coach
+      // confirmed saved. localStorage is a fallback for the offline case
+      // where a POST failed and the coach kept editing. Gemini raw is only
+      // used when both are absent (first-ever load of this review).
+      //
+      // We deliberately DO NOT do the old count-based sanity check on the
+      // server draft. That check caused the BC Soccer overwrite: if a
+      // background JWT refresh re-mounted this effect and the count check
+      // failed for any subtle reason, the entire draft was discarded and
+      // the state was reset to Gemini's raw output — then the auto-save
+      // effect immediately overwrote the localStorage backup with the
+      // reset state, silently erasing coach work.
+      //
+      // Trust the server draft. If gemini_output has genuinely changed
+      // shape (e.g. re-analysis), that's rare enough to handle by having
+      // the coach click "Reset to Gemini output" manually — better than
+      // silently losing hours of work.
       let restoredFromDraft = false;
-      try {
-        const raw = typeof window !== "undefined" ? window.localStorage.getItem(draftKey) : null;
-        if (raw) {
-          const draft = JSON.parse(raw);
-          // The coach-typed final score is independent of event-count drift,
-          // so we restore it whenever the draft is for THIS job — even if the
-          // events sanity check below rejects the rest of the draft. Losing a
-          // hand-entered 2-0 because Gemini's output shape changed by one row
-          // is a worse failure than the alternative.
-          if (draft._jobId === jobId && draft.scoreOverride) {
-            setScoreOverride(draft.scoreOverride);
+      const serverDraft = json.job?.review_draft;
+      const serverDraftAt = json.job?.review_draft_updated_at;
+
+      if (serverDraft && typeof serverDraft === 'object' && serverDraft.candidates) {
+        setCandidates(refreshClipUrls(serverDraft.candidates));
+        setSaveRows(refreshClipUrls(serverDraft.saveRows || initialSaves));
+        setDistRows(refreshClipUrls(serverDraft.distRows || initialDist));
+        setExtraGoals(refreshClipUrls(serverDraft.extraGoals || []));
+        if (serverDraft.scoreOverride) setScoreOverride(serverDraft.scoreOverride);
+        setSavedAt(serverDraftAt || null);
+        setSaveState('saved');
+        restoredFromDraft = true;
+      } else {
+        // No server draft — check localStorage. This is both:
+        //   (a) the offline-buffer fallback for the "server POST failed
+        //       but coach kept editing" case, AND
+        //   (b) the RECOVERY path for jobs that predate the server-draft
+        //       column (Amalie BC Soccer, 2026-07-11). Trust localStorage
+        //       when _jobId matches; don't second-guess with count
+        //       checks. The old count-check guard is what caused the
+        //       overwrite bug in the first place: if any subtle count
+        //       mismatch fired, state was reset to Gemini raw and the
+        //       auto-save immediately clobbered the localStorage backup.
+        try {
+          const raw = typeof window !== "undefined" ? window.localStorage.getItem(draftKey) : null;
+          if (raw) {
+            const draft = JSON.parse(raw);
+            if (draft._jobId === jobId && draft.candidates) {
+              if (draft.scoreOverride) setScoreOverride(draft.scoreOverride);
+              setCandidates(refreshClipUrls(draft.candidates));
+              setSaveRows(refreshClipUrls(draft.saveRows || initialSaves));
+              setDistRows(refreshClipUrls(draft.distRows || initialDist));
+              setExtraGoals(refreshClipUrls(draft.extraGoals || []));
+              setSavedAt(draft._savedAt || null);
+              setSaveState('saved');
+              restoredFromDraft = true;
+            }
           }
-          // Sanity check the draft matches the current job (same candidate / save / dist counts).
-          if (
-            draft.candidates?.length === cands.length &&
-            draft.saveRows?.length === initialSaves.length &&
-            (draft.distRows?.length ?? 0) === initialDist.length &&
-            draft._jobId === jobId
-          ) {
-            setCandidates(refreshClipUrls(draft.candidates));
-            setSaveRows(refreshClipUrls(draft.saveRows));
-            setDistRows(refreshClipUrls(draft.distRows || initialDist));
-            setExtraGoals(refreshClipUrls(draft.extraGoals || []));
-            setSavedAt(draft._savedAt || null);
-            restoredFromDraft = true;
-          }
+        } catch (e) {
+          // ignore parse errors — proceed with fresh state
         }
-      } catch (e) {
-        // ignore parse errors — proceed with fresh state
       }
       if (!restoredFromDraft) {
         setCandidates(cands);
         setSaveRows(initialSaves);
         setDistRows(initialDist);
+        setSaveState('idle');
       }
 
       setLoading(false);
@@ -256,26 +342,59 @@ export default function ReviewPage() {
     return () => { mounted = false; };
   }, [user, jobId, draftKey]);
 
-  // Auto-save: any state change writes to localStorage, debounced 400ms.
+  // Auto-save: debounced 1500ms. Every edit POSTs to the server so the
+  // draft is durable across tab close, browser restart, laptop sleep,
+  // JWT refresh, and any other client-side state loss. localStorage is
+  // written in parallel as an offline-buffer fallback only.
+  //
+  // Debounce is 1500ms (not 400ms) because server writes cost more than
+  // local writes; longer debounce reduces load without materially
+  // affecting the coach's sense of persistence — the "Saving…" indicator
+  // fires the moment the coach edits so they see immediate feedback.
+  //
+  // Guard published/failed jobs so we don't overwrite a good draft
+  // with a nearly-empty state during the brief window when the page
+  // is transitioning to the published summary view.
   useEffect(() => {
     if (loading || !job) return;
     if (typeof window === "undefined") return;
-    const handle = setTimeout(() => {
+    if (job.status === 'published' || publishedMatchId) return;
+
+    setSaveState('saving');
+    const handle = setTimeout(async () => {
+      const draft = { candidates, extraGoals, scoreOverride, saveRows, distRows };
+
+      // Always update localStorage first — fastest, never fails on network.
       try {
         const now = new Date().toISOString();
-        const draft = {
-          _jobId: jobId,
-          _savedAt: now,
-          candidates, extraGoals, scoreOverride, saveRows, distRows,
-        };
-        window.localStorage.setItem(draftKey, JSON.stringify(draft));
-        setSavedAt(now);
-      } catch (e) {
-        // localStorage quota or disabled — silent fail; we tried
+        window.localStorage.setItem(draftKey, JSON.stringify({
+          _jobId: jobId, _savedAt: now, ...draft,
+        }));
+      } catch { /* quota / disabled — proceed anyway; server is the real save */ }
+
+      // Then POST to server — the durable write. On failure, keep the
+      // localStorage backup and surface an 'error' state so the coach
+      // knows their next 5 min of edits are only in the browser.
+      try {
+        const res = await authedFetch(supabase, `/api/video-jobs/${jobId}/draft`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ draft }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        setSavedAt(json.saved_at);
+        setSaveState(navigator.onLine === false ? 'offline' : 'saved');
+      } catch {
+        setSaveState(navigator.onLine === false ? 'offline' : 'error');
       }
-    }, 400);
+    }, 1500);
     return () => clearTimeout(handle);
-  }, [loading, job, jobId, draftKey, candidates, extraGoals, scoreOverride, saveRows, distRows]);
+    // Intentionally omit `supabase` from deps — it's stable within a
+    // session and including it would make every JWT-refresh trigger a
+    // spurious save cycle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, job, jobId, draftKey, candidates, extraGoals, scoreOverride, saveRows, distRows, publishedMatchId]);
 
   const counts = useMemo(() => {
     let kept = 0, gf = 0, ga = 0;
@@ -879,8 +998,13 @@ export default function ReviewPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Publish failed");
-      // Published successfully — clear the draft so it doesn't override on next load.
+      // Published successfully — clear both the server draft AND the
+      // localStorage backup so a next-load doesn't restore stale review
+      // state over the published output.
       try { if (typeof window !== "undefined") window.localStorage.removeItem(draftKey); } catch {}
+      try {
+        await authedFetch(supabase, `/api/video-jobs/${jobId}/draft`, { method: 'DELETE' });
+      } catch { /* non-fatal — the published match takes precedence anyway */ }
       // Stay on this page — show the published summary so coach can revisit.
       setPublishedMatchId(json.match_id);
       // Refetch the job so the page re-renders with status='published' state
@@ -920,6 +1044,7 @@ export default function ReviewPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 20px", borderBottom: `1px solid ${t.border}`, maxWidth: 1100, margin: "0 auto" }}>
         <Link href="/upload" style={{ textDecoration: "none", color: t.bright, fontWeight: 700, fontSize: 16 }}>← Back to uploads</Link>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <SaveStateBadge state={saveState} savedAt={savedAt} theme={t} font={font} isPublished={job?.status === 'published' || !!publishedMatchId} />
           <button
             type="button"
             onClick={() => setShowShortcuts(s => !s)}
