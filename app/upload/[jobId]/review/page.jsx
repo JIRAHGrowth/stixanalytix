@@ -86,10 +86,16 @@ export default function ReviewPage() {
   const [extraGoals, setExtraGoals] = useState([]); // goals Gemini missed (either team)
   const [scoreOverride, setScoreOverride] = useState(null); // {goals_for, goals_against} or null = derive
 
-  // Phase 2.1 — saves review state
+  // Phase 2.1 — saves review state (Gemini-detected candidates only)
   const [saveRows, setSaveRows] = useState([]);
-  // Phase 2.2 — distribution review state
+  // Coach-added saves live here — mirrors the extraGoals pattern. Rendered
+  // as their own inline card list with dropdowns, NOT shoved into Focus
+  // mode which would try to load a non-existent video clip and fall back
+  // to a "failed to load" empty state (BC Soccer bug, 2026-07-11).
+  const [extraSaves, setExtraSaves] = useState([]);
+  // Phase 2.2 — distribution review state (Gemini-detected candidates only)
   const [distRows, setDistRows] = useState([]);
+  const [extraDist, setExtraDist] = useState([]);
 
   // Auto-save status indicator.
   //
@@ -291,10 +297,27 @@ export default function ReviewPage() {
       const serverDraft = json.job?.review_draft;
       const serverDraftAt = json.job?.review_draft_updated_at;
 
+      // Split saveRows/distRows into Gemini rows + coach extras — either
+      // reading them from a dedicated draft field (new format) OR migrating
+      // any coach_added rows out of the saveRows/distRows arrays (old format
+      // from before 2026-07-11 when Add-missed rows went into saveRows).
+      const splitCoach = (rows, override) => {
+        if (Array.isArray(override)) {
+          return { gemini: rows, extras: override };
+        }
+        const gemini = [], extras = [];
+        for (const r of rows) (r?.coach_added ? extras : gemini).push(r);
+        return { gemini, extras };
+      };
+
       if (serverDraft && typeof serverDraft === 'object' && serverDraft.candidates) {
         setCandidates(refreshClipUrls(serverDraft.candidates));
-        setSaveRows(refreshClipUrls(serverDraft.saveRows || initialSaves));
-        setDistRows(refreshClipUrls(serverDraft.distRows || initialDist));
+        const sSplit = splitCoach(refreshClipUrls(serverDraft.saveRows || initialSaves), serverDraft.extraSaves);
+        const dSplit = splitCoach(refreshClipUrls(serverDraft.distRows || initialDist), serverDraft.extraDist);
+        setSaveRows(sSplit.gemini);
+        setExtraSaves(sSplit.extras);
+        setDistRows(dSplit.gemini);
+        setExtraDist(dSplit.extras);
         setExtraGoals(refreshClipUrls(serverDraft.extraGoals || []));
         if (serverDraft.scoreOverride) setScoreOverride(serverDraft.scoreOverride);
         setSavedAt(serverDraftAt || null);
@@ -318,8 +341,12 @@ export default function ReviewPage() {
             if (draft._jobId === jobId && draft.candidates) {
               if (draft.scoreOverride) setScoreOverride(draft.scoreOverride);
               setCandidates(refreshClipUrls(draft.candidates));
-              setSaveRows(refreshClipUrls(draft.saveRows || initialSaves));
-              setDistRows(refreshClipUrls(draft.distRows || initialDist));
+              const sSplit = splitCoach(refreshClipUrls(draft.saveRows || initialSaves), draft.extraSaves);
+              const dSplit = splitCoach(refreshClipUrls(draft.distRows || initialDist), draft.extraDist);
+              setSaveRows(sSplit.gemini);
+              setExtraSaves(sSplit.extras);
+              setDistRows(dSplit.gemini);
+              setExtraDist(dSplit.extras);
               setExtraGoals(refreshClipUrls(draft.extraGoals || []));
               setSavedAt(draft._savedAt || null);
               setSaveState('saved');
@@ -362,7 +389,7 @@ export default function ReviewPage() {
 
     setSaveState('saving');
     const handle = setTimeout(async () => {
-      const draft = { candidates, extraGoals, scoreOverride, saveRows, distRows };
+      const draft = { candidates, extraGoals, scoreOverride, saveRows, distRows, extraSaves, extraDist };
 
       // Always update localStorage first — fastest, never fails on network.
       try {
@@ -394,7 +421,7 @@ export default function ReviewPage() {
     // session and including it would make every JWT-refresh trigger a
     // spurious save cycle.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, job, jobId, draftKey, candidates, extraGoals, scoreOverride, saveRows, distRows, publishedMatchId]);
+  }, [loading, job, jobId, draftKey, candidates, extraGoals, scoreOverride, saveRows, distRows, extraSaves, extraDist, publishedMatchId]);
 
   const counts = useMemo(() => {
     let kept = 0, gf = 0, ga = 0;
@@ -869,10 +896,14 @@ export default function ReviewPage() {
             notes: r.notes || null,
           } : null,
         })),
-      // Save extras — saves Gemini missed entirely; coach added via the
-      // "+ Add a save Gemini missed" button. Excludes reclassifications.
-      save_extras: saveRows
-        .filter(r => r.coach_added && !r._reclassified_from)
+      // Save extras — saves Gemini missed entirely. Two source arrays are
+      // merged for backward compat: (a) coach_added rows still in saveRows
+      // from before the 2026-07-11 split (older matches), (b) extraSaves
+      // from the new dedicated inline-card UI. Excludes reclassifications.
+      save_extras: [
+        ...saveRows.filter(r => r.coach_added && !r._reclassified_from),
+        ...extraSaves.filter(r => !r._reclassified_from),
+      ]
         .map(r => ({
           timestamp_seconds: tsStrToSeconds(r.timestamp_str),
           timestamp_str: r.timestamp_str || null,
@@ -914,9 +945,12 @@ export default function ReviewPage() {
             notes: r.notes || null,
           } : null,
         })),
-      // Distribution extras — distributions Gemini missed entirely.
-      dist_extras: distRows
-        .filter(r => r.coach_added && !r._reclassified_from)
+      // Distribution extras — distributions Gemini missed entirely. Two
+      // source arrays merged for backward compat (see save_extras comment).
+      dist_extras: [
+        ...distRows.filter(r => r.coach_added && !r._reclassified_from),
+        ...extraDist.filter(r => !r._reclassified_from),
+      ]
         .map(r => ({
           timestamp_seconds: tsStrToSeconds(r.timestamp_str),
           timestamp_str: r.timestamp_str || null,
@@ -1031,14 +1065,20 @@ export default function ReviewPage() {
   const updateExtra = (id, patch) => setExtraGoals(arr => arr.map(c => c._id === id ? { ...c, ...patch } : c));
   const removeExtra = (id) => setExtraGoals(arr => arr.filter(c => c._id !== id));
 
-  // Page-level Add-missed handlers. These exist in addition to the ones inside
-  // SavesTable / DistributionTable so the buttons are visible in Focus mode
-  // too (the Table components only render in Bulk mode). Both keeper_team
-  // variants ("us" / "opp") are exposed so coach can tag opposition-GK saves
-  // and distributions as training data — filtered out of analytics per
-  // saves.md line 1 / distribution.md line 25.
+  // Page-level Add-missed handlers — mirror the extraGoals pattern.
+  //
+  // Coach-added saves and distributions are STORED IN THEIR OWN STATE
+  // ARRAYS (not saveRows / distRows) so they don't get pulled into
+  // FocusModeSaves / FocusModeDistribution, which render each row via a
+  // video-clip card that requires a Gemini-generated clip_storage_path.
+  // Coach adds have no clip, so focus mode would show "failed to load"
+  // and no editable fields (BC Soccer bug, 2026-07-11).
+  //
+  // Both keeper_team variants exposed ("us" / "opp") — opposition-GK
+  // events are captured for training but filtered out of the analyzed
+  // keeper's stats (saves.md L1, distribution.md L25).
   const addPageSave = (keeperTeam) => {
-    setSaveRows(arr => [...(arr || []), {
+    setExtraSaves(arr => [...(arr || []), {
       _id: `coach_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       coach_added: true,
       keep: true,
@@ -1056,11 +1096,10 @@ export default function ReviewPage() {
       shot_description: "",
       gk_observations: "",
       notes: "",
-      gemini: { confidence: "—" },
     }]);
   };
   const addPageDist = (keeperTeam) => {
-    setDistRows(arr => [...(arr || []), {
+    setExtraDist(arr => [...(arr || []), {
       _id: `dcoach_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       coach_added: true,
       keep: true,
@@ -1075,9 +1114,12 @@ export default function ReviewPage() {
       receiver: "defender",
       first_touch: "",
       notes: "",
-      gemini: { confidence: "—" },
     }]);
   };
+  const updateExtraSave = (id, patch) => setExtraSaves(arr => arr.map(r => r._id === id ? { ...r, ...patch } : r));
+  const removeExtraSave = (id) => setExtraSaves(arr => arr.filter(r => r._id !== id));
+  const updateExtraDist = (id, patch) => setExtraDist(arr => arr.map(r => r._id === id ? { ...r, ...patch } : r));
+  const removeExtraDist = (id) => setExtraDist(arr => arr.filter(r => r._id !== id));
 
   // Bulk unreview for Gemini candidates. Coach's added extras + save/dist
   // decisions are preserved. Uses a browser confirm because the operation is
@@ -1384,6 +1426,23 @@ export default function ReviewPage() {
         ) : (
           <SavesTable rows={saveRows} onChange={setSaveRows} t={t} font={font} activeId={activeFocus.section === 'saves' ? activeId : null} />
         )}
+        {extraSaves.length > 0 && (
+          <>
+            <h3 style={{ fontSize: 13, fontWeight: 700, color: t.bright, letterSpacing: 0.4, margin: "20px 0 10px" }}>MISSED SAVES (added by you)</h3>
+            {extraSaves.map((r) => (
+              <ExtraSaveCard
+                key={r._id}
+                row={r}
+                onChange={(patch) => updateExtraSave(r._id, patch)}
+                onRemove={() => removeExtraSave(r._id)}
+                t={t}
+                font={font}
+                inputStyle={inputStyle}
+                meta={meta}
+              />
+            ))}
+          </>
+        )}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 4, marginBottom: 8 }}>
           <button
             type="button"
@@ -1417,6 +1476,22 @@ export default function ReviewPage() {
           </div>
         ) : (
           <DistributionTable rows={distRows} onChange={setDistRows} t={t} font={font} activeId={activeFocus.section === 'distribution' ? activeId : null} />
+        )}
+        {extraDist.length > 0 && (
+          <>
+            <h3 style={{ fontSize: 13, fontWeight: 700, color: t.bright, letterSpacing: 0.4, margin: "20px 0 10px" }}>MISSED DISTRIBUTIONS (added by you)</h3>
+            {extraDist.map((r) => (
+              <ExtraDistCard
+                key={r._id}
+                row={r}
+                onChange={(patch) => updateExtraDist(r._id, patch)}
+                onRemove={() => removeExtraDist(r._id)}
+                t={t}
+                font={font}
+                inputStyle={inputStyle}
+              />
+            ))}
+          </>
         )}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 4, marginBottom: 8 }}>
           <button
@@ -1476,6 +1551,110 @@ function ConcessionField({ label, value, options, optionLabels, onChange }) {
         <option value="">—</option>
         {options.map(o => <option key={o} value={o}>{optionLabels?.[o] || o}</option>)}
       </select>
+    </div>
+  );
+}
+
+// Coach-added save card. Mirrors the MISSED GOALS card pattern — inline
+// dropdowns, no video clip (which is why it can't live inside FocusModeSaves).
+// Keeper-team is displayed as a badge; timestamp is free-text MM:SS; the
+// rest are single-select dropdowns matching the eval schema.
+function ExtraSaveCard({ row, onChange, onRemove, t, font, inputStyle, meta }) {
+  const teamLabel = row.keeper_team === 'us'
+    ? `Our GK (${meta?.my_keeper_color || 'our keeper'})`
+    : row.keeper_team === 'opp'
+      ? `Opponent GK (${meta?.opponent_color || 'opposing keeper'})`
+      : 'Unspecified GK';
+  const teamColor = row.keeper_team === 'us' ? t.accent : t.dim;
+  const dropdown = (label, value, options, onValueChange) => (
+    <div>
+      <div style={{ fontSize: 10, color: t.dim, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: 600 }}>{label}</div>
+      <select value={value || ""} onChange={e => onValueChange(e.target.value)} style={inputStyle}>
+        <option value="">—</option>
+        {options.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </div>
+  );
+  return (
+    <div style={{ background: t.card, border: `1px solid ${teamColor}44`, borderRadius: 12, padding: 14, marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '4px 10px', borderRadius: 999, background: `${teamColor}18`, color: teamColor, fontSize: 11, fontWeight: 600 }}>
+          <span>🥅</span><span>{teamLabel}</span>
+        </div>
+        <button type="button" onClick={onRemove} style={{ padding: '6px 12px', borderRadius: 6, border: `1px solid ${t.border}`, background: 'transparent', color: t.dim, fontSize: 11, fontFamily: font, cursor: 'pointer' }}>Remove</button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '110px repeat(3, 1fr)', gap: 10, marginBottom: 10 }}>
+        <div>
+          <div style={{ fontSize: 10, color: t.dim, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: 600 }}>Time (MM:SS)</div>
+          <input type="text" value={row.timestamp_str || ""} onChange={e => onChange({ timestamp_str: e.target.value })} placeholder="e.g. 12:24" style={inputStyle} />
+        </div>
+        {dropdown('Shot origin', row.shot_origin, ['6yard', 'boxL', 'boxC', 'boxR', 'outL', 'outC', 'outR', 'cornerL', 'cornerR', 'unclear'], v => onChange({ shot_origin: v }))}
+        {dropdown('Shot type', row.shot_type, ['Foot', 'Header', 'Deflection'], v => onChange({ shot_type: v }))}
+        {dropdown('On target', row.on_target, ['yes', 'no', 'unclear'], v => onChange({ on_target: v }))}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 10 }}>
+        {dropdown('GK action', row.gk_action, GK_ACTIONS_VIDEO, v => onChange({ gk_action: v }))}
+        {dropdown('GK visible', row.gk_visible, ['yes', 'partial', 'no'], v => onChange({ gk_visible: v }))}
+        {dropdown('Outcome', row.outcome, OUTCOMES, v => onChange({ outcome: v }))}
+        {dropdown('Body zone (A/B/C)', row.body_distance_zone, BODY_ZONES, v => onChange({ body_distance_zone: v }))}
+      </div>
+      <textarea
+        value={row.notes || ""}
+        onChange={e => onChange({ notes: e.target.value })}
+        placeholder="What did the keeper do? Describe the shot origin, technique used, and outcome."
+        rows={3}
+        style={{ ...inputStyle, resize: 'vertical' }}
+      />
+    </div>
+  );
+}
+
+// Coach-added distribution card. Same pattern as ExtraSaveCard.
+function ExtraDistCard({ row, onChange, onRemove, t, font, inputStyle }) {
+  const teamLabel = row.keeper_team === 'us' ? 'Our GK' : row.keeper_team === 'opp' ? 'Opponent GK' : 'Unspecified GK';
+  const teamColor = row.keeper_team === 'us' ? t.accent : t.dim;
+  const dropdown = (label, value, options, onValueChange) => (
+    <div>
+      <div style={{ fontSize: 10, color: t.dim, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: 600 }}>{label}</div>
+      <select value={value || ""} onChange={e => onValueChange(e.target.value)} style={inputStyle}>
+        <option value="">—</option>
+        {options.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </div>
+  );
+  return (
+    <div style={{ background: t.card, border: `1px solid ${teamColor}44`, borderRadius: 12, padding: 14, marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '4px 10px', borderRadius: 999, background: `${teamColor}18`, color: teamColor, fontSize: 11, fontWeight: 600 }}>
+          <span>⚽</span><span>{teamLabel}</span>
+        </div>
+        <button type="button" onClick={onRemove} style={{ padding: '6px 12px', borderRadius: 6, border: `1px solid ${t.border}`, background: 'transparent', color: t.dim, fontSize: 11, fontFamily: font, cursor: 'pointer' }}>Remove</button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '110px repeat(3, 1fr)', gap: 10, marginBottom: 10 }}>
+        <div>
+          <div style={{ fontSize: 10, color: t.dim, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: 600 }}>Time (MM:SS)</div>
+          <input type="text" value={row.timestamp_str || ""} onChange={e => onChange({ timestamp_str: e.target.value })} placeholder="e.g. 12:24" style={inputStyle} />
+        </div>
+        {dropdown('Trigger', row.trigger, ['goal_kick', 'after_save', 'backpass', 'loose_ball', 'throw_in_to_gk', 'free_kick_to_gk'], v => onChange({ trigger: v }))}
+        {dropdown('Type', row.type, ['gk_short', 'gk_long', 'throw', 'pass', 'drop_kick'], v => onChange({ type: v }))}
+        {dropdown('Successful', row.successful, ['true', 'false', 'unclear'], v => onChange({ successful: v }))}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 10 }}>
+        {dropdown('Press state', row.press_state, ['unpressed', 'pressed', 'unclear'], v => onChange({ press_state: v }))}
+        {dropdown('Direction', row.direction, ['left', 'centre', 'right', 'backwards'], v => onChange({ direction: v }))}
+        {dropdown('Receiver', row.receiver, ['defender', 'midfielder', 'forward', 'out_of_play', 'opponent'], v => onChange({ receiver: v }))}
+        {dropdown('First touch', row.first_touch, ['clean', 'heavy', 'two_touches', 'mishit'], v => onChange({ first_touch: v }))}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(1, 1fr)', gap: 10, marginBottom: 10 }}>
+        {dropdown('Pass selection (optional)', row.pass_selection, ['short_to_defender', 'sideways_across_back', 'long_to_forward', 'switch_wide', 'backwards_under_pressure', 'clearance_under_pressure', 'drilled_into_channel'], v => onChange({ pass_selection: v }))}
+      </div>
+      <textarea
+        value={row.notes || ""}
+        onChange={e => onChange({ notes: e.target.value })}
+        placeholder="Any coaching-relevant observation for this distribution."
+        rows={2}
+        style={{ ...inputStyle, resize: 'vertical' }}
+      />
     </div>
   );
 }
