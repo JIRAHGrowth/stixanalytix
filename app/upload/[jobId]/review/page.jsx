@@ -1555,10 +1555,128 @@ function ConcessionField({ label, value, options, optionLabels, onChange }) {
   );
 }
 
-// Coach-added save card. Mirrors the MISSED GOALS card pattern — inline
-// dropdowns, no video clip (which is why it can't live inside FocusModeSaves).
-// Keeper-team is displayed as a badge; timestamp is free-text MM:SS; the
-// rest are single-select dropdowns matching the eval schema.
+// Vocabulary for the extra-event cards — matches the ground-truth Excel
+// template EXACTLY (see scripts/generate-ground-truth-template.js). Human
+// labels are what the coach sees; the id is what gets stored on the row and
+// flows through publish + eval. When the pipeline needs a canonical schema
+// value, use the id; when a human sees it, use the label.
+const OPT_SHOT_ORIGIN = [
+  { id: "6yard",   label: "6-Yard Box" },
+  { id: "boxL",    label: "Left Channel" },
+  { id: "boxC",    label: "Central Box" },
+  { id: "boxR",    label: "Right Channel" },
+  { id: "outL",    label: "Wide Left" },
+  { id: "outC",    label: "Central Distance" },
+  { id: "outR",    label: "Wide Right" },
+  { id: "cornerL", label: "Corner Left" },
+  { id: "cornerR", label: "Corner Right" },
+  { id: "unclear", label: "Unclear" },
+];
+const OPT_SHOT_TYPE = [
+  { id: "Foot", label: "Foot" },
+  { id: "Header", label: "Header" },
+  { id: "Deflection", label: "Deflection" },
+];
+const OPT_YES_NO_UNCLEAR = [
+  { id: "yes", label: "Yes" },
+  { id: "no", label: "No" },
+  { id: "unclear", label: "Unclear" },
+];
+const OPT_GK_VISIBLE = [
+  { id: "yes",     label: "Yes" },
+  { id: "partial", label: "Partial" },
+  { id: "no",      label: "No" },
+];
+// Matches ground-truth Excel exactly (adds Smother / Starfish / K-Barrier
+// on top of the video-pipeline vocabulary). Storing the display string as
+// the id keeps eval-match.js happy — the truth JSON stores these same
+// canonical strings.
+const OPT_GK_ACTION = [
+  "Catch", "Block", "Parry", "Deflect", "Punch",
+  "Smother", "Starfish", "K-Barrier",
+  "Missed", "Goal", "Unclear",
+].map(v => ({ id: v, label: v }));
+const OPT_OUTCOME = [
+  { id: "held",              label: "Held" },
+  { id: "rebound_safe",      label: "Rebound (safe)" },
+  { id: "rebound_dangerous", label: "Rebound (dangerous)" },
+  { id: "corner",            label: "Corner" },
+  { id: "out_of_play",       label: "Out of play" },
+  { id: "goal",              label: "Goal" },
+];
+const OPT_BODY_ZONE = [
+  { id: "A",       label: "A — At body" },
+  { id: "B",       label: "B — Extended" },
+  { id: "C",       label: "C — Full dive" },
+  { id: "unclear", label: "Unclear" },
+];
+const OPT_DIST_TRIGGER = [
+  { id: "goal_kick",         label: "Goal kick" },
+  { id: "after_save",        label: "After save" },
+  { id: "backpass",          label: "Backpass" },
+  { id: "loose_ball",        label: "Loose ball in box" },
+  { id: "throw_in_to_gk",    label: "Throw-in to GK" },
+  { id: "free_kick_to_gk",   label: "Free kick to GK" },
+];
+const OPT_DIST_TYPE = [
+  { id: "gk_short",  label: "GK Short Kick" },
+  { id: "gk_long",   label: "GK Long Kick" },
+  { id: "throw",     label: "Throw" },
+  { id: "pass",      label: "Pass" },
+  { id: "drop_kick", label: "Drop-kick" },
+];
+const OPT_PRESS_STATE = [
+  { id: "unpressed", label: "Unpressed" },
+  { id: "pressed",   label: "Pressed" },
+  { id: "unclear",   label: "Unclear" },
+];
+const OPT_DIRECTION = [
+  { id: "left",      label: "Left" },
+  { id: "centre",    label: "Centre" },
+  { id: "right",     label: "Right" },
+  { id: "backwards", label: "Backwards" },
+];
+const OPT_RECEIVER = [
+  { id: "defender",    label: "Defender" },
+  { id: "midfielder",  label: "Midfielder" },
+  { id: "forward",     label: "Forward" },
+  { id: "out_of_play", label: "Out of play" },
+  { id: "opponent",    label: "Opponent (turnover)" },
+];
+const OPT_FIRST_TOUCH = [
+  { id: "clean",       label: "Clean" },
+  { id: "heavy",       label: "Heavy" },
+  { id: "two_touches", label: "Two touches" },
+  { id: "mishit",      label: "Mishit" },
+];
+const OPT_PASS_SELECTION = [
+  { id: "short_to_defender",       label: "Short to defender" },
+  { id: "sideways_across_back",    label: "Sideways across back" },
+  { id: "long_to_forward",         label: "Long to forward" },
+  { id: "switch_wide",             label: "Switch wide" },
+  { id: "backwards_under_pressure",label: "Backwards under pressure" },
+  { id: "clearance_under_pressure",label: "Clearance under pressure" },
+  { id: "drilled_into_channel",    label: "Drilled into channel" },
+];
+
+// Shared dropdown-of-options helper. Options are {id,label} pairs — display
+// shows the label, state stores the id.
+function OptionSelect({ label, value, options, onValueChange, t, inputStyle }) {
+  return (
+    <div>
+      <div style={{ fontSize: 10, color: t.dim, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: 600 }}>{label}</div>
+      <select value={value || ""} onChange={e => onValueChange(e.target.value)} style={inputStyle}>
+        <option value="">—</option>
+        {options.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+      </select>
+    </div>
+  );
+}
+
+// Coach-added save card. Uses the exact vocabulary of the ground-truth
+// Excel template so the coach never sees a different option set here vs
+// there. Display strings match human speech; underlying ids match the
+// eval schema.
 function ExtraSaveCard({ row, onChange, onRemove, t, font, inputStyle, meta }) {
   const teamLabel = row.keeper_team === 'us'
     ? `Our GK (${meta?.my_keeper_color || 'our keeper'})`
@@ -1566,15 +1684,6 @@ function ExtraSaveCard({ row, onChange, onRemove, t, font, inputStyle, meta }) {
       ? `Opponent GK (${meta?.opponent_color || 'opposing keeper'})`
       : 'Unspecified GK';
   const teamColor = row.keeper_team === 'us' ? t.accent : t.dim;
-  const dropdown = (label, value, options, onValueChange) => (
-    <div>
-      <div style={{ fontSize: 10, color: t.dim, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: 600 }}>{label}</div>
-      <select value={value || ""} onChange={e => onValueChange(e.target.value)} style={inputStyle}>
-        <option value="">—</option>
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
-      </select>
-    </div>
-  );
   return (
     <div style={{ background: t.card, border: `1px solid ${teamColor}44`, borderRadius: 12, padding: 14, marginBottom: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -1588,15 +1697,15 @@ function ExtraSaveCard({ row, onChange, onRemove, t, font, inputStyle, meta }) {
           <div style={{ fontSize: 10, color: t.dim, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: 600 }}>Time (MM:SS)</div>
           <input type="text" value={row.timestamp_str || ""} onChange={e => onChange({ timestamp_str: e.target.value })} placeholder="e.g. 12:24" style={inputStyle} />
         </div>
-        {dropdown('Shot origin', row.shot_origin, ['6yard', 'boxL', 'boxC', 'boxR', 'outL', 'outC', 'outR', 'cornerL', 'cornerR', 'unclear'], v => onChange({ shot_origin: v }))}
-        {dropdown('Shot type', row.shot_type, ['Foot', 'Header', 'Deflection'], v => onChange({ shot_type: v }))}
-        {dropdown('On target', row.on_target, ['yes', 'no', 'unclear'], v => onChange({ on_target: v }))}
+        <OptionSelect label="Shot origin" value={row.shot_origin} options={OPT_SHOT_ORIGIN} onValueChange={v => onChange({ shot_origin: v })} t={t} inputStyle={inputStyle} />
+        <OptionSelect label="Shot type"   value={row.shot_type}   options={OPT_SHOT_TYPE}   onValueChange={v => onChange({ shot_type: v })}   t={t} inputStyle={inputStyle} />
+        <OptionSelect label="On target"   value={row.on_target}   options={OPT_YES_NO_UNCLEAR} onValueChange={v => onChange({ on_target: v })} t={t} inputStyle={inputStyle} />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 10 }}>
-        {dropdown('GK action', row.gk_action, GK_ACTIONS_VIDEO, v => onChange({ gk_action: v }))}
-        {dropdown('GK visible', row.gk_visible, ['yes', 'partial', 'no'], v => onChange({ gk_visible: v }))}
-        {dropdown('Outcome', row.outcome, OUTCOMES, v => onChange({ outcome: v }))}
-        {dropdown('Body zone (A/B/C)', row.body_distance_zone, BODY_ZONES, v => onChange({ body_distance_zone: v }))}
+        <OptionSelect label="GK action"   value={row.gk_action}   options={OPT_GK_ACTION}   onValueChange={v => onChange({ gk_action: v })}   t={t} inputStyle={inputStyle} />
+        <OptionSelect label="GK visible"  value={row.gk_visible}  options={OPT_GK_VISIBLE}  onValueChange={v => onChange({ gk_visible: v })}  t={t} inputStyle={inputStyle} />
+        <OptionSelect label="Outcome"     value={row.outcome}     options={OPT_OUTCOME}     onValueChange={v => onChange({ outcome: v })}     t={t} inputStyle={inputStyle} />
+        <OptionSelect label="Body zone"   value={row.body_distance_zone} options={OPT_BODY_ZONE} onValueChange={v => onChange({ body_distance_zone: v })} t={t} inputStyle={inputStyle} />
       </div>
       <textarea
         value={row.notes || ""}
@@ -1609,19 +1718,11 @@ function ExtraSaveCard({ row, onChange, onRemove, t, font, inputStyle, meta }) {
   );
 }
 
-// Coach-added distribution card. Same pattern as ExtraSaveCard.
+// Coach-added distribution card. Same pattern as ExtraSaveCard — vocabulary
+// mirrors the ground-truth Excel template.
 function ExtraDistCard({ row, onChange, onRemove, t, font, inputStyle }) {
   const teamLabel = row.keeper_team === 'us' ? 'Our GK' : row.keeper_team === 'opp' ? 'Opponent GK' : 'Unspecified GK';
   const teamColor = row.keeper_team === 'us' ? t.accent : t.dim;
-  const dropdown = (label, value, options, onValueChange) => (
-    <div>
-      <div style={{ fontSize: 10, color: t.dim, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: 600 }}>{label}</div>
-      <select value={value || ""} onChange={e => onValueChange(e.target.value)} style={inputStyle}>
-        <option value="">—</option>
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
-      </select>
-    </div>
-  );
   return (
     <div style={{ background: t.card, border: `1px solid ${teamColor}44`, borderRadius: 12, padding: 14, marginBottom: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
@@ -1635,18 +1736,18 @@ function ExtraDistCard({ row, onChange, onRemove, t, font, inputStyle }) {
           <div style={{ fontSize: 10, color: t.dim, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: 600 }}>Time (MM:SS)</div>
           <input type="text" value={row.timestamp_str || ""} onChange={e => onChange({ timestamp_str: e.target.value })} placeholder="e.g. 12:24" style={inputStyle} />
         </div>
-        {dropdown('Trigger', row.trigger, ['goal_kick', 'after_save', 'backpass', 'loose_ball', 'throw_in_to_gk', 'free_kick_to_gk'], v => onChange({ trigger: v }))}
-        {dropdown('Type', row.type, ['gk_short', 'gk_long', 'throw', 'pass', 'drop_kick'], v => onChange({ type: v }))}
-        {dropdown('Successful', row.successful, ['true', 'false', 'unclear'], v => onChange({ successful: v }))}
+        <OptionSelect label="Trigger"    value={row.trigger}    options={OPT_DIST_TRIGGER} onValueChange={v => onChange({ trigger: v })}    t={t} inputStyle={inputStyle} />
+        <OptionSelect label="Type"       value={row.type}       options={OPT_DIST_TYPE}    onValueChange={v => onChange({ type: v })}       t={t} inputStyle={inputStyle} />
+        <OptionSelect label="Successful" value={row.successful} options={OPT_YES_NO_UNCLEAR} onValueChange={v => onChange({ successful: v })} t={t} inputStyle={inputStyle} />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 10 }}>
-        {dropdown('Press state', row.press_state, ['unpressed', 'pressed', 'unclear'], v => onChange({ press_state: v }))}
-        {dropdown('Direction', row.direction, ['left', 'centre', 'right', 'backwards'], v => onChange({ direction: v }))}
-        {dropdown('Receiver', row.receiver, ['defender', 'midfielder', 'forward', 'out_of_play', 'opponent'], v => onChange({ receiver: v }))}
-        {dropdown('First touch', row.first_touch, ['clean', 'heavy', 'two_touches', 'mishit'], v => onChange({ first_touch: v }))}
+        <OptionSelect label="Press state"  value={row.press_state}  options={OPT_PRESS_STATE}  onValueChange={v => onChange({ press_state: v })}  t={t} inputStyle={inputStyle} />
+        <OptionSelect label="Direction"    value={row.direction}    options={OPT_DIRECTION}    onValueChange={v => onChange({ direction: v })}    t={t} inputStyle={inputStyle} />
+        <OptionSelect label="Receiver"     value={row.receiver}     options={OPT_RECEIVER}     onValueChange={v => onChange({ receiver: v })}     t={t} inputStyle={inputStyle} />
+        <OptionSelect label="First touch"  value={row.first_touch}  options={OPT_FIRST_TOUCH}  onValueChange={v => onChange({ first_touch: v })}  t={t} inputStyle={inputStyle} />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(1, 1fr)', gap: 10, marginBottom: 10 }}>
-        {dropdown('Pass selection (optional)', row.pass_selection, ['short_to_defender', 'sideways_across_back', 'long_to_forward', 'switch_wide', 'backwards_under_pressure', 'clearance_under_pressure', 'drilled_into_channel'], v => onChange({ pass_selection: v }))}
+      <div style={{ marginBottom: 10 }}>
+        <OptionSelect label="Pass selection (optional)" value={row.pass_selection} options={OPT_PASS_SELECTION} onValueChange={v => onChange({ pass_selection: v })} t={t} inputStyle={inputStyle} />
       </div>
       <textarea
         value={row.notes || ""}
