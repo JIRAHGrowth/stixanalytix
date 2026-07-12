@@ -11,17 +11,28 @@ has an `availability` ('available' or 'archived'), a `render_type`
 ('standard' — VEO's auto-follow crop, or 'panorama' — the stitched wide
 view), and a signed CDN `url` on c.veocdn.com.
 
-Selection policy — GK-analysis lens
------------------------------------
-'panorama' is materially better for goalkeeper work than 'standard' because
-'standard' auto-follows the ball and crops the keeper out during off-ball
-moments (sweeping, cross prep, wall setup). Same failure mode as a static
-goal-centered cam. So: **prefer panorama, fall back to standard**.
+Selection policy — coach-view alignment (2026-07-12 update)
+-----------------------------------------------------------
+Prefer **standard** (VEO's auto-follow crop), fall back to panorama.
 
-In practice most panorama renders on public matches come back as `archived`
-(VEO moves them to cold storage after ~30d). We take standard rather than
-error out — the coach gets a working analysis; if they want the better
-render, ask the video owner to un-archive.
+Why not panorama, which is a strictly better lens for GK analysis?
+Because standard is what the coach sees by default when they open a VEO
+share URL in their browser — VEO's web player opens on standard, and the
+panorama toggle is a discoverable-but-not-obvious control. If the analyzer
+picks panorama and the coach ground-truths from standard, the two views
+diverge: coach can't see keeper actions the analyzer captured, or tags
+events the analyzer couldn't see. UX alignment wins over marginal data
+quality here.
+
+For labeler workflows (Nicolas's SE Asia team, near-future), tagging
+happens against the actual downloaded MP4 — labelers will use panorama
+directly via the resolved URL, bypassing this preference. Their toolchain
+doesn't care what VEO's website defaults to.
+
+Trade-off honestly named: standard's auto-follow WILL miss sweeper actions
+and keeper off-ball positioning. That's the [[feedback-static-cam-sweeper-blindspot]]
+tax. Coach GT tagged from standard will inherit the same blindspot — a
+consistent (if narrower) truth is better than a mismatched pair.
 
 Nothing else lives in this file. Adding another provider means adding
 another module and one line to registry.py.
@@ -157,7 +168,11 @@ class VeoProvider:
         return videos
 
     def _pick_render(self, videos: list[dict[str, Any]]) -> dict[str, Any]:
-        """GK-first render selection: prefer panorama, fall back to standard.
+        """Coach-view-aligned selection: prefer standard, fall back to panorama.
+
+        See module docstring for the UX rationale (coach opens VEO on
+        standard by default; picking panorama here would misalign what the
+        analyzer saw vs what the coach sees during ground-truth tagging).
 
         Only 'available' renders count. Only MP4 mime types (skip the .ts HLS
         segments VEO occasionally exposes alongside the MP4 for their web
@@ -173,19 +188,19 @@ class VeoProvider:
 
         available = [v for v in videos if is_playable(v)]
 
-        panorama = next(
-            (v for v in available if v.get("render_type") == "panorama"),
-            None,
-        )
-        if panorama:
-            return panorama
-
         standard = next(
             (v for v in available if v.get("render_type") == "standard"),
             None,
         )
         if standard:
             return standard
+
+        panorama = next(
+            (v for v in available if v.get("render_type") == "panorama"),
+            None,
+        )
+        if panorama:
+            return panorama
 
         # Nothing playable. Distinguish "everything is archived" (owner action
         # needed) from "structure changed" (our bug) so the coach gets a
