@@ -1,10 +1,30 @@
 """
 StixAnalytix video worker.
 
-Phase 1: pulls a video_jobs row, downloads the source video, runs Gemini against
-prompts/goals.md (with team-colour variables substituted in), writes structured
-output to gemini_output, and parks the job at status='review_needed' for the
-coach to review and publish via the dashboard.
+Two-stage pipeline (2026-07-11 restructure — Rise Academy incident):
+
+    process(job_id)
+      1. Resolve URL → download → Gemini analysis → reconcile
+      2. CHECKPOINT: write gemini_output + status='review_needed' to DB
+      3. Spawn backfill_clips fire-and-forget
+      4. Return — process() no longer waits on clip slicing
+
+    backfill_clips(job_id)   [own Modal function, own 30-min timeout]
+      1. Read gemini_output (already persisted; expensive Gemini spend is safe)
+      2. Re-download source video
+      3. For each event, slice a 7s clip via ffmpeg + upload to Supabase
+      4. Write clip_storage_path back onto each event in gemini_output
+
+Rationale: previously clip slicing ran INSIDE process(). If clips exceeded
+the remaining time budget (panorama-render matches with 40-80 events are
+slow), Modal killed the container BEFORE gemini_output was written, so
+~$10 of Gemini spend was lost. Checkpointing before clips means analysis
+is durable the moment it exists; clips are additive and retryable.
+
+Coach UX: review page is usable the moment status='review_needed' — clips
+are nice-to-have (each event's inline preview) but not required (video
+falls back to timestamp-seeking the source URL when clip_storage_path is
+absent).
 
 Deploy:  modal deploy worker/app.py
 Invoke:  modal run worker/app.py::process --job-id <uuid>
@@ -1028,27 +1048,22 @@ def process(job_id: str) -> dict:
                     error_message=str(rec_err))
                 raise
 
-            # Generate per-event review clips from the source video. Mutates
-            # each event in place to add `clip_storage_path`. The Next.js API
-            # signs paths to URLs at request time.
-            clip_run_id = _pipeline_log_start(sb, job_id, "clips")
-            print("[clips] generating per-event review clips...", flush=True)
-            clip_start = time.time()
-            try:
-                n_g = _generate_clips_for_events(video_path, all_goals, "goal", job_id, sb)
-                n_s = _generate_clips_for_events(video_path, all_saves, "save", job_id, sb)
-                n_d = _generate_clips_for_events(video_path, all_dist, "dist", job_id, sb)
-                print(f"[clips] produced {n_g} goal / {n_s} save / {n_d} dist clips in {time.time() - clip_start:.0f}s", flush=True)
-                _pipeline_log_finish(sb, clip_run_id, "completed",
-                    duration_ms=int((time.time() - clip_start) * 1000),
-                    result_payload={"goal_clips": n_g, "save_clips": n_s, "dist_clips": n_d})
-            except Exception as clip_err:
-                _pipeline_log_finish(sb, clip_run_id, "failed",
-                    duration_ms=int((time.time() - clip_start) * 1000),
-                    error_message=str(clip_err))
-                raise
-
-            # Persist as if this had been one merged Gemini call
+            # === CHECKPOINT: persist gemini_output BEFORE clip generation ===
+            #
+            # Previous design ran clip slicing inline in process() and only
+            # persisted gemini_output after clips completed. Consequence:
+            # if clips hung (panorama-render matches with 40-80 events are
+            # slow enough to blow Modal's 60-min process timeout), Modal
+            # killed the container, the janitor swept the row to 'failed',
+            # and ~$10 of Gemini analysis was lost. Amalie's Rise Academy
+            # match (2026-07-11) burned this way — 54min analyzing, 6min
+            # of clip budget, timeout hit mid-clips.
+            #
+            # New design: reconcile → write gemini_output + status=
+            # 'review_needed' atomically → spawn backfill_clips as an
+            # independent Modal function (own 30-min timeout, separate
+            # container). Even if clips fail, the coach can review
+            # immediately; clips are additive and can be retried on-demand.
             sb.table("video_jobs").update({
                 "status": "review_needed",
                 "gemini_output": {
@@ -1064,15 +1079,32 @@ def process(job_id: str) -> dict:
                 },
                 "finished_at": now(),
             }).eq("id", job_id).execute()
+            print(f"[chunk] checkpoint written. status=review_needed. "
+                  f"goals={len(all_goals)} saves={len(all_saves)} dist={len(all_dist)}",
+                  flush=True)
+
+            # Fire-and-forget spawn of clip generation. backfill_clips is
+            # a Modal function with its own 30-min timeout; it re-downloads
+            # the video (2-3 min on panorama) but has full budget to slice
+            # every event. Spawn failure is logged but non-fatal — coach
+            # can review without clips (video seeks to timestamps by
+            # default) and backfill_clips can be invoked manually later.
+            try:
+                spawn_call = backfill_clips.spawn(job_id, False)
+                print(f"[clips] spawned backfill_clips (modal_call_id={spawn_call.object_id})",
+                      flush=True)
+            except Exception as spawn_err:
+                print(f"[clips] spawn FAILED — clips will need manual backfill: {spawn_err}",
+                      flush=True)
 
             chunk_mod.cleanup_chunks(chunks)
-            print(f"[chunk] done. goals={len(all_goals)} saves={len(all_saves)} dist={len(all_dist)}", flush=True)
             return {
                 "job_id": job_id, "status": "review_needed",
                 "chunked": True, "n_chunks": len(chunks),
                 "goals_detected": len(all_goals),
                 "saves_detected": len(all_saves),
                 "distribution_detected": len(all_dist),
+                "clips_spawned": True,
             }
 
         # === Upload to Gemini Files API (single-pass path — current default) ===
@@ -1235,17 +1267,11 @@ def process(job_id: str) -> dict:
         saves_count = len(sp_saves) if saves_result is not None else None
         dist_count = len(sp_dist) if dist_result is not None else None
 
-        # Generate per-event review clips from the source video. Mutates the
-        # event dicts in place to add `clip_storage_path`. The Next.js API
-        # signs paths to URLs at request time so playback URLs stay fresh.
-        print("[clips] generating per-event review clips...", flush=True)
-        clip_start = time.time()
-        n_g = _generate_clips_for_events(video_path, sp_goals, "goal", job_id, sb)
-        n_s = _generate_clips_for_events(video_path, sp_saves, "save", job_id, sb) if saves_result is not None else 0
-        n_d = _generate_clips_for_events(video_path, sp_dist, "dist", job_id, sb) if dist_result is not None else 0
-        print(f"[clips] produced {n_g} goal / {n_s} save / {n_d} dist clips in {time.time() - clip_start:.0f}s", flush=True)
-
-        # === Persist results ===
+        # === CHECKPOINT: persist gemini_output BEFORE clip generation ===
+        # See the chunked-path comment for full rationale (Rise Academy
+        # timeout incident, 2026-07-11). Same policy on the single-pass
+        # path: reconcile → checkpoint gemini_output + status='review_
+        # needed' → spawn backfill_clips fire-and-forget.
         gemini_output = {
             "model": model_name,
             "cached": cached is not None,
@@ -1266,6 +1292,19 @@ def process(job_id: str) -> dict:
             "gemini_output": gemini_output,
             "finished_at": now(),
         }).eq("id", job_id).execute()
+        print(f"[single-pass] checkpoint written. status=review_needed. "
+              f"goals={goals_count} saves={saves_count} dist={dist_count}",
+              flush=True)
+
+        # Fire-and-forget spawn of clip generation — see chunked-path
+        # comment for rationale. Non-fatal on spawn failure.
+        try:
+            spawn_call = backfill_clips.spawn(job_id, False)
+            print(f"[clips] spawned backfill_clips (modal_call_id={spawn_call.object_id})",
+                  flush=True)
+        except Exception as spawn_err:
+            print(f"[clips] spawn FAILED — clips will need manual backfill: {spawn_err}",
+                  flush=True)
 
         # Best-effort cache cleanup (will auto-expire anyway via TTL)
         if cached is not None:
@@ -1280,6 +1319,7 @@ def process(job_id: str) -> dict:
             "goals_detected": goals_count,
             "saves_detected": saves_count,
             "distribution_detected": dist_count,
+            "clips_spawned": True,
         }
 
     except Exception as e:
