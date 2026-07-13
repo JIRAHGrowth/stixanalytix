@@ -470,6 +470,8 @@ CLIP_WINDOWS = {
     "goal": (5, 3),   # (pre, post) in seconds
     "save": (4, 5),
     "dist": (3, 7),
+    "sweeper": (5, 5),  # through-ball into the action, plus outcome
+    "cross":   (5, 4),  # delivery → contact → clear
 }
 CLIP_DEFAULT_WINDOW = (5, 3)
 
@@ -1555,6 +1557,197 @@ def backfill_clips(job_id: str, force: bool = False) -> dict:
         "job_id": job_id,
         "clips_produced": {"goal": n_g, "save": n_s, "dist": n_d},
         "total_events": {"goal": len(goals), "save": len(saves), "dist": len(dist)},
+    }
+
+
+def _generate_clip_at_ts(video_path: str, timestamp_seconds: float,
+                          event_type: str, filename_suffix: str,
+                          job_id: str, sb) -> str | None:
+    """Slice + upload a clip at ``timestamp_seconds`` with a caller-supplied
+    filename suffix. Enables DB-driven event clipping (event UUID → suffix)
+    where the row-index-based ``_generate_event_clip`` would collide if event
+    ordering changes across runs.
+
+    Returns the storage path on success, None on failure.
+    """
+    import subprocess
+    import tempfile
+
+    if timestamp_seconds is None or not isinstance(timestamp_seconds, (int, float)):
+        return None
+
+    pre, post = CLIP_WINDOWS.get(event_type, CLIP_DEFAULT_WINDOW)
+    start = max(0, int(timestamp_seconds) - pre)
+    duration = pre + post
+
+    out_path = tempfile.mktemp(suffix=".mp4")
+    try:
+        result = subprocess.run(
+            [
+                "ffmpeg", "-ss", str(start), "-i", video_path,
+                "-t", str(duration),
+                "-vf", "scale=-2:720",
+                "-r", "30",
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "26",
+                "-c:a", "aac", "-b:a", "96k",
+                "-movflags", "+faststart",
+                "-y", out_path,
+            ],
+            capture_output=True, timeout=120,
+        )
+        if result.returncode != 0:
+            err = (result.stderr or b"").decode("utf-8", errors="replace")[:400]
+            print(f"[clip] ffmpeg failed for {event_type}/{filename_suffix} @ {start}s: {err}", flush=True)
+            return None
+        out_size = os.path.getsize(out_path) if os.path.exists(out_path) else 0
+        if out_size < 1024:
+            print(f"[clip] {event_type}/{filename_suffix} produced empty file", flush=True)
+            return None
+        if out_size > 8 * 1024 * 1024:
+            print(f"[clip] WARN {event_type}/{filename_suffix} = {out_size // 1024 // 1024} MB (target ≤8)", flush=True)
+
+        storage_path = f"{CLIPS_PREFIX}/{job_id}/{event_type}_{filename_suffix}.mp4"
+        with open(out_path, "rb") as f:
+            data = f.read()
+        sb.storage.from_("match-videos").upload(
+            storage_path, data,
+            file_options={"content-type": "video/mp4", "upsert": "true"},
+        )
+        return storage_path
+    except subprocess.TimeoutExpired:
+        print(f"[clip] ffmpeg timeout on {event_type}/{filename_suffix}", flush=True)
+        return None
+    except Exception as e:
+        print(f"[clip] unexpected failure on {event_type}/{filename_suffix}: {e}", flush=True)
+        return None
+    finally:
+        try:
+            if os.path.exists(out_path):
+                os.unlink(out_path)
+        except Exception:
+            pass
+
+
+@app.function(image=IMAGE, secrets=[secret], timeout=1800)
+def backfill_clips_from_events(match_id: str, force: bool = False) -> dict:
+    """Generate review clips for events persisted in the DB event tables.
+
+    Sibling to ``backfill_clips`` — but reads from shot_events /
+    distribution_events / goals_conceded / sweeper_events instead of
+    ``video_jobs.gemini_output``. Used when a match was published from
+    ground truth (or any coach-driven path) rather than from Gemini output,
+    so the clip pipeline can't find its events in the JSON blob.
+
+    Storage path convention: ``clips/<video_job_id>/<event_type>_<uuid8>.mp4``
+    where uuid8 is the first 8 chars of the event's DB primary key. Stable
+    across re-runs, safe against index-reshuffling.
+
+    Skips events that already have ``clip_storage_path`` unless ``force=True``.
+
+    Invoke locally: py -m modal run worker/app.py::backfill_clips_from_events --match-id <uuid>
+                    py -m modal run worker/app.py::backfill_clips_from_events --match-id <uuid> --force
+    """
+    from pathlib import Path
+    import tempfile
+    import time
+    import requests
+    from supabase import create_client
+
+    sb = create_client(
+        os.environ["NEXT_PUBLIC_SUPABASE_URL"],
+        os.environ["SUPABASE_SERVICE_ROLE_KEY"],
+    )
+
+    # Find the video_job for this match. Prefer published_match_id, fall back
+    # to match_id (older rows might use that field instead).
+    vj_rows = sb.table("video_jobs").select("*").eq("published_match_id", match_id).limit(1).execute().data
+    if not vj_rows:
+        vj_rows = sb.table("video_jobs").select("*").eq("match_id", match_id).limit(1).execute().data
+    if not vj_rows:
+        return {"match_id": match_id, "error": "no_video_job_for_match"}
+    job = vj_rows[0]
+    job_id = job["id"]
+
+    # Resolve a fresh download URL. Same logic as backfill_clips.
+    if job.get("storage_path"):
+        signed = sb.storage.from_("match-videos").create_signed_url(job["storage_path"], 7200)
+        download_url = signed.get("signedURL") or signed.get("signedUrl") or signed.get("url")
+        if not download_url:
+            return {"match_id": match_id, "error": "could_not_sign_source_url"}
+    else:
+        source_url = job.get("video_url")
+        if not source_url:
+            return {"match_id": match_id, "error": "no_video_url_or_storage_path"}
+        import sys as _sys
+        if "/root" not in _sys.path:
+            _sys.path.insert(0, "/root")
+        from resolvers import resolve as _resolve_url, ResolveError
+        try:
+            download_url = _resolve_url(source_url).playable_url
+        except ResolveError as re:
+            return {"match_id": match_id, "error": f"resolve_failed: {type(re).__name__}: {re.detail or re.coach_message}"}
+
+    print(f"[bfe] downloading source video for match {match_id}...", flush=True)
+    download_start = time.time()
+    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
+        r = requests.get(download_url, stream=True, timeout=900)
+        r.raise_for_status()
+        for chunk in r.iter_content(chunk_size=1024 * 1024):
+            f.write(chunk)
+        video_path = f.name
+    size_mb = os.path.getsize(video_path) / (1024 * 1024)
+    print(f"[bfe] {size_mb:.1f} MB downloaded in {time.time() - download_start:.0f}s", flush=True)
+
+    # Table → default event_type. shot_events is split by is_goal at row time.
+    tables = [
+        ("shot_events", None),
+        ("distribution_events", "dist"),
+        ("goals_conceded", "goal"),
+        ("sweeper_events", "sweeper"),
+    ]
+
+    per_table = {}
+    total_produced = 0
+    total_needed = 0
+    clip_start = time.time()
+
+    for tbl, fixed_type in tables:
+        q = sb.table(tbl).select("id, timestamp_seconds, is_goal" if tbl == "shot_events" else "id, timestamp_seconds").eq("match_id", match_id)
+        if not force:
+            q = q.is_("clip_storage_path", "null")
+        rows = q.execute().data or []
+        total_needed += len(rows)
+        produced = 0
+        skipped_no_ts = 0
+        for row in rows:
+            ts = row.get("timestamp_seconds")
+            if ts is None:
+                skipped_no_ts += 1
+                continue
+            event_type = fixed_type
+            if event_type is None:  # shot_events
+                event_type = "goal" if row.get("is_goal") else "save"
+            suffix = str(row["id"])[:8]
+            path = _generate_clip_at_ts(video_path, ts, event_type, suffix, job_id, sb)
+            if path:
+                sb.table(tbl).update({"clip_storage_path": path}).eq("id", row["id"]).execute()
+                produced += 1
+        per_table[tbl] = {"needed": len(rows), "produced": produced, "skipped_no_timestamp": skipped_no_ts}
+        total_produced += produced
+
+    print(f"[bfe] produced {total_produced}/{total_needed} clips in {time.time() - clip_start:.0f}s", flush=True)
+
+    try:
+        os.unlink(video_path)
+    except Exception:
+        pass
+
+    return {
+        "match_id": match_id,
+        "video_job_id": job_id,
+        "total_needed": total_needed,
+        "total_produced": total_produced,
+        "per_table": per_table,
     }
 
 
