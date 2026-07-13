@@ -553,9 +553,13 @@ export default function DashboardPage() {
 
   const keeperData = useMemo(() => {
     if (!selectedKeeper) return null;
-    const kMatches = allMatches.filter(m => m.keeper_id === selectedKeeper);
+    // A match can now have a substituted GK (matches.secondary_keeper_id).
+    // Include those on the sub's profile too so H2 stats aren't invisible.
+    const kMatches = allMatches.filter(m => m.keeper_id === selectedKeeper || m.secondary_keeper_id === selectedKeeper);
     const matchIds = new Set(kMatches.map(m => m.id));
-    const kGoals = allGoals.filter(g => matchIds.has(g.match_id));
+    // goals_conceded now has per-event keeper_id so a shared match doesn't
+    // leak one GK's conceded goal onto the other's profile.
+    const kGoals = allGoals.filter(g => matchIds.has(g.match_id) && g.keeper_id === selectedKeeper);
     const kAttrs = allAttrs.filter(a => a.keeper_id === selectedKeeper);
     const kShotEvents = allShotEvents.filter(se => se.keeper_id === selectedKeeper);
     const sorted = [...kMatches].sort((a, b) => new Date(b.match_date) - new Date(a.match_date));
@@ -601,9 +605,9 @@ export default function DashboardPage() {
 
   const cmpData = useMemo(() => {
     if (!cmpKeeper) return null;
-    const kMatches = allMatches.filter(m => m.keeper_id === cmpKeeper);
+    const kMatches = allMatches.filter(m => m.keeper_id === cmpKeeper || m.secondary_keeper_id === cmpKeeper);
     const matchIds = new Set(kMatches.map(m => m.id));
-    const kGoals = allGoals.filter(g => matchIds.has(g.match_id));
+    const kGoals = allGoals.filter(g => matchIds.has(g.match_id) && g.keeper_id === cmpKeeper);
     const kAttrs = allAttrs.filter(a => a.keeper_id === cmpKeeper);
     return {
       season: aggregateMatches(kMatches),
@@ -772,7 +776,7 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 keepers.map((k, i) => {
-                  const kMatches = allMatches.filter(m => m.keeper_id === k.id);
+                  const kMatches = allMatches.filter(m => m.keeper_id === k.id || m.secondary_keeper_id === k.id);
                   const kAgg = aggregateMatches(kMatches);
                   return (
                     <div key={k.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 0", borderTop: i > 0 ? `1px solid ${t.border}22` : "none", cursor: "pointer" }} onClick={() => setEditingKeeper(k)}>
