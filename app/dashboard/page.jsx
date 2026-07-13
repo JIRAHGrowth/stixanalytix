@@ -465,13 +465,29 @@ function StatsStrip({ seasonAgg, totalMatches }) {
   );
 }
 
-function RecentMatches({ matches }) {
+function RecentMatches({ matches, shotEvents, goalsConceded }) {
   const recent = useMemo(() => {
     return [...matches]
-      .filter(m => m.session_type === "match")
+      .filter(m => m.session_type === "match" || m.session_type === "friendly")
       .sort((a, b) => new Date(b.match_date) - new Date(a.match_date))
       .slice(0, 5);
   }, [matches]);
+
+  // Per-match, per-keeper save-on-target counts derived from events. Matches
+  // that have no events yet fall back to match aggregate columns below.
+  const eventCounts = useMemo(() => {
+    const out = {};
+    (shotEvents || []).forEach(e => {
+      if (e.is_goal) return;
+      if (!out[e.match_id]) out[e.match_id] = { sv: 0, ga: 0 };
+      if (e.on_target === "yes") out[e.match_id].sv++;
+    });
+    (goalsConceded || []).forEach(g => {
+      if (!out[g.match_id]) out[g.match_id] = { sv: 0, ga: 0 };
+      out[g.match_id].ga++;
+    });
+    return out;
+  }, [shotEvents, goalsConceded]);
 
   return (
     <div style={{
@@ -484,14 +500,22 @@ function RecentMatches({ matches }) {
         </span>
         <div style={{ flex: 1, height: 1, background: t.border }} />
         <Link href="/dashboard/deep-dive" style={{ fontSize: 10, color: t.accent, textDecoration: "none", fontWeight: 600, letterSpacing: 0.5 }}>
-          ALL {matches.filter(m => m.session_type === "match").length} →
+          ALL {matches.filter(m => m.session_type === "match" || m.session_type === "friendly").length} →
         </Link>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
         {recent.map((m, i) => {
           const rc = resultColor(m.result);
-          const sotPct = m.shots_on_target > 0 ? (m.saves / m.shots_on_target) * 100 : null;
+          const ec = eventCounts[m.id];
+          const hasEvents = !!ec;
+          // Hybrid: events for modern matches, fall back to match columns.
+          // Numerator = on-target saves; denominator = SOT (= saves + GA).
+          // Clamped to 100% because physical reality guarantees saves ≤ SOT.
+          const sv  = hasEvents ? ec.sv : (m.saves || 0);
+          const ga  = hasEvents ? ec.ga : (m.goals_conceded || 0);
+          const sot = hasEvents ? (ec.sv + ec.ga) : (m.shots_on_target || 0);
+          const sotPct = sot > 0 ? Math.min(100, (sv / sot) * 100) : null;
           return (
             <Link key={m.id} href={`/matches/${m.id}`} style={{ textDecoration: "none" }}>
               <div style={{
@@ -512,7 +536,7 @@ function RecentMatches({ matches }) {
                 }}>{m.result || "—"}</span>
                 <span style={{ color: t.bright, fontWeight: 500 }}>{m.opponent || "—"}</span>
                 <span style={{ color: t.text, fontWeight: 400 }}>{m.goals_for ?? 0}–{m.goals_against ?? 0}</span>
-                <span style={{ color: t.dim, fontWeight: 400 }}>{m.saves ?? 0}/{m.shots_on_target ?? 0}</span>
+                <span style={{ color: t.dim, fontWeight: 400 }}>{sv}/{sot}</span>
                 <span style={{ color: t.accent, fontWeight: 700, textAlign: "right" }}>
                   {sotPct != null ? `${sotPct.toFixed(1)}%` : "—"}
                 </span>
@@ -713,7 +737,7 @@ export default function DashboardPreview() {
             </div>
 
             <div style={{ marginTop: 20 }}>
-              <RecentMatches matches={data.matches} />
+              <RecentMatches matches={data.matches} shotEvents={data.shotEvents} goalsConceded={data.goalsConceded} />
             </div>
 
             <DesignerNotes />
