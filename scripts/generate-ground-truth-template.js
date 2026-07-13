@@ -27,6 +27,7 @@ const ExcelJS = require('exceljs');
 const HALF = ['1', '2'];
 const YN = ['Yes', 'No'];
 const YN_UNCLEAR = ['Yes', 'No', 'Unclear'];
+const KEEPER_TEAM = ['Us', 'Opponent'];
 const SHOT_LOCATIONS = [
   '6-Yard Box', 'Left Channel', 'Central Box', 'Right Channel',
   'Wide Left', 'Central Distance', 'Wide Right',
@@ -52,6 +53,8 @@ const SHEETS = {
       { key: 'duration',         label: 'Video duration (MM:SS)', type: 'text', sample: '52:23' },
       { key: 'final_score_us',   label: 'Final score — us',  type: 'number', sample: 4 },
       { key: 'final_score_them', label: 'Final score — them',type: 'number', sample: 1 },
+      { key: 'us_keeper_change_at',       label: 'Us GK sub at (MM:SS)',       type: 'text', sample: '', help: 'Leave blank if same GK all game. Otherwise MM:SS when your GK was subbed. Events after this time attribute to GK 2.' },
+      { key: 'opponent_keeper_change_at', label: 'Opponent GK sub at (MM:SS)', type: 'text', sample: '', help: 'Leave blank if same opponent GK all game. Otherwise MM:SS when the opposition GK was subbed.' },
       { key: 'video_job_id',     label: 'video_job_id',     type: 'text', sample: '', help: 'Fill in after upload — needed for eval' },
     ],
   },
@@ -61,6 +64,7 @@ const SHEETS = {
     columns: [
       { key: 'time',           header: 'Time (MM:SS)',  type: 'text',     width: 12 },
       { key: 'half',           header: 'Half',          type: 'dropdown', options: HALF, width: 8 },
+      { key: 'keeper_team',    header: 'Keeper team',   type: 'dropdown', options: KEEPER_TEAM, width: 14 },
       { key: 'scoring_team',   header: 'Scoring team',  type: 'dropdown', options: ['Us', 'Opponent'], width: 14 },
       { key: 'attack_type',    header: 'Attack type',   type: 'dropdown', options: ['Open play','Counter attack','Corner','Free kick','Penalty','Throw-in','Set piece other','Other'], width: 16 },
       { key: 'shot_type',      header: 'Shot type',     type: 'dropdown', options: ['Header','Driven','Tap-in','Volley','Half-volley','Curled','Chip','One-v-one finish','Rebound','Deflection','Penalty','Free-kick','Own goal','Other'], width: 16 },
@@ -72,7 +76,7 @@ const SHEETS = {
       { key: 'notes',          header: 'Notes',         type: 'text', width: 40 },
     ],
     sampleRow: {
-      time: '4:05', half: '1', scoring_team: 'Us', attack_type: 'Open play', shot_type: 'Rebound',
+      time: '4:05', half: '1', keeper_team: 'Opponent', scoring_team: 'Us', attack_type: 'Open play', shot_type: 'Rebound',
       shot_location: '6-Yard Box', placement_height: 'Low', placement_side: 'Centre',
       play_description: 'Right-side initial shot saved by opp GK, follow-up tap-in central.',
       gk_observations: 'Opp GK was on ground from initial save, could not recover for the rebound.',
@@ -85,6 +89,7 @@ const SHEETS = {
     columns: [
       { key: 'time',           header: 'Time (MM:SS)',  type: 'text', width: 12 },
       { key: 'half',           header: 'Half',          type: 'dropdown', options: HALF, width: 8 },
+      { key: 'keeper_team',    header: 'Keeper team',   type: 'dropdown', options: KEEPER_TEAM, width: 14 },
       { key: 'shot_origin',    header: 'Shot origin',   type: 'dropdown', options: SHOT_LOCATIONS, width: 18 },
       { key: 'shot_type',      header: 'Shot type',     type: 'dropdown', options: ['Foot','Header','Deflection'], width: 14 },
       { key: 'on_target',      header: 'On target',     type: 'dropdown', options: YN_UNCLEAR, width: 12 },
@@ -99,7 +104,7 @@ const SHEETS = {
       { key: 'notes',          header: 'Notes',         type: 'text', width: 40 },
     ],
     sampleRow: {
-      time: '24:47', half: '1', shot_origin: 'Central Distance', shot_type: 'Foot',
+      time: '24:47', half: '1', keeper_team: 'Us', shot_origin: 'Central Distance', shot_type: 'Foot',
       on_target: 'Yes', gk_action: 'Parry', gk_visible: 'Yes', outcome: 'Corner',
       body_zone: 'C', placement_height: 'Low', placement_side: 'GK Right',
       play_description: 'Driven shot from outside the box, central, aimed at the bottom-right corner.',
@@ -129,6 +134,7 @@ const SHEETS = {
     columns: [
       { key: 'time',           header: 'Time (MM:SS)',  type: 'text', width: 12 },
       { key: 'half',           header: 'Half',          type: 'dropdown', options: HALF, width: 8 },
+      { key: 'keeper_team',    header: 'Keeper team',   type: 'dropdown', options: KEEPER_TEAM, width: 14 },
       { key: 'trigger',        header: 'Trigger',       type: 'dropdown', options: ['Goal kick','After save','Backpass','Loose ball in box','Throw-in to GK','Free kick to GK'], width: 18 },
       { key: 'type',           header: 'Type',          type: 'dropdown', options: ['GK Short Kick','GK Long Kick','Throw','Pass','Drop-kick'], width: 16 },
       { key: 'successful',     header: 'Successful',    type: 'dropdown', options: YN, width: 12 },
@@ -140,7 +146,7 @@ const SHEETS = {
       { key: 'notes',          header: 'Notes',         type: 'text', width: 40 },
     ],
     sampleRow: {
-      time: '14:32', half: '1', trigger: 'Backpass', type: 'Pass', successful: 'Yes',
+      time: '14:32', half: '1', keeper_team: 'Us', trigger: 'Backpass', type: 'Pass', successful: 'Yes',
       under_pressure: 'Yes', pass_selection: 'Switch wide', direction: 'Left', receiver: 'Defender',
       first_touch: 'Clean',
       notes: 'Recycled possession to LCB under high press; built out from the back successfully.',
@@ -152,6 +158,7 @@ const SHEETS = {
     columns: [
       { key: 'time',            header: 'Time (MM:SS)', type: 'text', width: 12 },
       { key: 'half',            header: 'Half',         type: 'dropdown', options: HALF, width: 8 },
+      { key: 'keeper_team',     header: 'Keeper team',  type: 'dropdown', options: KEEPER_TEAM, width: 14 },
       { key: 'side',            header: 'Side',         type: 'dropdown', options: ['Left','Right','Corner Left','Corner Right'], width: 14 },
       { key: 'cross_type',      header: 'Cross type',   type: 'dropdown', options: ['Whipped','Floated','Driven','Cut-back','Looped'], width: 14 },
       { key: 'destination',     header: 'Destination',  type: 'dropdown', options: ['Near post','6yd','Penalty spot','Far post','Out of box'], width: 16 },
@@ -161,7 +168,7 @@ const SHEETS = {
       { key: 'notes',           header: 'Notes',        type: 'text', width: 40 },
     ],
     sampleRow: {
-      time: '36:18', half: '2', side: 'Corner Right', cross_type: 'Whipped', destination: 'Near post',
+      time: '36:18', half: '2', keeper_team: 'Us', side: 'Corner Right', cross_type: 'Whipped', destination: 'Near post',
       gk_action: 'Punch', gk_position: 'Edge of 6yd', outcome: 'Punched away',
       notes: 'Two-fisted punch under pressure from two attackers; cleared 25 yards.',
     },
@@ -172,6 +179,7 @@ const SHEETS = {
     columns: [
       { key: 'time',           header: 'Time (MM:SS)',  type: 'text', width: 12 },
       { key: 'half',           header: 'Half',          type: 'dropdown', options: HALF, width: 8 },
+      { key: 'keeper_team',    header: 'Keeper team',   type: 'dropdown', options: KEEPER_TEAM, width: 14 },
       { key: 'action',         header: 'Action',        type: 'dropdown', options: ['Clearance','Interception','Tackle','Header'], width: 14 },
       { key: 'distance',       header: 'Distance from goal', type: 'dropdown', options: ['In box','Edge of box','5–15 yards out','15+ yards out'], width: 22 },
       { key: 'successful',     header: 'Successful',    type: 'dropdown', options: YN, width: 12 },
@@ -180,7 +188,7 @@ const SHEETS = {
       { key: 'notes',          header: 'Notes',         type: 'text', width: 40 },
     ],
     sampleRow: {
-      time: '28:15', half: '1', action: 'Clearance', distance: '5–15 yards out',
+      time: '28:15', half: '1', keeper_team: 'Us', action: 'Clearance', distance: '5–15 yards out',
       successful: 'Yes', pressure: '1 attacker', outcome: 'Cleared safely',
       notes: 'Read the through ball early; one-touch clearance to the right wing.',
     },
@@ -191,12 +199,13 @@ const SHEETS = {
     columns: [
       { key: 'time',     header: 'Time (MM:SS)', type: 'text', width: 12 },
       { key: 'half',     header: 'Half',         type: 'dropdown', options: HALF, width: 8 },
+      { key: 'keeper_team', header: 'Keeper team', type: 'dropdown', options: KEEPER_TEAM, width: 14 },
       { key: 'event',    header: 'Event type',   type: 'dropdown', options: ['1v1 faced','Recovery save','Error leading to goal','Big moment (other)'], width: 24 },
       { key: 'outcome',  header: 'Outcome',      type: 'dropdown', options: ['Won','Conceded','Saved','Cleared'], width: 14 },
       { key: 'notes',    header: 'Notes',        type: 'text', width: 70 },
     ],
     sampleRow: {
-      time: '52:17', half: '2', event: '1v1 faced', outcome: 'Conceded',
+      time: '52:17', half: '2', keeper_team: 'Us', event: '1v1 faced', outcome: 'Conceded',
       notes: 'Through ball over the top, GK rushed off line, attacker rounded him to score into empty net. Sweeper-keeper action with poor angle.',
     },
   },
@@ -271,7 +280,7 @@ function buildMetadataSheet(workbook) {
     // Force time-format fields to TEXT so Excel doesn't auto-convert MM:SS
     // entries to overflow Date values (e.g. "55:28" stored as datetime
     // straddling two days).
-    if (f.key === 'duration') {
+    if (f.key === 'duration' || f.key === 'us_keeper_change_at' || f.key === 'opponent_keeper_change_at') {
       sheet.getCell(`B${row}`).numFmt = '@';
     }
   });
@@ -364,19 +373,21 @@ async function main() {
     'Tips:',
     ' • Time format is MM:SS (e.g. 12:24). The first column on every event sheet is Time.',
     ' • Dropdowns appear as you click into a cell — pick from the list rather than typing free text.',
-    ' • If you are unsure of a field, leave it blank. The converter handles missing values cleanly.',
+    ' • Keeper team — pick "Us" if the event is for the analyzed GK (the paying customer). Pick "Opponent" if the event is for the OTHER GK. Tag BOTH GKs\' events — opponent events are pure training signal for the model.',
+    ' • GK substitution — if either team subbed their GK, enter the MM:SS timestamp on the Metadata sheet ("Us GK sub at" / "Opponent GK sub at"). The converter tags every event before that time as keeper_slot=1 and every event after as keeper_slot=2. Leave blank if same GK all game.',
+    ' • If you are unsure of a field, leave it blank. The converter handles missing values cleanly. Blank Keeper team defaults to "Us".',
     ' • Notes are always optional but valuable — they become part of the match record on publish.',
     '',
     'Tab colours: red=Goals, green=Saves, blue=Distribution, orange=Crosses, purple=Sweeper, gold=1v1s, grey=metadata/this README.',
     '',
     'FORMAT EXAMPLES (copy the IDEA, not the literal row, into the relevant sheet):',
     '',
-    '  Goals: 4:05 | 1 | Us | Open play | Rebound | 6-Yard Box | Low | Centre | Right-side initial shot saved, follow-up tap-in central. | Opp GK was on ground from initial save. | (notes)',
-    '  Saves: 24:47 | 1 | Central Distance | Foot | Yes | Parry | Yes | Corner | C | Low | GK Right | Driven shot from outside the box, central. | Strong parry — full extension dive to the right. | (notes)',
-    '  Distribution: 14:32 | 1 | Backpass | Pass | Yes | Yes | Switch wide | Left | Defender | Clean | Recycled possession to LCB under high press.',
-    '  Crosses: 36:18 | 2 | Corner Right | Whipped | Near post | Punch | Edge of 6yd | Punched away | Two-fisted punch under pressure from two attackers.',
-    '  Sweeper: 28:15 | 1 | Clearance | 5–15 yards out | Yes | 1 attacker | Cleared safely | Read the through ball early.',
-    '  1v1s: 52:17 | 2 | 1v1 faced | Conceded | Through ball over the top, GK rushed off line, attacker rounded him.',
+    '  Goals: 4:05 | 1 | Opponent | Us | Open play | Rebound | 6-Yard Box | Low | Centre | Right-side initial shot saved, follow-up tap-in central. | Opp GK was on ground from initial save. | (notes)',
+    '  Saves: 24:47 | 1 | Us | Central Distance | Foot | Yes | Parry | Yes | Corner | C | Low | GK Right | Driven shot from outside the box, central. | Strong parry — full extension dive to the right. | (notes)',
+    '  Distribution: 14:32 | 1 | Us | Backpass | Pass | Yes | Yes | Switch wide | Left | Defender | Clean | Recycled possession to LCB under high press.',
+    '  Crosses: 36:18 | 2 | Us | Corner Right | Whipped | Near post | Punch | Edge of 6yd | Punched away | Two-fisted punch under pressure from two attackers.',
+    '  Sweeper: 28:15 | 1 | Us | Clearance | 5–15 yards out | Yes | 1 attacker | Cleared safely | Read the through ball early.',
+    '  1v1s: 52:17 | 2 | Us | 1v1 faced | Conceded | Through ball over the top, GK rushed off line, attacker rounded him.',
   ];
   readmeLines.forEach((line, i) => {
     const cell = readme.getCell(`A${i + 1}`);

@@ -64,6 +64,15 @@ const OUTCOME = {
 };
 const BODY_ZONE = { 'a': 'A', 'b': 'B', 'c': 'C', 'unclear': 'unclear' };
 
+// Keeper team — which GK is the event tagged for. Missing/blank on legacy
+// workbooks (pre-2026-07-11) defaults to 'us' since those workbooks only
+// tagged the analyzed GK.
+const KEEPER_TEAM = { 'us': 'us', 'opponent': 'opponent', 'them': 'opponent' };
+function normaliseKeeperTeam(v) {
+  const k = KEEPER_TEAM[lc(v)];
+  return k || 'us';
+}
+
 const DIST_TYPE = {
   'gk short kick': 'gk_short', 'gk long kick': 'gk_long',
   'throw': 'throw', 'pass': 'pass', 'drop-kick': 'drop_kick',
@@ -176,6 +185,20 @@ function map(table, key) {
   return table[lc(key)] ?? null;
 }
 
+// Legacy workbooks (pre-2026-07-11) don't have a "Keeper team" column. This
+// helper looks at the header row and returns true iff one of the header cells
+// says "Keeper team" — so each per-sheet reader can swap between the new and
+// legacy column layouts and stay index-aligned with the actual data.
+function hasKeeperTeamCol(sheet, headerRow = 1) {
+  const row = sheet.getRow(headerRow);
+  const maxCol = Math.min(row.cellCount || 30, 30);
+  for (let c = 1; c <= maxCol; c++) {
+    const v = readCell(row.getCell(c));
+    if (v && lc(v) === 'keeper team') return true;
+  }
+  return false;
+}
+
 function parseEventSheet(sheet, columnDefs, opts = {}) {
   const events = [];
   const dataStart = opts.dataStartRow || 2; // Goals/Saves/etc — header at row 1, sample at 2
@@ -225,12 +248,29 @@ function readMetadata(sheet) {
     duration_seconds: tsToSeconds(out['video duration (mm:ss)']),
     final_score_us:   Number(out['final score — us']) || 0,
     final_score_them: Number(out['final score — them']) || 0,
+    us_keeper_change_seconds:       tsToSeconds(out['us gk sub at (mm:ss)']),
+    opponent_keeper_change_seconds: tsToSeconds(out['opponent gk sub at (mm:ss)']),
     video_job_id:     out['video_job_id'] || null,
   };
 }
 
+// Derive keeper_slot (1 or 2) from an event's timestamp + the appropriate
+// team's change-timestamp. `changeSec` == null means "no change" — everyone
+// is slot 1. Events without their own timestamp default to slot 1.
+function deriveKeeperSlot(eventSeconds, changeSec) {
+  if (changeSec == null) return 1;
+  if (eventSeconds == null) return 1;
+  return eventSeconds >= changeSec ? 2 : 1;
+}
+
 function readGoals(sheet, ctx) {
-  const cols = [
+  const withKT = hasKeeperTeamCol(sheet);
+  const cols = withKT ? [
+    { key: 'time' }, { key: 'half' }, { key: 'keeper_team' }, { key: 'scoring_team' }, { key: 'attack_type' },
+    { key: 'shot_type' }, { key: 'shot_location' }, { key: 'placement_height' },
+    { key: 'placement_side' }, { key: 'play_description' }, { key: 'gk_observations' },
+    { key: 'notes' },
+  ] : [
     { key: 'time' }, { key: 'half' }, { key: 'scoring_team' }, { key: 'attack_type' },
     { key: 'shot_type' }, { key: 'shot_location' }, { key: 'placement_height' },
     { key: 'placement_side' }, { key: 'play_description' }, { key: 'gk_observations' },
@@ -240,6 +280,7 @@ function readGoals(sheet, ctx) {
     timestamp: e.time,
     timestamp_seconds: tsToSeconds(e.time),
     half: e.half ? parseInt(e.half, 10) : null,
+    keeper_team: normaliseKeeperTeam(e.keeper_team),
     scoring_team: SCORING_TEAM(e.scoring_team, ctx),
     attack_type: map(ATTACK_TYPE, e.attack_type),
     shot_type: e.shot_type ? lc(e.shot_type).replace(/\s+/g, '_').replace(/-/g, '_') : null,
@@ -253,7 +294,13 @@ function readGoals(sheet, ctx) {
 }
 
 function readSaves(sheet) {
-  const cols = [
+  const withKT = hasKeeperTeamCol(sheet);
+  const cols = withKT ? [
+    { key: 'time' }, { key: 'half' }, { key: 'keeper_team' }, { key: 'shot_origin' }, { key: 'shot_type' },
+    { key: 'on_target' }, { key: 'gk_action' }, { key: 'gk_visible' }, { key: 'outcome' },
+    { key: 'body_zone' }, { key: 'placement_height' }, { key: 'placement_side' },
+    { key: 'play_description' }, { key: 'gk_observations' }, { key: 'notes' },
+  ] : [
     { key: 'time' }, { key: 'half' }, { key: 'shot_origin' }, { key: 'shot_type' },
     { key: 'on_target' }, { key: 'gk_action' }, { key: 'gk_visible' }, { key: 'outcome' },
     { key: 'body_zone' }, { key: 'placement_height' }, { key: 'placement_side' },
@@ -263,6 +310,7 @@ function readSaves(sheet) {
     timestamp: e.time,
     timestamp_seconds: tsToSeconds(e.time),
     half: e.half ? parseInt(e.half, 10) : null,
+    keeper_team: normaliseKeeperTeam(e.keeper_team),
     shot_origin: map(SHOT_LOCATION_TO_ORIGIN, e.shot_origin),
     shot_type: e.shot_type ? String(e.shot_type) : null,  // Foot / Header / Deflection — preserve case
     on_target: map(ON_TARGET, e.on_target),
@@ -314,7 +362,12 @@ function readDistribution(sheet) {
 
   if (!headerRow) return { events: [], summary };
 
-  const cols = [
+  const withKT = hasKeeperTeamCol(sheet, headerRow);
+  const cols = withKT ? [
+    { key: 'time' }, { key: 'half' }, { key: 'keeper_team' }, { key: 'trigger' }, { key: 'type' },
+    { key: 'successful' }, { key: 'under_pressure' }, { key: 'pass_selection' },
+    { key: 'direction' }, { key: 'receiver' }, { key: 'first_touch' }, { key: 'notes' },
+  ] : [
     { key: 'time' }, { key: 'half' }, { key: 'trigger' }, { key: 'type' },
     { key: 'successful' }, { key: 'under_pressure' }, { key: 'pass_selection' },
     { key: 'direction' }, { key: 'receiver' }, { key: 'first_touch' }, { key: 'notes' },
@@ -323,6 +376,7 @@ function readDistribution(sheet) {
     timestamp: e.time,
     timestamp_seconds: tsToSeconds(e.time),
     half: e.half ? parseInt(e.half, 10) : null,
+    keeper_team: normaliseKeeperTeam(e.keeper_team),
     trigger: map(DIST_TRIGGER, e.trigger),
     type: map(DIST_TYPE, e.type),
     successful: e.successful ? !!YN_BOOL[lc(e.successful)] : null,
@@ -338,7 +392,12 @@ function readDistribution(sheet) {
 }
 
 function readCrosses(sheet) {
-  const cols = [
+  const withKT = hasKeeperTeamCol(sheet);
+  const cols = withKT ? [
+    { key: 'time' }, { key: 'half' }, { key: 'keeper_team' }, { key: 'side' }, { key: 'cross_type' },
+    { key: 'destination' }, { key: 'gk_action' }, { key: 'gk_position' },
+    { key: 'outcome' }, { key: 'notes' },
+  ] : [
     { key: 'time' }, { key: 'half' }, { key: 'side' }, { key: 'cross_type' },
     { key: 'destination' }, { key: 'gk_action' }, { key: 'gk_position' },
     { key: 'outcome' }, { key: 'notes' },
@@ -347,6 +406,7 @@ function readCrosses(sheet) {
     timestamp: e.time,
     timestamp_seconds: tsToSeconds(e.time),
     half: e.half ? parseInt(e.half, 10) : null,
+    keeper_team: normaliseKeeperTeam(e.keeper_team),
     side: e.side ? lc(e.side).replace(/\s+/g, '_') : null,
     cross_type: e.cross_type ? lc(e.cross_type) : null,
     destination: e.destination ? lc(e.destination).replace(/\s+/g, '_') : null,
@@ -358,7 +418,11 @@ function readCrosses(sheet) {
 }
 
 function readSweeper(sheet) {
-  const cols = [
+  const withKT = hasKeeperTeamCol(sheet);
+  const cols = withKT ? [
+    { key: 'time' }, { key: 'half' }, { key: 'keeper_team' }, { key: 'action' }, { key: 'distance' },
+    { key: 'successful' }, { key: 'pressure' }, { key: 'outcome' }, { key: 'notes' },
+  ] : [
     { key: 'time' }, { key: 'half' }, { key: 'action' }, { key: 'distance' },
     { key: 'successful' }, { key: 'pressure' }, { key: 'outcome' }, { key: 'notes' },
   ];
@@ -366,6 +430,7 @@ function readSweeper(sheet) {
     timestamp: e.time,
     timestamp_seconds: tsToSeconds(e.time),
     half: e.half ? parseInt(e.half, 10) : null,
+    keeper_team: normaliseKeeperTeam(e.keeper_team),
     action: e.action ? lc(e.action) : null,
     distance: e.distance ? lc(e.distance).replace(/[–-]/g, '_').replace(/\s+/g, '_') : null,
     successful: e.successful ? !!YN_BOOL[lc(e.successful)] : null,
@@ -376,13 +441,17 @@ function readSweeper(sheet) {
 }
 
 function readOneVOnes(sheet) {
-  const cols = [
+  const withKT = hasKeeperTeamCol(sheet);
+  const cols = withKT ? [
+    { key: 'time' }, { key: 'half' }, { key: 'keeper_team' }, { key: 'event' }, { key: 'outcome' }, { key: 'notes' },
+  ] : [
     { key: 'time' }, { key: 'half' }, { key: 'event' }, { key: 'outcome' }, { key: 'notes' },
   ];
   return parseEventSheet(sheet, cols).map(e => ({
     timestamp: e.time,
     timestamp_seconds: tsToSeconds(e.time),
     half: e.half ? parseInt(e.half, 10) : null,
+    keeper_team: normaliseKeeperTeam(e.keeper_team),
     event_type: e.event ? lc(e.event).replace(/\s+/g, '_').replace(/[()]/g, '') : null,
     outcome: e.outcome ? lc(e.outcome) : null,
     note: e.notes || null,
@@ -419,6 +488,23 @@ async function main() {
   const sweeper = get('Sweeper') ? readSweeper(get('Sweeper')) : [];
   const oneVOnes = get('1v1s') ? readOneVOnes(get('1v1s')) : [];
 
+  // Attach keeper_slot to every event based on its timestamp vs the relevant
+  // team's substitution timestamp from Metadata. Events default to slot 1
+  // (no sub happened OR event is before the sub).
+  const withSlot = (events) => events.map(e => ({
+    ...e,
+    keeper_slot: deriveKeeperSlot(
+      e.timestamp_seconds,
+      e.keeper_team === 'opponent' ? meta.opponent_keeper_change_seconds : meta.us_keeper_change_seconds,
+    ),
+  }));
+  const goalsWithSlot         = withSlot(goals);
+  const savesWithSlot         = withSlot(saves);
+  const distributionWithSlot  = withSlot(distribution.events);
+  const crossesWithSlot       = withSlot(crosses);
+  const sweeperWithSlot       = withSlot(sweeper);
+  const oneVOnesWithSlot      = withSlot(oneVOnes);
+
   const out = {
     match_name: meta.match_name,
     match_date: meta.match_date,
@@ -431,14 +517,16 @@ async function main() {
     my_keeper_color: meta.my_keeper_color,
     duration_seconds: meta.duration_seconds,
     final_score: { us: meta.final_score_us, them: meta.final_score_them },
+    us_keeper_change_seconds:       meta.us_keeper_change_seconds,
+    opponent_keeper_change_seconds: meta.opponent_keeper_change_seconds,
     video_job_id: meta.video_job_id,
     events: {
-      goals,
-      saves,
-      distribution: distribution.events,
-      crosses,
-      sweeper,
-      one_v_ones: oneVOnes,
+      goals:        goalsWithSlot,
+      saves:        savesWithSlot,
+      distribution: distributionWithSlot,
+      crosses:      crossesWithSlot,
+      sweeper:      sweeperWithSlot,
+      one_v_ones:   oneVOnesWithSlot,
     },
     distribution_summary: distribution.summary,
     _generated_at: new Date().toISOString(),
@@ -451,12 +539,20 @@ async function main() {
 
   console.log(`Wrote ${path.relative(process.cwd(), outPath)}`);
   console.log(`Events tagged:`);
-  console.log(`  Goals:        ${goals.length}`);
-  console.log(`  Saves:        ${saves.length}`);
-  console.log(`  Distribution: ${distribution.events.length} (+ totals: ${Object.keys(distribution.summary.totals).length})`);
-  console.log(`  Crosses:      ${crosses.length}`);
-  console.log(`  Sweeper:      ${sweeper.length}`);
-  console.log(`  1v1s:         ${oneVOnes.length}`);
+  console.log(`  Goals:        ${goalsWithSlot.length}`);
+  console.log(`  Saves:        ${savesWithSlot.length}`);
+  console.log(`  Distribution: ${distributionWithSlot.length} (+ totals: ${Object.keys(distribution.summary.totals).length})`);
+  console.log(`  Crosses:      ${crossesWithSlot.length}`);
+  console.log(`  Sweeper:      ${sweeperWithSlot.length}`);
+  console.log(`  1v1s:         ${oneVOnesWithSlot.length}`);
+  if (meta.us_keeper_change_seconds != null || meta.opponent_keeper_change_seconds != null) {
+    const countSlot2 = (arr) => arr.filter(e => e.keeper_slot === 2).length;
+    const totalSlot2 = countSlot2(goalsWithSlot) + countSlot2(savesWithSlot) + countSlot2(distributionWithSlot)
+                     + countSlot2(crossesWithSlot) + countSlot2(sweeperWithSlot) + countSlot2(oneVOnesWithSlot);
+    console.log(`  ↳ ${totalSlot2} of ${goalsWithSlot.length + savesWithSlot.length + distributionWithSlot.length + crossesWithSlot.length + sweeperWithSlot.length + oneVOnesWithSlot.length} events attributed to GK slot 2 (post-substitution)`);
+    if (meta.us_keeper_change_seconds != null) console.log(`  ↳ Us GK sub at ${meta.us_keeper_change_seconds}s`);
+    if (meta.opponent_keeper_change_seconds != null) console.log(`  ↳ Opponent GK sub at ${meta.opponent_keeper_change_seconds}s`);
+  }
   if (!meta.video_job_id) {
     console.log(`\nReminder: fill in video_job_id in the Metadata sheet, then re-run, before using with eval-match.js`);
   }

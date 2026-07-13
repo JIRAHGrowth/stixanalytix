@@ -562,7 +562,11 @@ export default function DashboardPreview() {
     (async () => {
       try {
         const [matchRes, attrRes, seRes, vjRes] = await Promise.all([
-          supabase.from("matches").select("*").eq("coach_id", user.id).eq("keeper_id", activeKeeperId)
+          // A match can now belong to two keepers when a substitution occurred
+          // (matches.secondary_keeper_id, added 2026-07-12). Fetch matches
+          // where the active keeper is either the primary or the sub.
+          supabase.from("matches").select("*").eq("coach_id", user.id)
+            .or(`keeper_id.eq.${activeKeeperId},secondary_keeper_id.eq.${activeKeeperId}`)
             .order("match_date", { ascending: true }),
           supabase.from("match_attributes").select("*").eq("keeper_id", activeKeeperId),
           supabase.from("shot_events").select("*").eq("keeper_id", activeKeeperId)
@@ -573,10 +577,12 @@ export default function DashboardPreview() {
         if (!mounted) return;
         const matches = matchRes.data || [];
         const matchIds = matches.map(m => m.id);
-        // goals_conceded carries coach_id but not keeper_id — fetch by match_id
-        // to scope cleanly to this keeper only.
+        // goals_conceded now has a keeper_id column (added 2026-07-12) so a
+        // multi-keeper match can attribute each conceded goal to whichever GK
+        // was on the pitch. Scope to the active keeper only.
         const gcRes = matchIds.length
-          ? await supabase.from("goals_conceded").select("*").in("match_id", matchIds)
+          ? await supabase.from("goals_conceded").select("*")
+              .in("match_id", matchIds).eq("keeper_id", activeKeeperId)
           : { data: [] };
         if (!mounted) return;
         const attrs = attrRes.data || [];

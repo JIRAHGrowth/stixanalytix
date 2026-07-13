@@ -10,6 +10,7 @@
  *     --truth scripts/ground-truth/<match-name>.json \
  *     --job <video_job_id>           # pulls gemini_output from Supabase
  *     [--tolerance 10]               # ±N seconds for matching events
+ *     [--keeper-team us|opponent|both]  # filter truth by keeper_team (default: us)
  *     [--save-report]                # write a dated report to scripts/eval-reports/
  *
  * Or evaluate a local gemini_output JSON file (bench harness path):
@@ -142,29 +143,39 @@ function extractSweeper(geminiOutput) {
   }));
 }
 
-function normaliseTruth(truth) {
+function normaliseTruth(truth, opts = {}) {
   // The Excel converter already writes timestamp_seconds as the canonical
   // numeric value. Prefer that — fall back to parsing the raw `timestamp`
   // string only if the numeric is missing.
   const ts = (e) => Number.isFinite(e.timestamp_seconds) ? e.timestamp_seconds : tsToSeconds(e.timestamp);
+  // Gemini output today only reports events for the analyzed GK ("us"). Legacy
+  // truth workbooks likewise only tagged us-GK events. To keep eval apples-to-
+  // apples, filter truth to keeper_team='us' by default. Callers wanting the
+  // full both-GKs comparison can pass { keeperTeam: 'both' }.
+  const wantKT = opts.keeperTeam || 'us';
+  const keepEvent = (e) => {
+    if (wantKT === 'both') return true;
+    const kt = (e.keeper_team || 'us').toLowerCase();
+    return kt === wantKT;
+  };
   return {
     duration_seconds: truth.duration_seconds || null,
     my_team_color: String(truth.my_team_color || '').toLowerCase(),
     opponent_color: String(truth.opponent_color || '').toLowerCase(),
-    goals: (truth.events?.goals || []).map(g => ({
+    goals: (truth.events?.goals || []).filter(keepEvent).map(g => ({
       timestamp_seconds: ts(g),
       scoring_team: String(g.scoring_team || '').toLowerCase(),
       shot_type: g.shot_type,
       note: g.note || null,
     })),
-    saves: (truth.events?.saves || []).map(s => ({
+    saves: (truth.events?.saves || []).filter(keepEvent).map(s => ({
       timestamp_seconds: ts(s),
       gk_action: s.gk_action,
       on_target: s.on_target,
       body_distance_zone: s.body_distance_zone,
       note: s.note || null,
     })),
-    distribution: (truth.events?.distribution || []).map(d => ({
+    distribution: (truth.events?.distribution || []).filter(keepEvent).map(d => ({
       timestamp_seconds: ts(d),
       type: d.type,
       trigger: d.trigger,
@@ -172,14 +183,14 @@ function normaliseTruth(truth) {
       under_pressure: d.under_pressure,
       note: d.note || null,
     })),
-    crosses: (truth.events?.crosses || []).map(c => ({
+    crosses: (truth.events?.crosses || []).filter(keepEvent).map(c => ({
       timestamp_seconds: ts(c),
       side: c.side,
       gk_action: c.gk_action,
       outcome: c.outcome,
       note: c.note || null,
     })),
-    sweeper: (truth.events?.sweeper || []).map(s => ({
+    sweeper: (truth.events?.sweeper || []).filter(keepEvent).map(s => ({
       timestamp_seconds: ts(s),
       action: s.action,
       successful: s.successful,
@@ -384,8 +395,12 @@ async function main() {
   let summary = {};
 
   if (args.truth) {
-    const truth = normaliseTruth(JSON.parse(fs.readFileSync(path.resolve(args.truth), 'utf8')));
-    console.log(`Loaded truth: ${truth.goals.length} goals · ${truth.saves.length} saves · ${truth.distribution.length} dist · ${truth.crosses.length} crosses · ${truth.sweeper.length} sweeper`);
+    const keeperTeam = (args['keeper-team'] || 'us').toLowerCase();
+    const truth = normaliseTruth(
+      JSON.parse(fs.readFileSync(path.resolve(args.truth), 'utf8')),
+      { keeperTeam },
+    );
+    console.log(`Loaded truth (keeper_team=${keeperTeam}): ${truth.goals.length} goals · ${truth.saves.length} saves · ${truth.distribution.length} dist · ${truth.crosses.length} crosses · ${truth.sweeper.length} sweeper`);
     if (truth.duration_seconds) console.log(`  duration: ${truth.duration_seconds}s`);
 
     const goalsRpt   = reportSection('goals',        truth.goals,        geminiGoals,   tolerance);
