@@ -561,7 +561,7 @@ export default function DashboardPreview() {
     setLoading(true);
     (async () => {
       try {
-        const [matchRes, attrRes, seRes, vjRes] = await Promise.all([
+        const [matchRes, attrRes, seRes, deRes, sweRes, ovoRes, vjRes] = await Promise.all([
           // A match can now belong to two keepers when a substitution occurred
           // (matches.secondary_keeper_id, added 2026-07-12). Fetch matches
           // where the active keeper is either the primary or the sub.
@@ -571,6 +571,12 @@ export default function DashboardPreview() {
           supabase.from("match_attributes").select("*").eq("keeper_id", activeKeeperId),
           supabase.from("shot_events").select("*").eq("keeper_id", activeKeeperId)
             .or("keeper_team.is.null,keeper_team.neq.opp"),
+          // Per-keeper distribution + sweeper + 1v1 events so aggregates can be
+          // derived from events rather than combined match-level columns.
+          supabase.from("distribution_events").select("*").eq("keeper_id", activeKeeperId)
+            .or("keeper_team.is.null,keeper_team.neq.opp"),
+          supabase.from("sweeper_events").select("*").eq("keeper_id", activeKeeperId),
+          supabase.from("one_v_one_events").select("*").eq("keeper_id", activeKeeperId),
           supabase.from("video_jobs").select("id", { count: "exact", head: true })
             .eq("coach_id", user.id).eq("status", "review_needed"),
         ]);
@@ -587,10 +593,16 @@ export default function DashboardPreview() {
         if (!mounted) return;
         const attrs = attrRes.data || [];
         const shotEvents = seRes.data || [];
+        const distEvents = deRes.data || [];
+        const sweeperEvents = sweRes.data || [];
+        const oneVOneEvents = ovoRes.data || [];
         const goalsConceded = gcRes.data || [];
-        const card = buildKeeperCardData({ matches, attrs, shotEvents, goalsConceded });
-        setData({
+        const card = buildKeeperCardData({
           matches, attrs, shotEvents, goalsConceded,
+          distEvents, sweeperEvents, oneVOneEvents,
+        });
+        setData({
+          matches, attrs, shotEvents, goalsConceded, distEvents, sweeperEvents, oneVOneEvents,
           card,
           pendingClipCount: vjRes.count ?? 0,
         });
@@ -605,22 +617,32 @@ export default function DashboardPreview() {
     return () => { mounted = false; };
   }, [activeKeeperId, user, supabase]);
 
-  // Season aggregate (for the stats strip) — computed on demand
+  // Season aggregate (for the stats strip) — event-driven so multi-keeper
+  // matches don't inflate one GK's totals with the other's stats. Includes
+  // friendlies (they count as "games played" for a keeper).
   const seasonAgg = useMemo(() => {
     if (!data?.matches?.length) return null;
-    const matchOnly = data.matches.filter(m => m.session_type === "match");
-    if (!matchOnly.length) return null;
-    return aggregateMatches(matchOnly);
-  }, [data?.matches]);
+    const games = data.matches.filter(m => m.session_type === "match" || m.session_type === "friendly");
+    if (!games.length) return null;
+    return aggregateMatches(games, {
+      shotEvents:    data.shotEvents,
+      distEvents:    data.distEvents,
+      sweeperEvents: data.sweeperEvents,
+      oneVOneEvents: data.oneVOneEvents,
+      goalsConceded: data.goalsConceded,
+    });
+  }, [data?.matches, data?.shotEvents, data?.distEvents, data?.sweeperEvents, data?.oneVOneEvents, data?.goalsConceded]);
 
   const activeKeeper = keepers.find(k => k.id === activeKeeperId);
   const latestMatch = data?.matches?.length
-    ? [...data.matches].filter(m => m.session_type === "match").sort((a, b) => new Date(b.match_date) - new Date(a.match_date))[0]
+    ? [...data.matches].filter(m => m.session_type === "match" || m.session_type === "friendly").sort((a, b) => new Date(b.match_date) - new Date(a.match_date))[0]
     : null;
   const since = activeKeeper?.created_at
     ? new Date(activeKeeper.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })
     : null;
-  const totalMatches = data?.matches?.filter(m => m.session_type === "match").length ?? 0;
+  // Include both competitive matches and friendlies as "games played". Training
+  // sessions still excluded — those are practices, not games.
+  const totalMatches = data?.matches?.filter(m => m.session_type === "match" || m.session_type === "friendly").length ?? 0;
 
   // ── Render ─────────────────────────────────────────────────────────────
   if (authLoading) {

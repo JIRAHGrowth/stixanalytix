@@ -463,6 +463,9 @@ export default function DashboardPage() {
   const [allGoals, setAllGoals] = useState([]);
   const [allAttrs, setAllAttrs] = useState([]);
   const [allShotEvents, setAllShotEvents] = useState([]);
+  const [allDistEvents, setAllDistEvents] = useState([]);
+  const [allSweeperEvents, setAllSweeperEvents] = useState([]);
+  const [allOneVOneEvents, setAllOneVOneEvents] = useState([]);
   const [loadingData, setLoadingData] = useState(true);
 
   const [editingMatch, setEditingMatch] = useState(null);
@@ -494,11 +497,17 @@ export default function DashboardPage() {
     if (!user) return;
     setLoadingData(true);
     const coachId = isDelegate && delegateOf ? delegateOf.coach_id : user.id;
-    const { matches, goals, attrs, shotEvents } = await fetchAnalyticsBundle(supabase, coachId);
+    const {
+      matches, goals, attrs, shotEvents,
+      distEvents, sweeperEvents, oneVOneEvents,
+    } = await fetchAnalyticsBundle(supabase, coachId);
     setAllMatches(matches);
     setAllGoals(goals);
     setAllAttrs(attrs);
     setAllShotEvents(shotEvents);
+    setAllDistEvents(distEvents || []);
+    setAllSweeperEvents(sweeperEvents || []);
+    setAllOneVOneEvents(oneVOneEvents || []);
     const { notesStatus: nS, rankingsStatus: rS } = await fetchReviewStatus(supabase, coachId);
     setNotesStatus(nS);
     setRankingsStatus(rS);
@@ -561,12 +570,18 @@ export default function DashboardPage() {
     // leak one GK's conceded goal onto the other's profile.
     const kGoals = allGoals.filter(g => matchIds.has(g.match_id) && g.keeper_id === selectedKeeper);
     const kAttrs = allAttrs.filter(a => a.keeper_id === selectedKeeper);
-    const kShotEvents = allShotEvents.filter(se => se.keeper_id === selectedKeeper);
+    const kShotEvents    = allShotEvents.filter(se => se.keeper_id === selectedKeeper);
+    const kDistEvents    = allDistEvents.filter(e => e.keeper_id === selectedKeeper);
+    const kSweeperEvents = allSweeperEvents.filter(e => e.keeper_id === selectedKeeper);
+    const kOneVOneEvents = allOneVOneEvents.filter(e => e.keeper_id === selectedKeeper);
     const sorted = [...kMatches].sort((a, b) => new Date(b.match_date) - new Date(a.match_date));
     const last5 = sorted.slice(0, 5);
     const l5Ids = new Set(last5.map(m => m.id));
     const l5Goals = kGoals.filter(g => l5Ids.has(g.match_id));
-    const l5ShotEvents = kShotEvents.filter(se => l5Ids.has(se.match_id));
+    const l5ShotEvents    = kShotEvents.filter(e => l5Ids.has(e.match_id));
+    const l5DistEvents    = kDistEvents.filter(e => l5Ids.has(e.match_id));
+    const l5SweeperEvents = kSweeperEvents.filter(e => l5Ids.has(e.match_id));
+    const l5OneVOneEvents = kOneVOneEvents.filter(e => l5Ids.has(e.match_id));
 
     // Attributes "last 5" used to be `kAttrs.filter(a => l5Ids.has(a.match_id))` —
     // i.e. attribute rows that happen to belong to the 5 most recent matches.
@@ -583,13 +598,19 @@ export default function DashboardPage() {
       .sort((a, b) => new Date(b.match.match_date) - new Date(a.match.match_date))
       .slice(0, 5)
       .map(x => x.attr);
+    // Season = event-driven per-keeper aggregate (fixes multi-keeper matches
+    // showing combined totals for both GKs). Quarterly still uses match-column
+    // mode because scoping events by quarter would double the memo work; the
+    // deep-dive quarterly view isn't per-half-critical yet.
+    const seasonEventOpts = { shotEvents: kShotEvents, distEvents: kDistEvents, sweeperEvents: kSweeperEvents, oneVOneEvents: kOneVOneEvents, goalsConceded: kGoals };
+    const l5EventOpts     = { shotEvents: l5ShotEvents, distEvents: l5DistEvents, sweeperEvents: l5SweeperEvents, oneVOneEvents: l5OneVOneEvents, goalsConceded: l5Goals };
     return {
       matches: kMatches,
       sorted,
-      season: aggregateMatches(kMatches),
-      l5: aggregateMatches(last5),
+      season: aggregateMatches(kMatches, seasonEventOpts),
+      l5: aggregateMatches(last5, l5EventOpts),
       quarterly: aggregateQuarterly(kMatches),
-      matchLog: buildMatchLog(kMatches),
+      matchLog: buildMatchLog(kMatches, { shotEvents: kShotEvents, goalsConceded: kGoals }),
       seasonGoals: aggregateGoals(kGoals),
       l5Goals: aggregateGoals(l5Goals),
       sznAttrs: aggregateAttrs(kAttrs),
@@ -601,7 +622,7 @@ export default function DashboardPage() {
       seasonShotEvents: kShotEvents,
       l5ShotEvents: l5ShotEvents,
     };
-  }, [selectedKeeper, allMatches, allGoals, allAttrs, allShotEvents]);
+  }, [selectedKeeper, allMatches, allGoals, allAttrs, allShotEvents, allDistEvents, allSweeperEvents, allOneVOneEvents]);
 
   const cmpData = useMemo(() => {
     if (!cmpKeeper) return null;
@@ -609,16 +630,25 @@ export default function DashboardPage() {
     const matchIds = new Set(kMatches.map(m => m.id));
     const kGoals = allGoals.filter(g => matchIds.has(g.match_id) && g.keeper_id === cmpKeeper);
     const kAttrs = allAttrs.filter(a => a.keeper_id === cmpKeeper);
+    const kShotEvents    = allShotEvents.filter(e => e.keeper_id === cmpKeeper);
+    const kDistEvents    = allDistEvents.filter(e => e.keeper_id === cmpKeeper);
+    const kSweeperEvents = allSweeperEvents.filter(e => e.keeper_id === cmpKeeper);
+    const kOneVOneEvents = allOneVOneEvents.filter(e => e.keeper_id === cmpKeeper);
+    const season = aggregateMatches(kMatches, {
+      shotEvents: kShotEvents, distEvents: kDistEvents,
+      sweeperEvents: kSweeperEvents, oneVOneEvents: kOneVOneEvents,
+      goalsConceded: kGoals,
+    });
     return {
-      season: aggregateMatches(kMatches),
+      season,
       seasonGoals: aggregateGoals(kGoals),
       sznAttrs: aggregateAttrs(kAttrs),
-      oneV1: aggregateMatches(kMatches)?.oneV1,
-      crosses: aggregateMatches(kMatches)?.crosses,
-      sweeper: aggregateMatches(kMatches)?.sweeper,
-      rebounds: aggregateMatches(kMatches)?.rebounds,
+      oneV1: season?.oneV1,
+      crosses: season?.crosses,
+      sweeper: season?.sweeper,
+      rebounds: season?.rebounds,
     };
-  }, [cmpKeeper, allMatches, allGoals, allAttrs]);
+  }, [cmpKeeper, allMatches, allGoals, allAttrs, allShotEvents, allDistEvents, allSweeperEvents, allOneVOneEvents]);
 
   const alerts = useMemo(() => {
     if (!keeperData?.season || !keeperData?.l5) return [];
