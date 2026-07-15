@@ -269,8 +269,15 @@ function buildMetadataSheet(workbook) {
   def.fields.forEach((f, i) => {
     const row = i + 2;
     sheet.getCell(`A${row}`).value = f.label;
-    sheet.getCell(`B${row}`).value = f.sample;
-    if (f.help) sheet.getCell(`C${row}`).value = f.help;
+    // Value column starts BLANK. Prefilling with samples (e.g.
+    // "judah-vs-ofc-2026-04-25") looked like a real value when coaches copied
+    // this template for a new match — the old data would end up in the JSON
+    // if any row was forgotten. Sample format lives in the Notes column.
+    sheet.getCell(`B${row}`).value = '';
+    const notes = [];
+    if (f.help) notes.push(f.help);
+    if (f.sample !== undefined && f.sample !== '') notes.push(`e.g. ${f.sample}`);
+    if (notes.length) sheet.getCell(`C${row}`).value = notes.join(' — ');
     if (f.type === 'dropdown') {
       sheet.getCell(`B${row}`).dataValidation = {
         type: 'list', allowBlank: true,
