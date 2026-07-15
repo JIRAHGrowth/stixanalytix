@@ -392,6 +392,13 @@ export default function PitchsidePage() {
 
       const goalsPayload = goalEvents.map(g => ({
         match_id: matchId, coach_id: coachId,
+        // keeper_id must be set for every conceded goal — the dashboard per-
+        // keeper filters (Goals tab, clean-sheet count, save%) drop NULL-keeper
+        // rows silently, which historically leaked pitchside goals off Amalie's
+        // ledger. Single-keeper pitchside matches use selectedKeeperId; multi-
+        // keeper pitchside (declared via UI in a follow-up) will route by
+        // half via lib/keeper-attribution.
+        keeper_id: selectedKeeperId,
         goal_zone: g.goalZone || null, shot_origin: g.origin || null,
         goal_source: g.type === "Corner" ? "Corner" : g.type === "Penalty" ? "Penalty" : "Open Play",
         goal_rank: g.rank || null, shot_type: g.method || null,

@@ -6,6 +6,7 @@ import {
   VALID_ZONES, VALID_ORIGINS, VALID_SOURCES, VALID_SHOT_TYPES,
   VALID_POSITIONING, VALID_RANKS, VALID_GK_ACTIONS, GK_ACTION_TO_COL,
 } from '@/lib/constants';
+import { attributeEventToKeeper, deriveHalfFromTimestamp } from '@/lib/keeper-attribution';
 
 // Coerce Gemini's stringly-typed booleans ("true"/"false"/"unclear") into a
 // nullable Postgres boolean. Anything we can't read confidently → null.
@@ -157,6 +158,37 @@ export async function POST(request, { params }) {
     // them from the W-L-D tally.
     const result = goalsFor > goalsAgainst ? 'W' : goalsFor < goalsAgainst ? 'L' : 'D';
 
+    // Two-keeper attribution. The review UI may include a `substitution` block
+    // in the payload declaring: sub_minute (MM:SS the second GK came on) and
+    // secondary_keeper_id (which keeper). If present + valid, the match row
+    // stores both, was_subbed flips true, and every event's keeper_id is
+    // routed by timestamp vs sub_minute via attributeEventToKeeper() below.
+    // Coach can also override an individual event's keeper via the review UI
+    // (each event may carry its own `keeper_id` in the payload, which wins).
+    const sub = body.substitution || {};
+    const rawSubMinute = Number.isFinite(sub.sub_minute) ? sub.sub_minute
+      : (Number.isFinite(meta.sub_minute) ? meta.sub_minute : null);
+    const rawSecondaryKid = sub.secondary_keeper_id || meta.secondary_keeper_id || null;
+    // A sub is valid only when BOTH sub_minute and secondary_keeper_id are set.
+    // Half-configured subs would silently mis-attribute — refuse them cleanly.
+    const hasSub = Number.isFinite(rawSubMinute) && rawSubMinute > 0 && !!rawSecondaryKid;
+    const subMinute = hasSub ? rawSubMinute : null;
+    const secondaryKeeperId = hasSub ? rawSecondaryKid : null;
+    const wasSubbed = hasSub || !!meta.was_subbed;
+    const matchForAttribution = {
+      keeper_id: job.keeper_id,
+      secondary_keeper_id: secondaryKeeperId,
+      sub_minute: subMinute,
+      was_subbed: hasSub,
+    };
+    // Per-event attribution. Prefers explicit event.keeper_id (coach override
+    // in review) over the auto-attribution by timestamp. Falls back to primary
+    // when neither is available.
+    const keeperForEvent = (event) => {
+      if (event?.keeper_id) return event.keeper_id;
+      return attributeEventToKeeper(matchForAttribution, event?.timestamp_seconds) || job.keeper_id;
+    };
+
     // Aggregate kept distribution events into matches.dist_* columns so the
     // existing dashboard distribution panel "just works" without per-event
     // joins. Per-event detail is preserved separately in distribution_events.
@@ -209,6 +241,7 @@ export async function POST(request, { params }) {
       id: matchId,
       coach_id: user.id,
       keeper_id: job.keeper_id,
+      secondary_keeper_id: secondaryKeeperId,
       club_id: job.club_id,
       logged_by: user.id,
       logged_by_name: profile?.full_name || user.email || 'Video upload',
@@ -226,9 +259,9 @@ export async function POST(request, { params }) {
       save_percentage: savePct,
       ...saveCounts,
       ...distAgg,
-      was_subbed: !!meta.was_subbed,
-      sub_minute: meta.sub_minute || null,
-      sub_reason: meta.sub_reason || null,
+      was_subbed: wasSubbed,
+      sub_minute: subMinute,
+      sub_reason: sub.sub_reason || meta.sub_reason || null,
       source_url: job.video_url || null,
       logged_via: 'video',
       notes: body.notes || null,
@@ -241,13 +274,19 @@ export async function POST(request, { params }) {
       const goalRows = concessions.map(c => ({
         match_id: matchId,
         coach_id: user.id,
+        // Per-keeper attribution — routed by timestamp vs sub_minute unless
+        // the coach explicitly assigned c.keeper_id in the review UI. Missing
+        // timestamp defaults to primary keeper (safe fallback).
+        keeper_id: keeperForEvent(c),
         goal_zone: c.goal_zone || null,
         shot_origin: c.shot_origin || null,
         goal_source: c.goal_source || null,
         goal_rank: c.goal_rank || null,
         shot_type: c.shot_type || null,
         gk_positioning: c.gk_positioning || null,
-        half: c.half || null,
+        // Prefer explicit review half; else derive from timestamp so this
+        // column stops leaking NULL on video-published matches.
+        half: c.half || (deriveHalfFromTimestamp(c.timestamp_seconds) === 'H1' ? 1 : deriveHalfFromTimestamp(c.timestamp_seconds) === 'H2' ? 2 : null),
         timestamp_seconds: Number.isFinite(c.timestamp_seconds) ? c.timestamp_seconds : null,
         minute: Number.isFinite(c.timestamp_seconds) ? Math.floor(c.timestamp_seconds / 60) : null,
         shot_description: c.shot_description || null,
@@ -274,13 +313,13 @@ export async function POST(request, { params }) {
         return {
           match_id: matchId,
           coach_id: user.id,
-          keeper_id: job.keeper_id,
+          keeper_id: keeperForEvent(gem),
           timestamp_seconds: Number.isFinite(gem.timestamp_seconds) ? gem.timestamp_seconds : null,
           minute: Number.isFinite(gem.timestamp_seconds) ? Math.floor(gem.timestamp_seconds / 60) : null,
           shot_description: gem.buildup || null,
           coach_notes: c.notes || null,
           attack_type: gem.attack_type || null,
-          half: null,
+          half: deriveHalfFromTimestamp(gem.timestamp_seconds),
           clip_storage_path: clipPathFor(clipPathByGoalTs, gem.timestamp_seconds),
         };
       });
@@ -289,13 +328,13 @@ export async function POST(request, { params }) {
       ...teamScored.map(g => ({
         match_id: matchId,
         coach_id: user.id,
-        keeper_id: job.keeper_id,
+        keeper_id: keeperForEvent(g),
         timestamp_seconds: Number.isFinite(g.timestamp_seconds) ? g.timestamp_seconds : null,
         minute: Number.isFinite(g.timestamp_seconds) ? Math.floor(g.timestamp_seconds / 60) : null,
         shot_description: g.shot_description || null,
         coach_notes: g.notes || null,
         attack_type: g.attack_type || null,
-        half: g.half || null,
+        half: g.half || deriveHalfFromTimestamp(g.timestamp_seconds),
         clip_storage_path: clipPathFor(clipPathByGoalTs, g.timestamp_seconds),
       })),
     ];
@@ -329,7 +368,9 @@ export async function POST(request, { params }) {
         const focusZone = (s.goal_zone && /^(High|Mid|Low) [LCR]$/.test(s.goal_zone)) ? s.goal_zone : null;
         return {
           match_id: matchId,
-          keeper_id: job.keeper_id,
+          // Per-keeper attribution routed by timestamp vs sub_minute unless
+          // the review UI explicitly set s.keeper_id.
+          keeper_id: keeperForEvent(s),
           coach_id: user.id,
           shot_origin: s.shot_origin === 'unclear' ? null : (s.shot_origin || null),
           gk_action: s.gk_action === 'unclear' ? null : (s.gk_action || null),
@@ -338,7 +379,10 @@ export async function POST(request, { params }) {
           is_off_target: isOffTarget,
           shot_type: s.shot_type || null,
           event_type: 'Shot',
-          half: null,
+          // Half derived from timestamp when the review UI doesn't specify.
+          // Previously always null on video publishes; that column was dead
+          // weight and blocked half-by-half breakdowns.
+          half: s.half || deriveHalfFromTimestamp(s.timestamp_seconds),
           timestamp_seconds: Number.isFinite(s.timestamp_seconds) ? s.timestamp_seconds : null,
           on_target: s.on_target || null,
           outcome: s.outcome || null,
@@ -375,11 +419,11 @@ export async function POST(request, { params }) {
     if (distribution.length) {
       const distRows = distribution.map(d => ({
         match_id: matchId,
-        keeper_id: job.keeper_id,
+        keeper_id: keeperForEvent(d),
         coach_id: user.id,
         timestamp_seconds: Number.isFinite(d.timestamp_seconds) ? d.timestamp_seconds : null,
         minute: Number.isFinite(d.timestamp_seconds) ? Math.floor(d.timestamp_seconds / 60) : null,
-        half: d.half || null,
+        half: d.half || deriveHalfFromTimestamp(d.timestamp_seconds),
         match_clock: d.match_clock || null,
         trigger: d.trigger || null,
         type: d.type || null,

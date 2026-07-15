@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 
+import { fetchActiveKeepers } from "@/lib/queries";
 import { tDark } from "@/lib/theme";
 import {
   GOAL_ZONES, OFF_TARGET_ZONES, SHOT_ORIGINS, SHOT_TYPES, GOAL_SOURCES, GK_POSITIONING,
@@ -70,6 +71,23 @@ function SaveStateBadge({ state, savedAt, theme, font, isPublished }) {
   );
 }
 
+// Accepts "MM:SS", "M:SS", "62", "62:30" — returns the integer minute (rounded
+// down for MM:SS entries). Returns null for empty / invalid / negative input,
+// which the publish handler reads as "no substitution declared".
+function parseMinuteInput(raw) {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  if (s.includes(':')) {
+    const [mStr, secStr] = s.split(':');
+    const m = parseInt(mStr, 10);
+    if (!Number.isFinite(m) || m < 0) return null;
+    return m; // MM:SS entry → floor to whole minute for sub_minute column
+  }
+  const n = parseInt(s, 10);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
 export default function ReviewPage() {
   const { user, supabase, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -80,6 +98,16 @@ export default function ReviewPage() {
   const [error, setError] = useState("");
   const [publishing, setPublishing] = useState(false);
   const [publishedMatchId, setPublishedMatchId] = useState(null);
+
+  // Substitution capture — for two-keeper matches (H1 GK1 → H2 GK2 style).
+  // When populated, publish route writes matches.secondary_keeper_id +
+  // sub_minute AND routes every event past sub_minute*60 to the secondary
+  // keeper via lib/keeper-attribution.js. Empty by default; coach only fills
+  // when a substitution actually happened.
+  const [subMinuteStr, setSubMinuteStr] = useState(""); // MM:SS entry
+  const [secondaryKeeperId, setSecondaryKeeperId] = useState("");
+  const [subReason, setSubReason] = useState("");
+  const [coachKeepers, setCoachKeepers] = useState([]); // for the dropdown
 
   // For each Gemini candidate: keep + scored_by_us toggle + editable fields if concession
   const [candidates, setCandidates] = useState([]);
@@ -139,6 +167,18 @@ export default function ReviewPage() {
     if (typeof window !== "undefined") window.localStorage.setItem("stix-review-mode", m);
   };
 
+  // Fetch the coach's active keepers so the substitution panel dropdown has
+  // options. Independent of the job load — we always need this list.
+  useEffect(() => {
+    if (!user || !supabase) return;
+    let mounted = true;
+    (async () => {
+      const ks = await fetchActiveKeepers(supabase, user.id);
+      if (mounted) setCoachKeepers(ks || []);
+    })();
+    return () => { mounted = false; };
+  }, [user, supabase]);
+
   useEffect(() => {
     if (!user) return;
     let mounted = true;
@@ -148,6 +188,22 @@ export default function ReviewPage() {
       if (!mounted) return;
       if (!res.ok) { setError(json.error || "Failed to load"); setLoading(false); return; }
       setJob(json.job);
+
+      // Hydrate substitution state from the draft (survives auto-save) or,
+      // failing that, from match_metadata (in case the coach pre-filled it
+      // in the upload flow). Empty string == "no sub".
+      const draftSub = json.job?.review_draft?.substitution;
+      const metaSub = json.job?.match_metadata;
+      if (draftSub && (draftSub.sub_minute_str || draftSub.secondary_keeper_id)) {
+        setSubMinuteStr(draftSub.sub_minute_str || "");
+        setSecondaryKeeperId(draftSub.secondary_keeper_id || "");
+        setSubReason(draftSub.sub_reason || "");
+      } else if (metaSub?.sub_minute || metaSub?.secondary_keeper_id) {
+        // Fall back to metadata if the draft doesn't have it yet.
+        setSubMinuteStr(metaSub.sub_minute ? String(metaSub.sub_minute) : "");
+        setSecondaryKeeperId(metaSub.secondary_keeper_id || "");
+        setSubReason(metaSub.sub_reason || "");
+      }
 
       const out = json.job?.gemini_output?.parsed || { goals: [] };
       const meta = json.job?.match_metadata || {};
@@ -389,7 +445,16 @@ export default function ReviewPage() {
 
     setSaveState('saving');
     const handle = setTimeout(async () => {
-      const draft = { candidates, extraGoals, scoreOverride, saveRows, distRows, extraSaves, extraDist };
+      const draft = {
+        candidates, extraGoals, scoreOverride, saveRows, distRows, extraSaves, extraDist,
+        // Persist substitution across auto-save so a coach's H1/H2 split isn't
+        // lost if they close the tab before publishing.
+        substitution: {
+          sub_minute_str: subMinuteStr,
+          secondary_keeper_id: secondaryKeeperId,
+          sub_reason: subReason,
+        },
+      };
 
       // Always update localStorage first — fastest, never fails on network.
       try {
@@ -421,7 +486,7 @@ export default function ReviewPage() {
     // session and including it would make every JWT-refresh trigger a
     // spurious save cycle.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, job, jobId, draftKey, candidates, extraGoals, scoreOverride, saveRows, distRows, extraSaves, extraDist, publishedMatchId]);
+  }, [loading, job, jobId, draftKey, candidates, extraGoals, scoreOverride, saveRows, distRows, extraSaves, extraDist, publishedMatchId, subMinuteStr, secondaryKeeperId, subReason]);
 
   const counts = useMemo(() => {
     let kept = 0, gf = 0, ga = 0;
@@ -1034,6 +1099,15 @@ export default function ReviewPage() {
 
     setPublishing(true);
     try {
+      // Substitution payload — only send when the coach actually declared
+      // both a sub_minute (MM:SS parsed to integer minute) AND a secondary
+      // keeper. Half-configured subs would mis-attribute events; publish
+      // route also validates this and drops half-configured ones.
+      const subMinNum = parseMinuteInput(subMinuteStr);
+      const substitution = (subMinNum != null && secondaryKeeperId)
+        ? { sub_minute: subMinNum, secondary_keeper_id: secondaryKeeperId, sub_reason: subReason || null }
+        : null;
+
       const res = await authedFetch(supabase, `/api/video-jobs/${jobId}/publish`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1044,6 +1118,7 @@ export default function ReviewPage() {
           team_scored: teamScored,
           saves: savesPayload,
           distribution: distPayload,
+          substitution,
           review_diff: reviewDiff,
           notes: notesFromGemini(job, candidates, extraGoals, saveRows),
         }),
@@ -1528,6 +1603,71 @@ export default function ReviewPage() {
             + Add an opponent GK distribution
           </button>
         </div>
+
+        {/* SUBSTITUTION PANEL — declare a two-keeper match. Publish route
+            reads sub_minute + secondary_keeper_id from the payload and routes
+            events past sub_minute*60 to the secondary keeper. Empty by default
+            (single-keeper matches); coach only fills when a sub actually
+            happened. Half-configured entries are ignored server-side. */}
+        {job?.status !== "published" && !publishedMatchId && (
+          <div style={{ marginTop: 24, marginBottom: 8, padding: 16, border: `1px solid ${t.border}`, borderRadius: 10, background: `${t.accent}08` }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: t.bright, letterSpacing: 0.4, marginBottom: 4 }}>
+              SUBSTITUTION (optional)
+            </div>
+            <div style={{ fontSize: 11, color: t.dim, marginBottom: 12 }}>
+              Did a second keeper come in? Enter the sub minute + who came on. Events after that minute will be attributed to the second keeper.
+              Leave blank if the same keeper played the whole match.
+            </div>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+              <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11, color: t.dim, fontFamily: font }}>
+                Sub at (MM or MM:SS)
+                <input
+                  type="text"
+                  value={subMinuteStr}
+                  onChange={(e) => setSubMinuteStr(e.target.value)}
+                  placeholder="e.g. 62 or 62:00"
+                  style={{ padding: "8px 10px", borderRadius: 6, border: `1px solid ${t.border}`, background: t.card, color: t.bright, fontFamily: font, fontSize: 13, width: 140 }}
+                />
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11, color: t.dim, fontFamily: font }}>
+                Second keeper
+                <select
+                  value={secondaryKeeperId}
+                  onChange={(e) => setSecondaryKeeperId(e.target.value)}
+                  style={{ padding: "8px 10px", borderRadius: 6, border: `1px solid ${t.border}`, background: t.card, color: t.bright, fontFamily: font, fontSize: 13, minWidth: 220 }}
+                >
+                  <option value="">— none —</option>
+                  {coachKeepers.filter(k => k.id !== job?.keeper_id).map(k => (
+                    <option key={k.id} value={k.id}>{k.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 11, color: t.dim, fontFamily: font, flex: 1, minWidth: 200 }}>
+                Reason (optional)
+                <input
+                  type="text"
+                  value={subReason}
+                  onChange={(e) => setSubReason(e.target.value)}
+                  placeholder="e.g. half-time rotation, injury"
+                  style={{ padding: "8px 10px", borderRadius: 6, border: `1px solid ${t.border}`, background: t.card, color: t.bright, fontFamily: font, fontSize: 13 }}
+                />
+              </label>
+            </div>
+            {(() => {
+              const parsed = parseMinuteInput(subMinuteStr);
+              const halfConfigured = (parsed != null) !== !!secondaryKeeperId;
+              const primaryName = coachKeepers.find(k => k.id === job?.keeper_id)?.name || "primary keeper";
+              const secondaryName = coachKeepers.find(k => k.id === secondaryKeeperId)?.name;
+              if (halfConfigured) {
+                return <div style={{ marginTop: 10, fontSize: 11, color: t.red || "#ef4444" }}>Both fields required — otherwise the substitution will be ignored on publish.</div>;
+              }
+              if (parsed != null && secondaryName) {
+                return <div style={{ marginTop: 10, fontSize: 11, color: t.accent }}>✓ Events before {parsed}:00 → <b>{primaryName}</b>. Events at/after {parsed}:00 → <b>{secondaryName}</b>.</div>;
+              }
+              return null;
+            })()}
+          </div>
+        )}
 
         {/* PUBLISH */}
         {error && <div style={{ color: t.red, fontSize: 12, marginBottom: 12 }}>{error}</div>}
