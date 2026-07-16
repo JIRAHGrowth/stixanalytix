@@ -466,6 +466,7 @@ export default function DashboardPage() {
   const [allDistEvents, setAllDistEvents] = useState([]);
   const [allSweeperEvents, setAllSweeperEvents] = useState([]);
   const [allOneVOneEvents, setAllOneVOneEvents] = useState([]);
+  const [allCrossEvents, setAllCrossEvents] = useState([]);
   const [loadingData, setLoadingData] = useState(true);
 
   const [editingMatch, setEditingMatch] = useState(null);
@@ -499,7 +500,7 @@ export default function DashboardPage() {
     const coachId = isDelegate && delegateOf ? delegateOf.coach_id : user.id;
     const {
       matches, goals, attrs, shotEvents,
-      distEvents, sweeperEvents, oneVOneEvents,
+      distEvents, sweeperEvents, oneVOneEvents, crossEvents,
     } = await fetchAnalyticsBundle(supabase, coachId);
     setAllMatches(matches);
     setAllGoals(goals);
@@ -508,6 +509,7 @@ export default function DashboardPage() {
     setAllDistEvents(distEvents || []);
     setAllSweeperEvents(sweeperEvents || []);
     setAllOneVOneEvents(oneVOneEvents || []);
+    setAllCrossEvents(crossEvents || []);
     const { notesStatus: nS, rankingsStatus: rS } = await fetchReviewStatus(supabase, coachId);
     setNotesStatus(nS);
     setRankingsStatus(rS);
@@ -574,6 +576,7 @@ export default function DashboardPage() {
     const kDistEvents    = allDistEvents.filter(e => e.keeper_id === selectedKeeper);
     const kSweeperEvents = allSweeperEvents.filter(e => e.keeper_id === selectedKeeper);
     const kOneVOneEvents = allOneVOneEvents.filter(e => e.keeper_id === selectedKeeper);
+    const kCrossEvents   = allCrossEvents.filter(e => e.keeper_id === selectedKeeper);
     const sorted = [...kMatches].sort((a, b) => new Date(b.match_date) - new Date(a.match_date));
     const last5 = sorted.slice(0, 5);
     const l5Ids = new Set(last5.map(m => m.id));
@@ -582,6 +585,7 @@ export default function DashboardPage() {
     const l5DistEvents    = kDistEvents.filter(e => l5Ids.has(e.match_id));
     const l5SweeperEvents = kSweeperEvents.filter(e => l5Ids.has(e.match_id));
     const l5OneVOneEvents = kOneVOneEvents.filter(e => l5Ids.has(e.match_id));
+    const l5CrossEvents   = kCrossEvents.filter(e => l5Ids.has(e.match_id));
 
     // Attributes "last 5" used to be `kAttrs.filter(a => l5Ids.has(a.match_id))` —
     // i.e. attribute rows that happen to belong to the 5 most recent matches.
@@ -602,8 +606,8 @@ export default function DashboardPage() {
     // showing combined totals for both GKs). Quarterly still uses match-column
     // mode because scoping events by quarter would double the memo work; the
     // deep-dive quarterly view isn't per-half-critical yet.
-    const seasonEventOpts = { shotEvents: kShotEvents, distEvents: kDistEvents, sweeperEvents: kSweeperEvents, oneVOneEvents: kOneVOneEvents, goalsConceded: kGoals };
-    const l5EventOpts     = { shotEvents: l5ShotEvents, distEvents: l5DistEvents, sweeperEvents: l5SweeperEvents, oneVOneEvents: l5OneVOneEvents, goalsConceded: l5Goals };
+    const seasonEventOpts = { shotEvents: kShotEvents, distEvents: kDistEvents, sweeperEvents: kSweeperEvents, oneVOneEvents: kOneVOneEvents, crossEvents: kCrossEvents, goalsConceded: kGoals };
+    const l5EventOpts     = { shotEvents: l5ShotEvents, distEvents: l5DistEvents, sweeperEvents: l5SweeperEvents, oneVOneEvents: l5OneVOneEvents, crossEvents: l5CrossEvents, goalsConceded: l5Goals };
     return {
       matches: kMatches,
       sorted,
@@ -622,7 +626,7 @@ export default function DashboardPage() {
       seasonShotEvents: kShotEvents,
       l5ShotEvents: l5ShotEvents,
     };
-  }, [selectedKeeper, allMatches, allGoals, allAttrs, allShotEvents, allDistEvents, allSweeperEvents, allOneVOneEvents]);
+  }, [selectedKeeper, allMatches, allGoals, allAttrs, allShotEvents, allDistEvents, allSweeperEvents, allOneVOneEvents, allCrossEvents]);
 
   const cmpData = useMemo(() => {
     if (!cmpKeeper) return null;
@@ -634,9 +638,11 @@ export default function DashboardPage() {
     const kDistEvents    = allDistEvents.filter(e => e.keeper_id === cmpKeeper);
     const kSweeperEvents = allSweeperEvents.filter(e => e.keeper_id === cmpKeeper);
     const kOneVOneEvents = allOneVOneEvents.filter(e => e.keeper_id === cmpKeeper);
+    const kCrossEvents   = allCrossEvents.filter(e => e.keeper_id === cmpKeeper);
     const season = aggregateMatches(kMatches, {
       shotEvents: kShotEvents, distEvents: kDistEvents,
       sweeperEvents: kSweeperEvents, oneVOneEvents: kOneVOneEvents,
+      crossEvents: kCrossEvents,
       goalsConceded: kGoals,
     });
     return {
@@ -648,7 +654,7 @@ export default function DashboardPage() {
       sweeper: season?.sweeper,
       rebounds: season?.rebounds,
     };
-  }, [cmpKeeper, allMatches, allGoals, allAttrs, allShotEvents, allDistEvents, allSweeperEvents, allOneVOneEvents]);
+  }, [cmpKeeper, allMatches, allGoals, allAttrs, allShotEvents, allDistEvents, allSweeperEvents, allOneVOneEvents, allCrossEvents]);
 
   const alerts = useMemo(() => {
     if (!keeperData?.season || !keeperData?.l5) return [];

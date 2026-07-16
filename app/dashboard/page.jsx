@@ -585,7 +585,7 @@ export default function DashboardPreview() {
     setLoading(true);
     (async () => {
       try {
-        const [matchRes, attrRes, seRes, deRes, sweRes, ovoRes, vjRes] = await Promise.all([
+        const [matchRes, attrRes, seRes, deRes, sweRes, ovoRes, crRes, vjRes] = await Promise.all([
           // A match can now belong to two keepers when a substitution occurred
           // (matches.secondary_keeper_id, added 2026-07-12). Fetch matches
           // where the active keeper is either the primary or the sub.
@@ -595,12 +595,16 @@ export default function DashboardPreview() {
           supabase.from("match_attributes").select("*").eq("keeper_id", activeKeeperId),
           supabase.from("shot_events").select("*").eq("keeper_id", activeKeeperId)
             .or("keeper_team.is.null,keeper_team.neq.opp"),
-          // Per-keeper distribution + sweeper + 1v1 events so aggregates can be
-          // derived from events rather than combined match-level columns.
+          // Per-keeper distribution + sweeper + 1v1 + cross events so aggregates
+          // can be derived from events rather than combined match-level columns.
+          // Every event table excludes keeper_team='opp' (opp GK events kept for
+          // LLM training but not shown in the coach's dashboard).
           supabase.from("distribution_events").select("*").eq("keeper_id", activeKeeperId)
             .or("keeper_team.is.null,keeper_team.neq.opp"),
           supabase.from("sweeper_events").select("*").eq("keeper_id", activeKeeperId),
           supabase.from("one_v_one_events").select("*").eq("keeper_id", activeKeeperId),
+          supabase.from("cross_events").select("*").eq("keeper_id", activeKeeperId)
+            .or("keeper_team.is.null,keeper_team.neq.opp"),
           supabase.from("video_jobs").select("id", { count: "exact", head: true })
             .eq("coach_id", user.id).eq("status", "review_needed"),
         ]);
@@ -620,13 +624,14 @@ export default function DashboardPreview() {
         const distEvents = deRes.data || [];
         const sweeperEvents = sweRes.data || [];
         const oneVOneEvents = ovoRes.data || [];
+        const crossEvents = crRes.data || [];
         const goalsConceded = gcRes.data || [];
         const card = buildKeeperCardData({
           matches, attrs, shotEvents, goalsConceded,
-          distEvents, sweeperEvents, oneVOneEvents,
+          distEvents, sweeperEvents, oneVOneEvents, crossEvents,
         });
         setData({
-          matches, attrs, shotEvents, goalsConceded, distEvents, sweeperEvents, oneVOneEvents,
+          matches, attrs, shotEvents, goalsConceded, distEvents, sweeperEvents, oneVOneEvents, crossEvents,
           card,
           pendingClipCount: vjRes.count ?? 0,
         });
@@ -653,9 +658,10 @@ export default function DashboardPreview() {
       distEvents:    data.distEvents,
       sweeperEvents: data.sweeperEvents,
       oneVOneEvents: data.oneVOneEvents,
+      crossEvents:   data.crossEvents,
       goalsConceded: data.goalsConceded,
     });
-  }, [data?.matches, data?.shotEvents, data?.distEvents, data?.sweeperEvents, data?.oneVOneEvents, data?.goalsConceded]);
+  }, [data?.matches, data?.shotEvents, data?.distEvents, data?.sweeperEvents, data?.oneVOneEvents, data?.crossEvents, data?.goalsConceded]);
 
   const activeKeeper = keepers.find(k => k.id === activeKeeperId);
   const latestMatch = data?.matches?.length
