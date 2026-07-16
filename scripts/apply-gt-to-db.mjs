@@ -446,9 +446,38 @@ async function reconcileMatch(gtPath) {
   };
   const ctx = { match_id: matchId, coach_id: match.coach_id, clipIdx, keeperFor };
 
-  // Filter GT to our-keeper events only
-  const ourGoals = (gt.events?.goals || []).filter(g => normKeeperTeam(g.keeper_team, myColor, oppColor) === 'us');
-  const ourScored = (gt.events?.goals || []).filter(g => normKeeperTeam(g.keeper_team, myColor, oppColor) === 'opp'); // opp keeper conceded ⇒ we scored
+  // ── Goal classification: scoring_team is the AUTHORITATIVE signal ──────────
+  // Coaches sometimes mis-key `keeper_team` in the GT xlsx (checking "us" out
+  // of habit even when logging goals we scored). `scoring_team` is unambiguous:
+  // it names the color of the team that scored the goal.
+  //   - opp scored the goal → we conceded → goals_conceded (ourGoals)
+  //   - we scored the goal → goals_scored (ourScored)
+  // Fall back to keeper_team only when scoring_team is missing/blank.
+  //
+  // 2026-07-15 incident: U16 Rise + KCITY had goals labeled keeper_team='us'
+  // but scoring_team=my_color. First reconciler run trusted keeper_team and
+  // wrongly added 3+2 goals to Amalie/Judah's goals_conceded ledgers.
+  const classifyGoal = (g) => {
+    const st = String(g.scoring_team || '').toLowerCase().trim();
+    if (st) {
+      // scoring_team = OUR side → we scored → goals_scored
+      if (st === 'us') return 'scored';
+      if (myColor && st.includes(myColor)) return 'scored';
+      // scoring_team = OPP side → opp scored → we conceded → goals_conceded
+      if (st === 'opponent' || st === 'them') return 'conceded';
+      if (oppColor && st.includes(oppColor)) return 'conceded';
+    }
+    // No scoring_team — fall back to keeper_team.
+    // keeper_team = "the team whose keeper the event is about". So:
+    //   keeper_team='us'  → our GK is on the receiving end → we conceded
+    //   keeper_team='opp' → opp GK is on the receiving end → we scored
+    const kt = normKeeperTeam(g.keeper_team, myColor, oppColor);
+    if (kt === 'us') return 'conceded';
+    if (kt === 'opp') return 'scored';
+    return null;
+  };
+  const ourGoals  = (gt.events?.goals || []).filter(g => classifyGoal(g) === 'conceded');
+  const ourScored = (gt.events?.goals || []).filter(g => classifyGoal(g) === 'scored');
   const ourSaves = (gt.events?.saves || []).filter(s => normKeeperTeam(s.keeper_team, myColor, oppColor) === 'us' || s.keeper_team == null);
   const ourDists = (gt.events?.distribution || []).filter(d => normKeeperTeam(d.keeper_team, myColor, oppColor) === 'us' || d.keeper_team == null);
   const ourCrosses = (gt.events?.crosses || []).filter(c => normKeeperTeam(c.keeper_team, myColor, oppColor) === 'us' || c.keeper_team == null);
