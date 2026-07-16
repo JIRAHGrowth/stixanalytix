@@ -114,6 +114,14 @@ export async function POST(request, { params }) {
     const concessions = Array.isArray(body.concessions) ? body.concessions : [];
     const teamScored = Array.isArray(body.team_scored) ? body.team_scored : [];
     const saves = Array.isArray(body.saves) ? body.saves : [];
+    // Phase B: 3 new event-type arrays. Each row shape mirrors the DB table's
+    // columns; publish route validates enum values via check constraints on
+    // the tables themselves (surfaces as PostgREST errors if coach types
+    // something outside the allowed set — the review UI's SegmentedField
+    // constrains input so this is a defence-in-depth check).
+    const crosses = Array.isArray(body.crosses) ? body.crosses : [];
+    const sweeper = Array.isArray(body.sweeper) ? body.sweeper : [];
+    const oneV1 = Array.isArray(body.one_v_one) ? body.one_v_one : [];
     if (concessions.length !== goalsAgainst) {
       return NextResponse.json({ error: `concessions array length (${concessions.length}) must equal goals_against (${goalsAgainst})` }, { status: 400 });
     }
@@ -450,6 +458,87 @@ export async function POST(request, { params }) {
       }
     }
 
+    // ─── Phase B: cross_events / sweeper_events / one_v_one_events ──────────
+    // Same pattern as distribution: per-event insert, keeper_id routed by
+    // timestamp vs sub_minute via keeperForEvent(). Non-fatal on failure.
+    // Enum values are constrained at DB level (check constraints); the review
+    // UI's SegmentedField already prevents out-of-vocab input, so any error
+    // here is a data-integrity bug worth logging loudly.
+    if (crosses.length) {
+      const crossRows = crosses.map(c => ({
+        match_id: matchId,
+        keeper_id: keeperForEvent(c),
+        coach_id: user.id,
+        timestamp_seconds: Number.isFinite(c.timestamp_seconds) ? c.timestamp_seconds : null,
+        minute: Number.isFinite(c.timestamp_seconds) ? Math.floor(c.timestamp_seconds / 60) : null,
+        half: deriveHalfFromTimestamp(c.timestamp_seconds),
+        match_clock: c.match_clock || null,
+        side: c.side || null,
+        cross_type: c.cross_type || null,
+        destination: c.destination || null,
+        gk_action: c.gk_action || null,
+        gk_starting_pos: c.gk_starting_pos || null,
+        outcome: c.outcome || null,
+        notes: c.notes || null,
+        keeper_team: (c.keeper_team === 'us' || c.keeper_team === 'opp') ? c.keeper_team : null,
+        source: 'video',
+        coach_added: !!c.coach_added,
+      }));
+      const { error: cErr } = await admin.from('cross_events').insert(crossRows);
+      if (cErr) console.error('cross_events insert failed (non-fatal):', cErr);
+      else console.log(`[publish] wrote ${crossRows.length} cross_events row(s)`);
+    }
+    if (sweeper.length) {
+      const sweeperRows = sweeper.map(s => ({
+        match_id: matchId,
+        keeper_id: keeperForEvent(s),
+        coach_id: user.id,
+        timestamp_seconds: Number.isFinite(s.timestamp_seconds) ? s.timestamp_seconds : null,
+        minute: Number.isFinite(s.timestamp_seconds) ? Math.floor(s.timestamp_seconds / 60) : null,
+        half: deriveHalfFromTimestamp(s.timestamp_seconds),
+        match_clock: s.match_clock || null,
+        trigger: s.trigger || null,
+        gk_starting_depth: s.gk_starting_depth || null,
+        timing: s.timing || null,
+        action: s.action || null,
+        pressure: s.pressure || null,
+        risk_grade: s.risk_grade || null,
+        result: s.result || null,
+        notes: s.notes || null,
+        source: 'video',
+        coach_added: !!s.coach_added,
+      }));
+      const { error: swErr } = await admin.from('sweeper_events').insert(sweeperRows);
+      if (swErr) console.error('sweeper_events insert failed (non-fatal):', swErr);
+      else console.log(`[publish] wrote ${sweeperRows.length} sweeper_events row(s)`);
+    }
+    if (oneV1.length) {
+      const oneV1Rows = oneV1.map(o => ({
+        match_id: matchId,
+        keeper_id: keeperForEvent(o),
+        coach_id: user.id,
+        timestamp_seconds: Number.isFinite(o.timestamp_seconds) ? o.timestamp_seconds : null,
+        minute: Number.isFinite(o.timestamp_seconds) ? Math.floor(o.timestamp_seconds / 60) : null,
+        half: deriveHalfFromTimestamp(o.timestamp_seconds),
+        match_clock: o.match_clock || null,
+        situation_type: o.situation_type || null,
+        approach_corridor: o.approach_corridor || null,
+        set_position: o.set_position || null,
+        body_shape: o.body_shape || null,
+        engagement_depth: o.engagement_depth || null,
+        decision: o.decision || null,
+        timing: o.timing || null,
+        result: o.result || null,
+        rebound_quality: o.rebound_quality || null,
+        notes: o.notes || null,
+        source: 'video',
+        coach_added: !!o.coach_added,
+      }));
+      const { error: oErr } = await admin.from('one_v_one_events').insert(oneV1Rows);
+      if (oErr) console.error('one_v_one_events insert failed (non-fatal):', oErr);
+      else console.log(`[publish] wrote ${oneV1Rows.length} one_v_one_events row(s)`);
+    }
+
     const { error: updErr } = await admin.from('video_jobs').update({
       status: 'published',
       published_match_id: matchId,
@@ -460,6 +549,11 @@ export async function POST(request, { params }) {
         team_scored: teamScored,
         saves,
         distribution,
+        // Phase B: persist cross/sweeper/1v1 payloads too so restore-published-
+        // events.mjs can recover them if the DB rows ever get clobbered.
+        crosses,
+        sweeper,
+        one_v_one: oneV1,
         review_diff: body.review_diff || null,
         notes: body.notes || null,
       },

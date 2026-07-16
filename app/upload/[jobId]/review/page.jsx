@@ -31,6 +31,9 @@ import { authedFetch } from "@/lib/authed-fetch";
 import FocusModeGoals from "@/components/review/FocusModeGoals";
 import FocusModeSaves from "@/components/review/FocusModeSaves";
 import FocusModeDistribution from "@/components/review/FocusModeDistribution";
+import FocusModeCrosses from "@/components/review/FocusModeCrosses";
+import FocusModeSweeper from "@/components/review/FocusModeSweeper";
+import FocusMode1v1 from "@/components/review/FocusMode1v1";
 
 // Save-state indicator. Always visible in the review header so the coach
 // KNOWS when their work is durably on the server before walking away.
@@ -124,6 +127,15 @@ export default function ReviewPage() {
   // Phase 2.2 — distribution review state (Gemini-detected candidates only)
   const [distRows, setDistRows] = useState([]);
   const [extraDist, setExtraDist] = useState([]);
+
+  // Phase B — cross / sweeper / 1v1 review state. Gemini prompts don't exist
+  // for these event types yet, so these arrays start empty. Coach adds via
+  // "+ Add" buttons or reclassifies from saves/dists. Reclassifications from
+  // other sections land here with _reclassified_from set so publish route
+  // logs the appropriate coach_correction.
+  const [crossRows, setCrossRows] = useState([]);
+  const [sweeperRows, setSweeperRows] = useState([]);
+  const [oneV1Rows, setOneV1Rows] = useState([]);
 
   // Auto-save status indicator.
   //
@@ -375,6 +387,10 @@ export default function ReviewPage() {
         setDistRows(dSplit.gemini);
         setExtraDist(dSplit.extras);
         setExtraGoals(refreshClipUrls(serverDraft.extraGoals || []));
+        // Phase B: restore cross/sweeper/1v1 rows (default to empty for older drafts).
+        setCrossRows(refreshClipUrls(serverDraft.crossRows || []));
+        setSweeperRows(refreshClipUrls(serverDraft.sweeperRows || []));
+        setOneV1Rows(refreshClipUrls(serverDraft.oneV1Rows || []));
         if (serverDraft.scoreOverride) setScoreOverride(serverDraft.scoreOverride);
         setSavedAt(serverDraftAt || null);
         setSaveState('saved');
@@ -404,6 +420,9 @@ export default function ReviewPage() {
               setDistRows(dSplit.gemini);
               setExtraDist(dSplit.extras);
               setExtraGoals(refreshClipUrls(draft.extraGoals || []));
+              setCrossRows(refreshClipUrls(draft.crossRows || []));
+              setSweeperRows(refreshClipUrls(draft.sweeperRows || []));
+              setOneV1Rows(refreshClipUrls(draft.oneV1Rows || []));
               setSavedAt(draft._savedAt || null);
               setSaveState('saved');
               restoredFromDraft = true;
@@ -447,6 +466,9 @@ export default function ReviewPage() {
     const handle = setTimeout(async () => {
       const draft = {
         candidates, extraGoals, scoreOverride, saveRows, distRows, extraSaves, extraDist,
+        // Phase B: cross/sweeper/1v1 rows persist across auto-save too — coach
+        // shouldn't lose reclassifications or additions if the tab closes.
+        crossRows, sweeperRows, oneV1Rows,
         // Persist substitution across auto-save so a coach's H1/H2 split isn't
         // lost if they close the tab before publishing.
         substitution: {
@@ -486,7 +508,7 @@ export default function ReviewPage() {
     // session and including it would make every JWT-refresh trigger a
     // spurious save cycle.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, job, jobId, draftKey, candidates, extraGoals, scoreOverride, saveRows, distRows, extraSaves, extraDist, publishedMatchId, subMinuteStr, secondaryKeeperId, subReason]);
+  }, [loading, job, jobId, draftKey, candidates, extraGoals, scoreOverride, saveRows, distRows, extraSaves, extraDist, crossRows, sweeperRows, oneV1Rows, publishedMatchId, subMinuteStr, secondaryKeeperId, subReason]);
 
   const counts = useMemo(() => {
     let kept = 0, gf = 0, ga = 0;
@@ -505,9 +527,47 @@ export default function ReviewPage() {
 
   const finalScore = scoreOverride || { goals_for: counts.gf, goals_against: counts.ga };
 
-  const updateCand = (id, patch) => setCandidates(cs => cs.map(c => c._id === id ? { ...c, ...patch } : c));
-  const updateSave = (id, patch) => setSaveRows(rs => rs.map(r => r._id === id ? { ...r, ...patch } : r));
-  const updateDist = (id, patch) => setDistRows(rs => rs.map(r => r._id === id ? { ...r, ...patch } : r));
+  const updateCand    = (id, patch) => setCandidates(cs => cs.map(c => c._id === id ? { ...c, ...patch } : c));
+  const updateSave    = (id, patch) => setSaveRows(rs => rs.map(r => r._id === id ? { ...r, ...patch } : r));
+  const updateDist    = (id, patch) => setDistRows(rs => rs.map(r => r._id === id ? { ...r, ...patch } : r));
+  const updateCross   = (id, patch) => setCrossRows(rs => rs.map(r => r._id === id ? { ...r, ...patch } : r));
+  const updateSweeper = (id, patch) => setSweeperRows(rs => rs.map(r => r._id === id ? { ...r, ...patch } : r));
+  const update1v1     = (id, patch) => setOneV1Rows(rs => rs.map(r => r._id === id ? { ...r, ...patch } : r));
+
+  // Phase B: coach-adds a new event of a type Gemini doesn't detect yet.
+  // Blank row appended to the list; FocusMode* auto-jumps to the last card
+  // when a coach_added row appears so the coach can start filling it in.
+  const addCross = (keeperTeam = "us") => {
+    const _id = `c-add-${Date.now()}`;
+    setCrossRows(rs => [...rs, {
+      _id, coach_added: true, keep: true, keeper_team: keeperTeam,
+      timestamp_seconds: null, match_clock: "",
+      side: "", cross_type: "", destination: "",
+      gk_action: "", gk_starting_pos: "", outcome: "", notes: "",
+      gemini: {},
+    }]);
+  };
+  const addSweeper = (keeperTeam = "us") => {
+    const _id = `w-add-${Date.now()}`;
+    setSweeperRows(rs => [...rs, {
+      _id, coach_added: true, keep: true, keeper_team: keeperTeam,
+      timestamp_seconds: null, match_clock: "",
+      trigger: "", gk_starting_depth: "", timing: "",
+      action: "", pressure: "", risk_grade: "", result: "", notes: "",
+      gemini: {},
+    }]);
+  };
+  const add1v1 = (keeperTeam = "us") => {
+    const _id = `o-add-${Date.now()}`;
+    setOneV1Rows(rs => [...rs, {
+      _id, coach_added: true, keep: true, keeper_team: keeperTeam,
+      timestamp_seconds: null, match_clock: "",
+      situation_type: "", approach_corridor: "", set_position: "",
+      body_shape: "", engagement_depth: "", decision: "", timing: "",
+      result: "", rebound_quality: "", notes: "",
+      gemini: {},
+    }]);
+  };
 
   // Generalized reclassification: move an event from one section to another.
   // The clip + timestamp follow the event; type-specific fields are blank on
@@ -517,10 +577,15 @@ export default function ReviewPage() {
   // preamble on the NEXT match.
   const reclassifyEvent = (sourceType, id, targetType) => {
     if (sourceType === targetType) return;
+    // Source lookup extended to 6 types. Any source can be reclassified to any
+    // other; clip pointer + timestamp follow the row via clipBundle.
     const sourceRows =
-      sourceType === "goal" ? candidates :
-      sourceType === "save" ? saveRows :
-      sourceType === "distribution" ? distRows : null;
+      sourceType === "goal"         ? candidates :
+      sourceType === "save"         ? saveRows :
+      sourceType === "distribution" ? distRows :
+      sourceType === "cross"        ? crossRows :
+      sourceType === "sweeper"      ? sweeperRows :
+      sourceType === "one_v_one"    ? oneV1Rows : null;
     if (!sourceRows) return;
     const row = sourceRows.find(r => r._id === id);
     if (!row) return;
@@ -528,41 +593,56 @@ export default function ReviewPage() {
     const clipBundle = {
       timestamp_seconds: g.timestamp_seconds ?? row.timestamp_seconds,
       match_clock: g.match_clock ?? row.match_clock,
-      clip_storage_path: g.clip_storage_path,
-      clip_url: g.clip_url,
+      clip_storage_path: g.clip_storage_path ?? row.clip_storage_path,
+      clip_url: g.clip_url ?? row.clip_url,
     };
     const provenance = {
       source: sourceType,
       gemini_value: sourceType === "goal" ? g : row,
     };
+    const commonNew = {
+      keep: true,
+      timestamp_seconds: clipBundle.timestamp_seconds,
+      match_clock: clipBundle.match_clock,
+      keeper_team: row.keeper_team || "us",
+      gemini: clipBundle,
+      _reclassified_from: provenance,
+    };
 
     if (targetType === "distribution") {
-      const newRow = {
-        _id: `d-reclass-${id}`,
-        keep: true,
-        timestamp_seconds: clipBundle.timestamp_seconds,
-        match_clock: clipBundle.match_clock,
+      setDistRows(rs => sortByTs([...rs, {
+        _id: `d-reclass-${id}`, ...commonNew,
         trigger: "", type: "", successful: "", press_state: "",
         pass_selection: "", direction: "", receiver: "",
         first_touch: "", target_zone: "", notes: "",
-        gemini: clipBundle,
-        _reclassified_from: provenance,
-      };
-      setDistRows(rs => sortByTs([...rs, newRow]));
+      }]));
     } else if (targetType === "save") {
-      const newRow = {
-        _id: `s-reclass-${id}`,
-        keep: true,
-        timestamp_seconds: clipBundle.timestamp_seconds,
-        match_clock: clipBundle.match_clock,
+      setSaveRows(rs => sortByTs([...rs, {
+        _id: `s-reclass-${id}`, ...commonNew,
         shot_origin: "", shot_type: "", on_target: "", gk_action: "",
         gk_visible: "", outcome: "", body_distance_zone: "",
         goal_placement_height: "", goal_placement_side: "",
         technique: "", dive_family: "", notes: "",
-        gemini: clipBundle,
-        _reclassified_from: provenance,
-      };
-      setSaveRows(rs => sortByTs([...rs, newRow]));
+      }]));
+    } else if (targetType === "cross") {
+      setCrossRows(rs => sortByTs([...rs, {
+        _id: `c-reclass-${id}`, ...commonNew,
+        side: "", cross_type: "", destination: "",
+        gk_action: "", gk_starting_pos: "", outcome: "", notes: "",
+      }]));
+    } else if (targetType === "sweeper") {
+      setSweeperRows(rs => sortByTs([...rs, {
+        _id: `w-reclass-${id}`, ...commonNew,
+        trigger: "", gk_starting_depth: "", timing: "",
+        action: "", pressure: "", risk_grade: "", result: "", notes: "",
+      }]));
+    } else if (targetType === "one_v_one") {
+      setOneV1Rows(rs => sortByTs([...rs, {
+        _id: `o-reclass-${id}`, ...commonNew,
+        situation_type: "", approach_corridor: "", set_position: "",
+        body_shape: "", engagement_depth: "", decision: "", timing: "",
+        result: "", rebound_quality: "", notes: "",
+      }]));
     } else if (targetType === "goal") {
       // Reclassifying TO a goal candidate goes into extraGoals (coach-added),
       // since `candidates` is reserved for AI-detected goal candidates with
@@ -570,10 +650,8 @@ export default function ReviewPage() {
       const tsSecs = clipBundle.timestamp_seconds;
       const mm = Math.floor((tsSecs || 0) / 60);
       const ss = String(Math.floor((tsSecs || 0) % 60)).padStart(2, "0");
-      const newRow = {
-        _id: `g-reclass-${id}`,
-        coach_added: true,
-        keep: true,
+      setExtraGoals(arr => [...arr, {
+        _id: `g-reclass-${id}`, coach_added: true, keep: true,
         scored_by_us: null,
         timestamp_str: `${mm}:${ss}`,
         timestamp_seconds: tsSecs,
@@ -583,14 +661,16 @@ export default function ReviewPage() {
         clip_storage_path: clipBundle.clip_storage_path,
         clip_url: clipBundle.clip_url,
         _reclassified_from: provenance,
-      };
-      setExtraGoals(arr => [...arr, newRow]);
+      }]);
     }
 
     // Remove from the source section
-    if (sourceType === "goal") setCandidates(cs => cs.filter(c => c._id !== id));
-    else if (sourceType === "save") setSaveRows(rs => rs.filter(r => r._id !== id));
-    else if (sourceType === "distribution") setDistRows(rs => rs.filter(r => r._id !== id));
+    if (sourceType === "goal")               setCandidates(cs => cs.filter(c => c._id !== id));
+    else if (sourceType === "save")          setSaveRows(rs => rs.filter(r => r._id !== id));
+    else if (sourceType === "distribution")  setDistRows(rs => rs.filter(r => r._id !== id));
+    else if (sourceType === "cross")         setCrossRows(rs => rs.filter(r => r._id !== id));
+    else if (sourceType === "sweeper")       setSweeperRows(rs => rs.filter(r => r._id !== id));
+    else if (sourceType === "one_v_one")     setOneV1Rows(rs => rs.filter(r => r._id !== id));
   };
 
   // Backwards-compat wrapper kept for FocusModeGoals which still calls the
@@ -1097,6 +1177,55 @@ export default function ReviewPage() {
       confidence: r.gemini?.confidence || null,
     }));
 
+    // Phase B: crosses / sweeper / 1v1 payloads. Only kept rows go to the DB.
+    // Reclassified-in rows are included (they inherit clip_storage_path via the
+    // gemini bundle set by reclassifyEvent). Coach-added rows convert MM:SS to
+    // seconds if the coach typed one; otherwise null (publish route skips inserts
+    // with null timestamp for the ts-based keeper routing).
+    const crossPayload = crossRows.filter(r => r.keep !== false).map(r => ({
+      timestamp_seconds: r.coach_added && r.timestamp_str ? tsStrToSeconds(r.timestamp_str) : r.timestamp_seconds,
+      match_clock: r.match_clock || null,
+      side: r.side || null,
+      cross_type: r.cross_type || null,
+      destination: r.destination || null,
+      gk_action: r.gk_action || null,
+      gk_starting_pos: r.gk_starting_pos || null,
+      outcome: r.outcome || null,
+      notes: r.notes || null,
+      keeper_team: r.keeper_team || null,
+      coach_added: !!r.coach_added,
+    }));
+    const sweeperPayload = sweeperRows.filter(r => r.keep !== false).map(r => ({
+      timestamp_seconds: r.coach_added && r.timestamp_str ? tsStrToSeconds(r.timestamp_str) : r.timestamp_seconds,
+      match_clock: r.match_clock || null,
+      trigger: r.trigger || null,
+      gk_starting_depth: r.gk_starting_depth || null,
+      timing: r.timing || null,
+      action: r.action || null,
+      pressure: r.pressure || null,
+      risk_grade: r.risk_grade || null,
+      result: r.result || null,
+      notes: r.notes || null,
+      keeper_team: r.keeper_team || null,
+      coach_added: !!r.coach_added,
+    }));
+    const oneV1Payload = oneV1Rows.filter(r => r.keep !== false).map(r => ({
+      timestamp_seconds: r.coach_added && r.timestamp_str ? tsStrToSeconds(r.timestamp_str) : r.timestamp_seconds,
+      match_clock: r.match_clock || null,
+      situation_type: r.situation_type || null,
+      approach_corridor: r.approach_corridor || null,
+      set_position: r.set_position || null,
+      body_shape: r.body_shape || null,
+      engagement_depth: r.engagement_depth || null,
+      decision: r.decision || null,
+      timing: r.timing || null,
+      result: r.result || null,
+      rebound_quality: r.rebound_quality || null,
+      notes: r.notes || null,
+      keeper_team: r.keeper_team || null,
+      coach_added: !!r.coach_added,
+    }));
+
     setPublishing(true);
     try {
       // Substitution payload — only send when the coach actually declared
@@ -1118,6 +1247,13 @@ export default function ReviewPage() {
           team_scored: teamScored,
           saves: savesPayload,
           distribution: distPayload,
+          // Phase B: three new event-type payloads. Publish route inserts
+          // into cross_events / sweeper_events / one_v_one_events with
+          // keeper_id routed by timestamp vs sub_minute (same helper Phase
+          // A ships for saves + distribution).
+          crosses: crossPayload,
+          sweeper: sweeperPayload,
+          one_v_one: oneV1Payload,
           substitution,
           review_diff: reviewDiff,
           notes: notesFromGemini(job, candidates, extraGoals, saveRows),
@@ -1601,6 +1737,78 @@ export default function ReviewPage() {
             title="Opposition-GK distributions. Captured for model training; excluded from the analyzed keeper's stats."
           >
             + Add an opponent GK distribution
+          </button>
+        </div>
+
+        {/* ── CROSSES ─────────────────────────────────────────────────
+            Gemini doesn't detect crosses yet, so this section starts empty.
+            Coach adds via + button or reclassifies from saves/dists. */}
+        <h2 style={{ fontSize: 15, fontWeight: 700, color: t.bright, letterSpacing: 0.4, marginTop: 28, marginBottom: 12 }}>
+          🎯 CROSSES <span style={{ fontSize: 11, color: t.dim, fontWeight: 400, marginLeft: 8 }}>({crossRows.length})</span>
+        </h2>
+        <FocusModeCrosses
+          rows={crossRows}
+          onChange={updateCross}
+          onReclassify={(id, target) => reclassifyEvent("cross", id, target)}
+          videoUrl={job?.video_url}
+          theme={t}
+          isActive={activeFocus.section === "crosses"}
+        />
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10, marginBottom: 8 }}>
+          <button type="button" onClick={() => addCross('us')}
+            style={{ padding: "8px 14px", borderRadius: 8, border: `1px dashed ${t.accent}66`, background: "transparent", color: t.accent, fontSize: 12, fontFamily: font, cursor: "pointer" }}>
+            + Add a cross (our GK)
+          </button>
+          <button type="button" onClick={() => addCross('opp')}
+            style={{ padding: "8px 14px", borderRadius: 8, border: `1px dashed ${t.dim}66`, background: "transparent", color: t.dim, fontSize: 12, fontFamily: font, cursor: "pointer" }}
+            title="Opposition-GK crosses. Captured for training; excluded from the analyzed keeper's stats.">
+            + Add an opponent GK cross
+          </button>
+        </div>
+
+        {/* ── SWEEPER ─────────────────────────────────────────────── */}
+        <h2 style={{ fontSize: 15, fontWeight: 700, color: t.bright, letterSpacing: 0.4, marginTop: 28, marginBottom: 12 }}>
+          🧹 SWEEPER <span style={{ fontSize: 11, color: t.dim, fontWeight: 400, marginLeft: 8 }}>({sweeperRows.length})</span>
+        </h2>
+        <FocusModeSweeper
+          rows={sweeperRows}
+          onChange={updateSweeper}
+          onReclassify={(id, target) => reclassifyEvent("sweeper", id, target)}
+          videoUrl={job?.video_url}
+          theme={t}
+          isActive={activeFocus.section === "sweeper"}
+        />
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10, marginBottom: 8 }}>
+          <button type="button" onClick={() => addSweeper('us')}
+            style={{ padding: "8px 14px", borderRadius: 8, border: `1px dashed ${t.accent}66`, background: "transparent", color: t.accent, fontSize: 12, fontFamily: font, cursor: "pointer" }}>
+            + Add a sweeper action (our GK)
+          </button>
+          <button type="button" onClick={() => addSweeper('opp')}
+            style={{ padding: "8px 14px", borderRadius: 8, border: `1px dashed ${t.dim}66`, background: "transparent", color: t.dim, fontSize: 12, fontFamily: font, cursor: "pointer" }}>
+            + Add an opponent GK sweeper action
+          </button>
+        </div>
+
+        {/* ── 1V1S ────────────────────────────────────────────────── */}
+        <h2 style={{ fontSize: 15, fontWeight: 700, color: t.bright, letterSpacing: 0.4, marginTop: 28, marginBottom: 12 }}>
+          ⚔️ 1V1S <span style={{ fontSize: 11, color: t.dim, fontWeight: 400, marginLeft: 8 }}>({oneV1Rows.length})</span>
+        </h2>
+        <FocusMode1v1
+          rows={oneV1Rows}
+          onChange={update1v1}
+          onReclassify={(id, target) => reclassifyEvent("one_v_one", id, target)}
+          videoUrl={job?.video_url}
+          theme={t}
+          isActive={activeFocus.section === "one_v_one"}
+        />
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10, marginBottom: 8 }}>
+          <button type="button" onClick={() => add1v1('us')}
+            style={{ padding: "8px 14px", borderRadius: 8, border: `1px dashed ${t.accent}66`, background: "transparent", color: t.accent, fontSize: 12, fontFamily: font, cursor: "pointer" }}>
+            + Add a 1v1 (our GK)
+          </button>
+          <button type="button" onClick={() => add1v1('opp')}
+            style={{ padding: "8px 14px", borderRadius: 8, border: `1px dashed ${t.dim}66`, background: "transparent", color: t.dim, fontSize: 12, fontFamily: font, cursor: "pointer" }}>
+            + Add an opponent GK 1v1
           </button>
         </div>
 
