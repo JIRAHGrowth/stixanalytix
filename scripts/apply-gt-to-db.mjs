@@ -153,101 +153,120 @@ function pairByTimestamp(gtList, dbList, gtTsKey = 'timestamp_seconds', dbTsKey 
 // Each builder takes a normalised GT event + context and returns the row
 // shape ready for insert into the corresponding table.
 
-function buildGoalRow({ gt, ctx }) {
+function buildGoalRow({ gt, ctx, dbRow }) {
+  // Defensive merge — preserve DB values for fields where GT is missing or
+  // mapping falls back to a less-specific label.
+  const keep = (gtVal, dbVal) => (gtVal === null || gtVal === undefined || gtVal === '') ? (dbVal ?? null) : gtVal;
+  const gtZone = goalZoneFromGT(gt);
+  const gtSource = attackTypeToSource(gt.attack_type);
+  const gtShotType = shotTypeToLabel(gt.shot_type);
   return {
     match_id: ctx.match_id,
     coach_id: ctx.coach_id,
     keeper_id: ctx.keeperFor(gt),
-    goal_zone: goalZoneFromGT(gt),
-    shot_origin: gt.shot_location || null,
-    goal_source: attackTypeToSource(gt.attack_type),
-    goal_rank: null,
-    shot_type: shotTypeToLabel(gt.shot_type),
-    gk_positioning: null,
-    half: gt.half === 1 || gt.half === 2 ? gt.half : null,
-    timestamp_seconds: gt.timestamp_seconds ?? null,
-    minute: Number.isFinite(gt.timestamp_seconds) ? Math.floor(gt.timestamp_seconds / 60) : null,
-    shot_description: gt.play_description || null,
-    gk_observations: gt.gk_observations || null,
-    coach_notes: gt.note || null,
-    clip_storage_path: clipPathFor(ctx.clipIdx, gt.timestamp_seconds),
+    goal_zone: gtZone || dbRow?.goal_zone || null,
+    shot_origin: keep(gt.shot_location, dbRow?.shot_origin),
+    goal_source: gtSource || dbRow?.goal_source || null,
+    goal_rank: dbRow?.goal_rank ?? null,
+    // Only overwrite shot_type when GT gives a specific label (not the 'Foot' fallback).
+    shot_type: gtShotType && gtShotType !== 'Foot' ? gtShotType : (dbRow?.shot_type || gtShotType),
+    gk_positioning: dbRow?.gk_positioning ?? null,
+    half: gt.half === 1 || gt.half === 2 ? gt.half : (dbRow?.half ?? null),
+    timestamp_seconds: gt.timestamp_seconds ?? dbRow?.timestamp_seconds ?? null,
+    minute: Number.isFinite(gt.timestamp_seconds) ? Math.floor(gt.timestamp_seconds / 60) : (dbRow?.minute ?? null),
+    shot_description: keep(gt.play_description, dbRow?.shot_description),
+    gk_observations: keep(gt.gk_observations, dbRow?.gk_observations),
+    coach_notes: keep(gt.note, dbRow?.coach_notes),
+    clip_storage_path: clipPathFor(ctx.clipIdx, gt.timestamp_seconds) || dbRow?.clip_storage_path || null,
   };
 }
 
-function buildSaveRow({ gt, ctx }) {
+function buildSaveRow({ gt, ctx, dbRow }) {
+  // Defensive merge: only override DB fields where GT has a real value.
+  // NEVER null out an existing DB value — Gemini + coach review may have
+  // populated it correctly, and blanking it destroys precision that GT
+  // may not have re-tagged.
+  const keep = (gtVal, dbVal) => (gtVal === null || gtVal === undefined || gtVal === '') ? (dbVal ?? null) : gtVal;
   return {
     match_id: ctx.match_id,
     coach_id: ctx.coach_id,
     keeper_id: ctx.keeperFor(gt),
-    shot_origin: gt.shot_origin || null,
-    gk_action: gt.gk_action || null,
-    goal_zone: null,
+    shot_origin: keep(gt.shot_origin, dbRow?.shot_origin),
+    gk_action: keep(gt.gk_action, dbRow?.gk_action),
+    goal_zone: dbRow?.goal_zone ?? null,
     is_goal: false,
-    is_off_target: gt.on_target === 'no',
-    shot_type: gt.shot_type || null,
+    is_off_target: gt.on_target === 'no' ? true : gt.on_target === 'yes' ? false : (dbRow?.is_off_target ?? false),
+    shot_type: keep(gt.shot_type, dbRow?.shot_type),
     event_type: 'Shot',
-    half: gt.half === 1 ? 'H1' : gt.half === 2 ? 'H2' : null,
-    timestamp_seconds: gt.timestamp_seconds ?? null,
-    on_target: gt.on_target || null,
-    outcome: gt.outcome || null,
-    body_distance_zone: gt.body_distance_zone || null,
-    goal_placement_height: gt.goal_placement_height || null,
-    goal_placement_side: gt.goal_placement_side || null,
-    gk_visible: gt.gk_visible || null,
-    shot_description: gt.play_description || null,
-    gk_observations: gt.gk_observations || null,
-    coach_notes: gt.note || null,
-    keeper_team: 'us',
-    // shot_events has no `source` column; keeper_team/coach_added carry the
-    // provenance signal we need.
-    coach_added: false,
-    clip_storage_path: clipPathFor(ctx.clipIdx, gt.timestamp_seconds),
+    half: gt.half === 1 ? 'H1' : gt.half === 2 ? 'H2' : (dbRow?.half ?? null),
+    timestamp_seconds: gt.timestamp_seconds ?? dbRow?.timestamp_seconds ?? null,
+    on_target: keep(gt.on_target, dbRow?.on_target),
+    outcome: keep(gt.outcome, dbRow?.outcome),
+    body_distance_zone: keep(gt.body_distance_zone, dbRow?.body_distance_zone),
+    goal_placement_height: keep(gt.goal_placement_height, dbRow?.goal_placement_height),
+    goal_placement_side: keep(gt.goal_placement_side, dbRow?.goal_placement_side),
+    gk_visible: keep(gt.gk_visible, dbRow?.gk_visible),
+    shot_description: keep(gt.play_description, dbRow?.shot_description),
+    gk_observations: keep(gt.gk_observations, dbRow?.gk_observations),
+    coach_notes: keep(gt.note, dbRow?.coach_notes),
+    // Preserve DB keeper_team (never flip an opp-tagged row to us via GT match).
+    keeper_team: dbRow?.keeper_team ?? 'us',
+    coach_added: dbRow?.coach_added ?? false,
+    clip_storage_path: clipPathFor(ctx.clipIdx, gt.timestamp_seconds) || dbRow?.clip_storage_path || null,
   };
 }
 
-function buildDistRow({ gt, ctx }) {
-  // GT converter already produces DB-vocab strings (gk_short/gk_long/throw/pass/drop_kick).
+function buildDistRow({ gt, ctx, dbRow }) {
+  // Defensive merge — see buildSaveRow header. Never null out an existing DB value.
+  const keep = (gtVal, dbVal) => (gtVal === null || gtVal === undefined || gtVal === '') ? (dbVal ?? null) : gtVal;
+  const gtSuc = gt.successful === true || gt.successful === 'yes' ? true
+              : gt.successful === false || gt.successful === 'no' ? false : null;
+  const gtPress = gt.under_pressure === true || gt.under_pressure === 'yes' ? true
+                : gt.under_pressure === false || gt.under_pressure === 'no' ? false : null;
   return {
     match_id: ctx.match_id,
     coach_id: ctx.coach_id,
     keeper_id: ctx.keeperFor(gt),
-    timestamp_seconds: gt.timestamp_seconds ?? null,
-    minute: Number.isFinite(gt.timestamp_seconds) ? Math.floor(gt.timestamp_seconds / 60) : null,
-    half: gt.half === 1 ? 'H1' : gt.half === 2 ? 'H2' : null,
-    trigger: gt.trigger || null,
-    type: gt.type || null,
-    successful: gt.successful === 'yes' ? true : gt.successful === 'no' ? false : null,
-    under_pressure: gt.under_pressure === 'yes' ? true : gt.under_pressure === 'no' ? false : null,
-    pass_selection: gt.pass_selection || null,
-    direction: gt.direction || null,
-    receiver: gt.receiver || null,
-    first_touch: gt.first_touch || null,
-    notes: gt.note || null,
-    source: 'manual',
-    keeper_team: 'us',
-    clip_storage_path: clipPathFor(ctx.clipIdx, gt.timestamp_seconds),
+    timestamp_seconds: gt.timestamp_seconds ?? dbRow?.timestamp_seconds ?? null,
+    minute: Number.isFinite(gt.timestamp_seconds) ? Math.floor(gt.timestamp_seconds / 60) : (dbRow?.minute ?? null),
+    half: gt.half === 1 ? 'H1' : gt.half === 2 ? 'H2' : (dbRow?.half ?? null),
+    trigger: keep(gt.trigger, dbRow?.trigger),
+    type: keep(gt.type, dbRow?.type),
+    // Prefer GT boolean; fall back to preserving whatever DB already had (Gemini's or coach's value).
+    successful: gtSuc !== null ? gtSuc : (dbRow?.successful ?? null),
+    under_pressure: gtPress !== null ? gtPress : (dbRow?.under_pressure ?? null),
+    pass_selection: keep(gt.pass_selection, dbRow?.pass_selection),
+    direction: keep(gt.direction, dbRow?.direction),
+    receiver: keep(gt.receiver, dbRow?.receiver),
+    first_touch: keep(gt.first_touch, dbRow?.first_touch),
+    notes: keep(gt.note, dbRow?.notes),
+    source: dbRow?.source || 'manual',
+    // Preserve DB keeper_team (never flip an opp-tagged row).
+    keeper_team: dbRow?.keeper_team ?? 'us',
+    clip_storage_path: clipPathFor(ctx.clipIdx, gt.timestamp_seconds) || dbRow?.clip_storage_path || null,
   };
 }
 
-function buildCrossRow({ gt, ctx }) {
+function buildCrossRow({ gt, ctx, dbRow }) {
+  const keep = (gtVal, dbVal) => (gtVal === null || gtVal === undefined || gtVal === '') ? (dbVal ?? null) : gtVal;
   return {
     match_id: ctx.match_id,
     coach_id: ctx.coach_id,
     keeper_id: ctx.keeperFor(gt),
-    timestamp_seconds: gt.timestamp_seconds ?? null,
-    minute: Number.isFinite(gt.timestamp_seconds) ? Math.floor(gt.timestamp_seconds / 60) : null,
-    half: gt.half === 1 ? 'H1' : gt.half === 2 ? 'H2' : null,
-    side: gt.side || null,
-    cross_type: gt.cross_type || null,
-    destination: gt.destination || null,
-    gk_action: gt.gk_action || null,
-    gk_starting_pos: gt.gk_position || null,
-    outcome: gt.outcome || null,
-    notes: gt.note || null,
-    keeper_team: 'us',
-    source: 'manual',
-    coach_added: false,
-    clip_storage_path: clipPathFor(ctx.clipIdx, gt.timestamp_seconds),
+    timestamp_seconds: gt.timestamp_seconds ?? dbRow?.timestamp_seconds ?? null,
+    minute: Number.isFinite(gt.timestamp_seconds) ? Math.floor(gt.timestamp_seconds / 60) : (dbRow?.minute ?? null),
+    half: gt.half === 1 ? 'H1' : gt.half === 2 ? 'H2' : (dbRow?.half ?? null),
+    side: keep(gt.side, dbRow?.side),
+    cross_type: keep(gt.cross_type, dbRow?.cross_type),
+    destination: keep(gt.destination, dbRow?.destination),
+    gk_action: keep(gt.gk_action, dbRow?.gk_action),
+    gk_starting_pos: keep(gt.gk_position, dbRow?.gk_starting_pos),
+    outcome: keep(gt.outcome, dbRow?.outcome),
+    notes: keep(gt.note, dbRow?.notes),
+    keeper_team: dbRow?.keeper_team ?? 'us',
+    source: dbRow?.source || 'manual',
+    coach_added: dbRow?.coach_added ?? false,
+    clip_storage_path: clipPathFor(ctx.clipIdx, gt.timestamp_seconds) || dbRow?.clip_storage_path || null,
   };
 }
 
@@ -281,28 +300,28 @@ const SWEEPER_OUTCOME_MAP = {
   goal_conceded: 'goal',
 };
 
-function buildSweeperRow({ gt, ctx }) {
-  const action = SWEEPER_ACTION_MAP[String(gt.action || '').toLowerCase()] || null;
-  const pressure = SWEEPER_PRESSURE_MAP[String(gt.pressure || '').toLowerCase()] || null;
+function buildSweeperRow({ gt, ctx, dbRow }) {
+  // Defensive: unmapped GT values fall back to DB value instead of nulling.
+  const action = SWEEPER_ACTION_MAP[String(gt.action || '').toLowerCase()] || dbRow?.action || null;
+  const pressure = SWEEPER_PRESSURE_MAP[String(gt.pressure || '').toLowerCase()] || dbRow?.pressure || null;
   const result = SWEEPER_OUTCOME_MAP[String(gt.outcome || '').toLowerCase()]
     || ((gt.successful === 'yes' || gt.successful === true) ? 'kept_possession'
-      : (gt.successful === 'no' || gt.successful === false) ? 'lost_possession' : null);
+      : (gt.successful === 'no' || gt.successful === false) ? 'lost_possession' : dbRow?.result || null);
   return {
     match_id: ctx.match_id,
     coach_id: ctx.coach_id,
     keeper_id: ctx.keeperFor(gt),
-    timestamp_seconds: gt.timestamp_seconds ?? null,
-    minute: Number.isFinite(gt.timestamp_seconds) ? Math.floor(gt.timestamp_seconds / 60) : null,
-    half: gt.half === 1 ? 'H1' : gt.half === 2 ? 'H2' : null,
+    timestamp_seconds: gt.timestamp_seconds ?? dbRow?.timestamp_seconds ?? null,
+    minute: Number.isFinite(gt.timestamp_seconds) ? Math.floor(gt.timestamp_seconds / 60) : (dbRow?.minute ?? null),
+    half: gt.half === 1 ? 'H1' : gt.half === 2 ? 'H2' : (dbRow?.half ?? null),
     action,
     pressure,
     result,
-    // sweep_zone is unconstrained free text; preserve GT distance as-is.
-    sweep_zone: gt.distance || null,
-    notes: gt.note || (gt.outcome && !SWEEPER_OUTCOME_MAP[gt.outcome] ? gt.outcome : null),
-    source: 'manual',
-    coach_added: false,
-    clip_storage_path: clipPathFor(ctx.clipIdx, gt.timestamp_seconds),
+    sweep_zone: gt.distance || dbRow?.sweep_zone || null,
+    notes: gt.note || (gt.outcome && !SWEEPER_OUTCOME_MAP[gt.outcome] ? gt.outcome : dbRow?.notes || null),
+    source: dbRow?.source || 'manual',
+    coach_added: dbRow?.coach_added ?? false,
+    clip_storage_path: clipPathFor(ctx.clipIdx, gt.timestamp_seconds) || dbRow?.clip_storage_path || null,
   };
 }
 
@@ -316,21 +335,22 @@ const ONE_V_ONE_RESULT_MAP = {
 // situation_type enum: through_ball | breakaway_run | defensive_error | loose_ball | cross_back.
 // GT's "event" column doesn't map cleanly (values: "1v1 faced" / "recovery save" / etc.),
 // so leave situation_type null and stash the GT event verbatim in notes.
-function buildOneV1Row({ gt, ctx }) {
-  const result = ONE_V_ONE_RESULT_MAP[String(gt.outcome || '').toLowerCase()] || null;
+function buildOneV1Row({ gt, ctx, dbRow }) {
+  const result = ONE_V_ONE_RESULT_MAP[String(gt.outcome || '').toLowerCase()] || dbRow?.result || null;
+  // GT converter emits `event_type` (was reading `event` earlier — small bug fix).
+  const eventLabel = gt.event_type || gt.event || null;
   return {
     match_id: ctx.match_id,
     coach_id: ctx.coach_id,
     keeper_id: ctx.keeperFor(gt),
-    timestamp_seconds: gt.timestamp_seconds ?? null,
-    minute: Number.isFinite(gt.timestamp_seconds) ? Math.floor(gt.timestamp_seconds / 60) : null,
-    half: gt.half === 1 ? 'H1' : gt.half === 2 ? 'H2' : null,
+    timestamp_seconds: gt.timestamp_seconds ?? dbRow?.timestamp_seconds ?? null,
+    minute: Number.isFinite(gt.timestamp_seconds) ? Math.floor(gt.timestamp_seconds / 60) : (dbRow?.minute ?? null),
+    half: gt.half === 1 ? 'H1' : gt.half === 2 ? 'H2' : (dbRow?.half ?? null),
     result,
-    // Preserve the GT event label + outcome verbatim so nothing is lost.
-    notes: [gt.event, gt.outcome, gt.note].filter(Boolean).join(' — ') || null,
-    source: 'manual',
-    coach_added: false,
-    clip_storage_path: clipPathFor(ctx.clipIdx, gt.timestamp_seconds),
+    notes: [eventLabel, gt.outcome, gt.note].filter(Boolean).join(' — ') || dbRow?.notes || null,
+    source: dbRow?.source || 'manual',
+    coach_added: dbRow?.coach_added ?? false,
+    clip_storage_path: clipPathFor(ctx.clipIdx, gt.timestamp_seconds) || dbRow?.clip_storage_path || null,
   };
 }
 
@@ -444,9 +464,7 @@ async function reconcileMatch(gtPath) {
     const { pairs, unmatchedGt, unmatchedDb } = pairByTimestamp(ourGoals, dbGoals);
     summary.goals = { gt: ourGoals.length, db: dbGoals.length, matched: pairs.length, addFromGt: unmatchedGt.length, dropFromDb: unmatchedDb.length };
     pairs.forEach(([g, d]) => {
-      const newRow = buildGoalRow({ gt: g, ctx });
-      // Preserve existing clip if worker index doesn't have one for the GT ts.
-      if (!newRow.clip_storage_path && d.clip_storage_path) newRow.clip_storage_path = d.clip_storage_path;
+      const newRow = buildGoalRow({ gt: g, ctx, dbRow: d });
       plan.update.push({ table: 'goals_conceded', id: d.id, patch: newRow, wasFrom: 'db+gt', why: 'field precision from GT' });
     });
     unmatchedGt.forEach(g => plan.insert.push({ table: 'goals_conceded', row: buildGoalRow({ gt: g, ctx }), reason: 'GT-only goal' }));
@@ -469,10 +487,10 @@ async function reconcileMatch(gtPath) {
 
     summary.saves = { gt: ourSaves.length, db: dbSaves.length, savePairs: saveSavePairs.length, addFromGt: saveUnmatchedGt.length, reclassifiedToCross: saveCrossPairs.length, dropFromDb: 0 };
 
-    // Update paired saves with GT precision
+    // Update paired saves with GT precision. Pass dbRow so builder can
+    // preserve DB values for fields GT doesn't specify (never null-out).
     saveSavePairs.forEach(([g, d]) => {
-      const newRow = buildSaveRow({ gt: g, ctx });
-      if (!newRow.clip_storage_path && d.clip_storage_path) newRow.clip_storage_path = d.clip_storage_path;
+      const newRow = buildSaveRow({ gt: g, ctx, dbRow: d });
       plan.update.push({ table: 'shot_events', id: d.id, patch: newRow, reason: 'field precision from GT' });
     });
     // Insert GT-only saves
@@ -501,8 +519,7 @@ async function reconcileMatch(gtPath) {
     const remainingGtCrosses = ourCrosses.filter(c => !insertedCrossTs.has(c.timestamp_seconds));
     const { pairs, unmatchedGt, unmatchedDb } = pairByTimestamp(remainingGtCrosses, dbCrosses);
     pairs.forEach(([g, d]) => {
-      const newRow = buildCrossRow({ gt: g, ctx });
-      if (!newRow.clip_storage_path && d.clip_storage_path) newRow.clip_storage_path = d.clip_storage_path;
+      const newRow = buildCrossRow({ gt: g, ctx, dbRow: d });
       plan.update.push({ table: 'cross_events', id: d.id, patch: newRow, reason: 'field precision from GT' });
     });
     unmatchedGt.forEach(g => plan.insert.push({ table: 'cross_events', row: buildCrossRow({ gt: g, ctx }), reason: 'GT-only cross' }));
@@ -514,8 +531,7 @@ async function reconcileMatch(gtPath) {
   {
     const { pairs, unmatchedGt, unmatchedDb } = pairByTimestamp(ourDists, dbDists);
     pairs.forEach(([g, d]) => {
-      const newRow = buildDistRow({ gt: g, ctx });
-      if (!newRow.clip_storage_path && d.clip_storage_path) newRow.clip_storage_path = d.clip_storage_path;
+      const newRow = buildDistRow({ gt: g, ctx, dbRow: d });
       plan.update.push({ table: 'distribution_events', id: d.id, patch: newRow, reason: 'field precision from GT' });
     });
     unmatchedGt.forEach(g => plan.insert.push({ table: 'distribution_events', row: buildDistRow({ gt: g, ctx }), reason: 'GT-only distribution' }));
@@ -527,8 +543,7 @@ async function reconcileMatch(gtPath) {
   {
     const { pairs, unmatchedGt, unmatchedDb } = pairByTimestamp(ourSweeper, dbSweeper);
     pairs.forEach(([g, d]) => {
-      const newRow = buildSweeperRow({ gt: g, ctx });
-      if (!newRow.clip_storage_path && d.clip_storage_path) newRow.clip_storage_path = d.clip_storage_path;
+      const newRow = buildSweeperRow({ gt: g, ctx, dbRow: d });
       plan.update.push({ table: 'sweeper_events', id: d.id, patch: newRow, reason: 'field precision from GT' });
     });
     unmatchedGt.forEach(g => plan.insert.push({ table: 'sweeper_events', row: buildSweeperRow({ gt: g, ctx }), reason: 'GT-only sweeper' }));
@@ -540,8 +555,7 @@ async function reconcileMatch(gtPath) {
   {
     const { pairs, unmatchedGt, unmatchedDb } = pairByTimestamp(ourOneV1, dbOneV1);
     pairs.forEach(([g, d]) => {
-      const newRow = buildOneV1Row({ gt: g, ctx });
-      if (!newRow.clip_storage_path && d.clip_storage_path) newRow.clip_storage_path = d.clip_storage_path;
+      const newRow = buildOneV1Row({ gt: g, ctx, dbRow: d });
       plan.update.push({ table: 'one_v_one_events', id: d.id, patch: newRow, reason: 'field precision from GT' });
     });
     unmatchedGt.forEach(g => plan.insert.push({ table: 'one_v_one_events', row: buildOneV1Row({ gt: g, ctx }), reason: 'GT-only 1v1' }));

@@ -17,7 +17,12 @@ const ACTION_COLORS = Object.fromEntries(
   Object.entries(GK_ACTION_SEVERITY).map(([k, v]) => [k, t[v]])
 );
 
-const SAVE_ACTIONS = ["Catch", "Block", "Parry", "Deflect", "Punch"];
+// Must stay in lockstep with lib/constants.js GK_ACTION_TO_COL — every action
+// that counts toward `matches.saves` in the publish route must count here too.
+// Missing "Smother", "Starfish", "K-Barrier" caused matches/[id] page to
+// under-report save count vs the matches row (2026-07-15 incident: Fusion 4
+// saves in DB but page showed 3 because ts 6378 was a Smother).
+const SAVE_ACTIONS = ["Catch", "Block", "Parry", "Deflect", "Punch", "Smother", "Starfish", "K-Barrier"];
 
 function fmtTs(s) {
   if (s == null) return null;

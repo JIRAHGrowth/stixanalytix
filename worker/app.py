@@ -1699,11 +1699,15 @@ def backfill_clips_from_events(match_id: str, force: bool = False) -> dict:
     print(f"[bfe] {size_mb:.1f} MB downloaded in {time.time() - download_start:.0f}s", flush=True)
 
     # Table → default event_type. shot_events is split by is_goal at row time.
+    # cross_events + one_v_one_events added 2026-07-14 for GT-reconciler coverage
+    # (both tables get populated by the ground-truth import pipeline).
     tables = [
         ("shot_events", None),
         ("distribution_events", "dist"),
         ("goals_conceded", "goal"),
         ("sweeper_events", "sweeper"),
+        ("cross_events", "cross"),
+        ("one_v_one_events", "one_v_one"),
     ]
 
     per_table = {}
