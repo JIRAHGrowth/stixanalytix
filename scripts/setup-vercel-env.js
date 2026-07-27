@@ -21,6 +21,7 @@ const VARS_TO_PUSH = [
   'SUPABASE_SERVICE_ROLE_KEY',
   'MODAL_TRIGGER_URL',
   'MODAL_TRIGGER_SECRET',
+  'MODAL_BACKFILL_CLIPS_TRIGGER_URL',
 ];
 
 function die(msg) { console.error('ERROR: ' + msg); process.exit(1); }

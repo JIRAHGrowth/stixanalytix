@@ -75,6 +75,9 @@ def _load_schema(name: str) -> dict:
 GOALS_RESPONSE_SCHEMA = _load_schema("goals")
 SAVES_RESPONSE_SCHEMA = _load_schema("saves")
 DISTRIBUTION_RESPONSE_SCHEMA = _load_schema("distribution")
+CROSSES_RESPONSE_SCHEMA = _load_schema("crosses")
+SWEEPER_RESPONSE_SCHEMA = _load_schema("sweeper")
+ONE_V_ONE_RESPONSE_SCHEMA = _load_schema("one_v_one")
 
 
 # === pipeline_runs instrumentation ==================================================
@@ -860,11 +863,24 @@ def process(job_id: str) -> dict:
             all_goals = []
             all_saves = []
             all_dist = []
+            all_crosses = []
+            all_sweeper = []
+            all_one_v_one = []
             chunk_usages = []
             goals_template = Path("/root/prompts/goals.md").read_text(encoding="utf-8")
             saves_template = Path("/root/prompts/saves.md").read_text(encoding="utf-8")
             dist_path = Path("/root/prompts/distribution.md")
             dist_template = dist_path.read_text(encoding="utf-8") if dist_path.exists() else None
+            # Phase 2.4 event types (cross / sweeper / 1v1). Each lives in its
+            # own prompt for calibration independence — see prompts/README.md
+            # changelog 2026-07-16. Load conditionally so a missing prompt file
+            # skips that detector without breaking the run.
+            crosses_path = Path("/root/prompts/crosses.md")
+            crosses_template = crosses_path.read_text(encoding="utf-8") if crosses_path.exists() else None
+            sweeper_path = Path("/root/prompts/sweeper.md")
+            sweeper_template = sweeper_path.read_text(encoding="utf-8") if sweeper_path.exists() else None
+            one_v_one_path = Path("/root/prompts/one_v_one.md")
+            one_v_one_template = one_v_one_path.read_text(encoding="utf-8") if one_v_one_path.exists() else None
             shared_suffix = (
                 ("\n\n---\n\n" + spatial_calibration if spatial_calibration else "") +
                 ("\n\n---\n\n" + calibration if calibration else "") +
@@ -886,6 +902,9 @@ def process(job_id: str) -> dict:
             saves_passes = int(os.environ.get("SAVES_VOTING_PASSES", "2"))
             goals_passes = int(os.environ.get("GOALS_VOTING_PASSES", "1"))
             dist_passes  = int(os.environ.get("DIST_VOTING_PASSES",  "1"))
+            crosses_passes = int(os.environ.get("CROSSES_VOTING_PASSES", "1"))
+            sweeper_passes = int(os.environ.get("SWEEPER_VOTING_PASSES", "1"))
+            one_v_one_passes = int(os.environ.get("ONE_V_ONE_VOTING_PASSES", "1"))
 
             # Each tuple: (response key, prompt template, response schema, sink list, n_passes)
             prompt_passes = [
@@ -895,6 +914,18 @@ def process(job_id: str) -> dict:
             if dist_template is not None:
                 prompt_passes.append(
                     ("distribution", dist_template, DISTRIBUTION_RESPONSE_SCHEMA, all_dist, dist_passes)
+                )
+            if crosses_template is not None:
+                prompt_passes.append(
+                    ("crosses", crosses_template, CROSSES_RESPONSE_SCHEMA, all_crosses, crosses_passes)
+                )
+            if sweeper_template is not None:
+                prompt_passes.append(
+                    ("sweeper", sweeper_template, SWEEPER_RESPONSE_SCHEMA, all_sweeper, sweeper_passes)
+                )
+            if one_v_one_template is not None:
+                prompt_passes.append(
+                    ("one_v_one", one_v_one_template, ONE_V_ONE_RESPONSE_SCHEMA, all_one_v_one, one_v_one_passes)
                 )
 
             # Resume support — load anything this job already completed (e.g. on
@@ -1028,6 +1059,9 @@ def process(job_id: str) -> dict:
             all_goals = chunk_mod.dedupe_events(all_goals, tolerance_sec=15, key_fields=["scoring_team", "shot_type"])
             all_saves = chunk_mod.dedupe_events(all_saves, tolerance_sec=5, key_fields=["gk_action", "shot_origin"])
             all_dist = chunk_mod.dedupe_events(all_dist, tolerance_sec=5, key_fields=["trigger", "type"])
+            all_crosses = chunk_mod.dedupe_events(all_crosses, tolerance_sec=3, key_fields=["side", "cross_type"])
+            all_sweeper = chunk_mod.dedupe_events(all_sweeper, tolerance_sec=5, key_fields=["trigger", "action"])
+            all_one_v_one = chunk_mod.dedupe_events(all_one_v_one, tolerance_sec=5, key_fields=["situation_type", "body_shape"])
 
             # Drop low-signal saves (off-target with no GK involvement) before persisting
             all_saves = _filter_low_signal_saves(all_saves)
@@ -1076,13 +1110,17 @@ def process(job_id: str) -> dict:
                     "parsed": {"goals": all_goals},
                     "saves": {"parsed": {"saves": all_saves}, "usage": None},
                     "distribution": {"parsed": {"distribution": all_dist}, "usage": None},
+                    "crosses": {"parsed": {"crosses": all_crosses}, "usage": None},
+                    "sweeper": {"parsed": {"sweeper": all_sweeper}, "usage": None},
+                    "one_v_one": {"parsed": {"one_v_one": all_one_v_one}, "usage": None},
                     "raw": None,
                     "usage": {"chunks": chunk_usages},
                 },
                 "finished_at": now(),
             }).eq("id", job_id).execute()
             print(f"[chunk] checkpoint written. status=review_needed. "
-                  f"goals={len(all_goals)} saves={len(all_saves)} dist={len(all_dist)}",
+                  f"goals={len(all_goals)} saves={len(all_saves)} dist={len(all_dist)} "
+                  f"crosses={len(all_crosses)} sweeper={len(all_sweeper)} 1v1={len(all_one_v_one)}",
                   flush=True)
 
             # Fire-and-forget spawn of clip generation. backfill_clips is
@@ -1106,6 +1144,9 @@ def process(job_id: str) -> dict:
                 "goals_detected": len(all_goals),
                 "saves_detected": len(all_saves),
                 "distribution_detected": len(all_dist),
+                "crosses_detected": len(all_crosses),
+                "sweeper_detected": len(all_sweeper),
+                "one_v_one_detected": len(all_one_v_one),
                 "clips_spawned": True,
             }
 
@@ -1252,6 +1293,60 @@ def process(job_id: str) -> dict:
             dist_count = len((dist_result["parsed"] or {}).get("distribution", [])) if dist_result["parsed"] else None
             print(f"[dist] detected {dist_count}")
 
+        # === Run the crosses prompt (Phase 2.4) ===
+        crosses_result = None
+        crosses_count = None
+        crosses_path = Path("/root/prompts/crosses.md")
+        if crosses_path.exists():
+            print("[crosses] running crosses.md")
+            crosses_result = run_prompt(
+                str(crosses_path),
+                CROSSES_RESPONSE_SCHEMA,
+                {
+                    "my_team_color": meta.get("my_team_color"),
+                    "my_keeper_color": meta.get("my_keeper_color"),
+                    "opponent_color": meta.get("opponent_color"),
+                },
+            )
+            crosses_count = len((crosses_result["parsed"] or {}).get("crosses", [])) if crosses_result["parsed"] else None
+            print(f"[crosses] detected {crosses_count}")
+
+        # === Run the sweeper prompt (Phase 2.4) ===
+        sweeper_result = None
+        sweeper_count = None
+        sweeper_path = Path("/root/prompts/sweeper.md")
+        if sweeper_path.exists():
+            print("[sweeper] running sweeper.md")
+            sweeper_result = run_prompt(
+                str(sweeper_path),
+                SWEEPER_RESPONSE_SCHEMA,
+                {
+                    "my_team_color": meta.get("my_team_color"),
+                    "my_keeper_color": meta.get("my_keeper_color"),
+                    "opponent_color": meta.get("opponent_color"),
+                },
+            )
+            sweeper_count = len((sweeper_result["parsed"] or {}).get("sweeper", [])) if sweeper_result["parsed"] else None
+            print(f"[sweeper] detected {sweeper_count}")
+
+        # === Run the 1v1 prompt (Phase 2.4) ===
+        one_v_one_result = None
+        one_v_one_count = None
+        one_v_one_path = Path("/root/prompts/one_v_one.md")
+        if one_v_one_path.exists():
+            print("[1v1] running one_v_one.md")
+            one_v_one_result = run_prompt(
+                str(one_v_one_path),
+                ONE_V_ONE_RESPONSE_SCHEMA,
+                {
+                    "my_team_color": meta.get("my_team_color"),
+                    "my_keeper_color": meta.get("my_keeper_color"),
+                    "opponent_color": meta.get("opponent_color"),
+                },
+            )
+            one_v_one_count = len((one_v_one_result["parsed"] or {}).get("one_v_one", [])) if one_v_one_result["parsed"] else None
+            print(f"[1v1] detected {one_v_one_count}")
+
         # Cross-event reconciliation (Phase 2.3 — A+B+C). Pure function over
         # the three event lists; trims events that collide / fail QC. Applied
         # in single-pass and chunked paths identically.
@@ -1288,6 +1383,12 @@ def process(job_id: str) -> dict:
             gemini_output["saves"] = saves_result
         if dist_result is not None:
             gemini_output["distribution"] = dist_result
+        if crosses_result is not None:
+            gemini_output["crosses"] = crosses_result
+        if sweeper_result is not None:
+            gemini_output["sweeper"] = sweeper_result
+        if one_v_one_result is not None:
+            gemini_output["one_v_one"] = one_v_one_result
 
         sb.table("video_jobs").update({
             "status": "review_needed",
@@ -1295,7 +1396,8 @@ def process(job_id: str) -> dict:
             "finished_at": now(),
         }).eq("id", job_id).execute()
         print(f"[single-pass] checkpoint written. status=review_needed. "
-              f"goals={goals_count} saves={saves_count} dist={dist_count}",
+              f"goals={goals_count} saves={saves_count} dist={dist_count} "
+              f"crosses={crosses_count} sweeper={sweeper_count} 1v1={one_v_one_count}",
               flush=True)
 
         # Fire-and-forget spawn of clip generation — see chunked-path
@@ -1321,6 +1423,9 @@ def process(job_id: str) -> dict:
             "goals_detected": goals_count,
             "saves_detected": saves_count,
             "distribution_detected": dist_count,
+            "crosses_detected": crosses_count,
+            "sweeper_detected": sweeper_count,
+            "one_v_one_detected": one_v_one_count,
             "clips_spawned": True,
         }
 
@@ -1436,6 +1541,241 @@ def reconcile_existing(job_id: str) -> dict:
     return {"job_id": job_id, "before": before, "after": after}
 
 
+@app.function(image=IMAGE, secrets=[secret], timeout=3600)
+def run_phase_2_4_detectors(job_id: str) -> dict:
+    """Additive-only: run ONLY the crosses / sweeper / one_v_one detectors
+    against an already-analyzed job and MERGE results into gemini_output.
+
+    Why this exists (2026-07-16):
+      - Phase 2.4 added three new detectors AFTER many matches were already
+        published. Re-running full process() would (a) waste ~2× on goals/
+        saves/dist that already exist AND (b) clobber the reviewed_output
+        blob if the coach later re-published. Per additive-only rule
+        (feedback_additive_only_for_published_data), we never rewrite
+        coach-reviewed data.
+      - This function reads the video, runs ONLY the three new prompts,
+        MERGES the resulting arrays into gemini_output.crosses/sweeper/
+        one_v_one, and leaves everything else untouched. Status stays
+        as-is (published stays published; review_needed stays review_needed).
+      - After this runs, coach can eyeball via scripts/compare-detector-vs-gt.mjs
+        for calibration. If they want the events in the DB relational
+        tables too, that's a separate additive script (Phase 3).
+
+    Uses the same chunked-vs-single-pass switch as process() based on
+    match_metadata.use_chunking, so the chunking topology matches the
+    original run.
+
+    Invoke locally:  py -m modal run worker/app.py::run_phase_2_4_detectors --job-id <uuid>
+    """
+    from datetime import datetime, timezone
+    from pathlib import Path
+    import tempfile
+    import time
+    import json
+
+    import requests
+    from supabase import create_client
+    import google.generativeai as genai
+
+    sb = create_client(
+        os.environ["NEXT_PUBLIC_SUPABASE_URL"],
+        os.environ["SUPABASE_SERVICE_ROLE_KEY"],
+    )
+    job = sb.table("video_jobs").select("*").eq("id", job_id).single().execute().data
+    if not job:
+        return {"job_id": job_id, "error": "not_found"}
+    if not job.get("gemini_output"):
+        return {"job_id": job_id, "error": "no_prior_gemini_output — run process() first"}
+
+    meta = job.get("match_metadata") or {}
+    existing_out = job.get("gemini_output") or {}
+
+    # === Resolve + download (same pattern as process()) ===
+    import sys as _sys
+    if "/root" not in _sys.path:
+        _sys.path.insert(0, "/root")
+    from resolvers import resolve as _resolve_url, ResolveError
+
+    try:
+        resolved = _resolve_url(job["video_url"])
+        print(f"[phase2.4] resolved provider={resolved.provider} duration={resolved.duration_sec}s", flush=True)
+    except ResolveError as re:
+        return {"job_id": job_id, "error": f"resolve_failed: {re.coach_message}"}
+
+    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
+        print(f"[phase2.4] downloading from {resolved.provider}...", flush=True)
+        r = requests.get(resolved.playable_url, stream=True, timeout=600)
+        r.raise_for_status()
+        for chunk in r.iter_content(chunk_size=1024 * 1024):
+            f.write(chunk)
+        video_path = f.name
+    print(f"[phase2.4] downloaded {os.path.getsize(video_path) / (1024 * 1024):.1f} MB", flush=True)
+
+    # === Shared context ===
+    calibration = _build_calibration_preamble(sb, job["coach_id"])
+    spatial_calibration = _build_spatial_calibration(meta)
+    encyclopedia_path = Path("/root/prompts/gk_techniques.md")
+    encyclopedia_text = ""
+    if encyclopedia_path.exists():
+        encyclopedia_text = (
+            "\n\n---\n\n# REFERENCE — STIX Goalkeeper Technique Encyclopedia\n\n"
+            + encyclopedia_path.read_text(encoding="utf-8")
+        )
+    shared_suffix = (
+        ("\n\n---\n\n" + spatial_calibration if spatial_calibration else "")
+        + ("\n\n---\n\n" + calibration if calibration else "")
+        + encyclopedia_text
+    )
+
+    genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+    model_name = os.environ.get("GEMINI_MODEL", "gemini-2.5-pro")
+
+    # Load the three new prompt templates. If any is missing (deploy skew),
+    # skip that detector rather than fail loudly.
+    prompts_to_run = []
+    for kind, schema, path_str in (
+        ("crosses",   CROSSES_RESPONSE_SCHEMA,   "/root/prompts/crosses.md"),
+        ("sweeper",   SWEEPER_RESPONSE_SCHEMA,   "/root/prompts/sweeper.md"),
+        ("one_v_one", ONE_V_ONE_RESPONSE_SCHEMA, "/root/prompts/one_v_one.md"),
+    ):
+        p = Path(path_str)
+        if p.exists():
+            prompts_to_run.append((kind, p.read_text(encoding="utf-8"), schema))
+        else:
+            print(f"[phase2.4] {path_str} missing — skipping {kind}", flush=True)
+    if not prompts_to_run:
+        return {"job_id": job_id, "error": "no phase 2.4 prompts on disk"}
+
+    render_vars = {
+        "my_team_color": meta.get("my_team_color"),
+        "my_keeper_color": meta.get("my_keeper_color"),
+        "opponent_color": meta.get("opponent_color"),
+    }
+
+    results = {kind: [] for kind, *_ in prompts_to_run}
+    usages = []
+
+    use_chunking = bool(meta.get("use_chunking"))
+    chunk_duration = int(meta.get("chunk_duration_sec") or 600)
+
+    if use_chunking:
+        import chunking as chunk_mod
+        print(f"[phase2.4] chunking source into ~{chunk_duration}s segments...", flush=True)
+        chunks = chunk_mod.split_video(video_path, chunk_duration_sec=chunk_duration, overlap_sec=15)
+        print(f"[phase2.4] produced {len(chunks)} chunks", flush=True)
+
+        for c in chunks:
+            print(f"[phase2.4] uploading chunk {c.index}...", flush=True)
+            upl = genai.upload_file(path=c.path, mime_type="video/mp4")
+            wait_start = time.time()
+            while upl.state.name == "PROCESSING":
+                if time.time() - wait_start > 10 * 60:
+                    raise RuntimeError(f"chunk {c.index} indexing exceeded 10 min")
+                time.sleep(5)
+                upl = genai.get_file(upl.name)
+            if upl.state.name != "ACTIVE":
+                raise RuntimeError(f"chunk {c.index} ended in state {upl.state.name}")
+
+            offset_note = (
+                f"\n\nIMPORTANT: This video is a {c.duration_seconds}-second segment "
+                f"of a longer match, starting at {c.start_seconds // 60}:{c.start_seconds % 60:02d} "
+                f"of the full match. Report `timestamp_seconds` from 0 (the start of THIS segment), "
+                f"not the full-match clock — the consumer will offset.\n"
+            )
+
+            for kind, template, schema in prompts_to_run:
+                rendered = _render_prompt(template, render_vars) + offset_note + shared_suffix
+                model = genai.GenerativeModel(model_name, generation_config={
+                    "response_mime_type": "application/json",
+                    "response_schema": schema,
+                })
+                print(f"[phase2.4] chunk {c.index} / {kind} generating...", flush=True)
+                resp = model.generate_content([upl, rendered])
+                try:
+                    parsed = json.loads(resp.text)
+                except json.JSONDecodeError:
+                    parsed = None
+                events = (parsed or {}).get(kind, []) if parsed else []
+                chunk_mod.offset_timestamps(events, c.start_seconds)
+                results[kind].extend(events)
+                usage = getattr(resp, "usage_metadata", None)
+                if usage is not None:
+                    usages.append({
+                        "chunk": c.index, "kind": kind,
+                        "total_token_count": getattr(usage, "total_token_count", None),
+                        "prompt_token_count": getattr(usage, "prompt_token_count", None),
+                        "candidates_token_count": getattr(usage, "candidates_token_count", None),
+                    })
+        # Dedupe overlap-zone dupes with the same keys the chunked path uses
+        results["crosses"]   = chunk_mod.dedupe_events(results["crosses"],   tolerance_sec=3, key_fields=["side", "cross_type"])
+        results["sweeper"]   = chunk_mod.dedupe_events(results["sweeper"],   tolerance_sec=5, key_fields=["trigger", "action"])
+        results["one_v_one"] = chunk_mod.dedupe_events(results["one_v_one"], tolerance_sec=5, key_fields=["situation_type", "body_shape"])
+        chunk_mod.cleanup_chunks(chunks)
+    else:
+        print("[phase2.4] single-pass upload...", flush=True)
+        upl = genai.upload_file(path=video_path, mime_type="video/mp4")
+        wait_start = time.time()
+        while upl.state.name == "PROCESSING":
+            if time.time() - wait_start > 20 * 60:
+                raise RuntimeError("indexing exceeded 20 min")
+            time.sleep(5)
+            upl = genai.get_file(upl.name)
+        if upl.state.name != "ACTIVE":
+            raise RuntimeError(f"file ended in state {upl.state.name}")
+        for kind, template, schema in prompts_to_run:
+            rendered = _render_prompt(template, render_vars) + shared_suffix
+            model = genai.GenerativeModel(model_name, generation_config={
+                "response_mime_type": "application/json",
+                "response_schema": schema,
+            })
+            print(f"[phase2.4] {kind} generating...", flush=True)
+            resp = model.generate_content([upl, rendered])
+            try:
+                parsed = json.loads(resp.text)
+            except json.JSONDecodeError:
+                parsed = None
+            events = (parsed or {}).get(kind, []) if parsed else []
+            results[kind].extend(events)
+            usage = getattr(resp, "usage_metadata", None)
+            if usage is not None:
+                usages.append({
+                    "kind": kind,
+                    "total_token_count": getattr(usage, "total_token_count", None),
+                    "prompt_token_count": getattr(usage, "prompt_token_count", None),
+                    "candidates_token_count": getattr(usage, "candidates_token_count", None),
+                })
+
+    # === MERGE into existing gemini_output — never touches other keys ===
+    new_out = dict(existing_out)
+    new_out["crosses"]   = {"parsed": {"crosses":   results["crosses"]},   "usage": None}
+    new_out["sweeper"]   = {"parsed": {"sweeper":   results["sweeper"]},   "usage": None}
+    new_out["one_v_one"] = {"parsed": {"one_v_one": results["one_v_one"]}, "usage": None}
+    new_out["phase_2_4_ran_at"] = datetime.now(timezone.utc).isoformat()
+    new_out["phase_2_4_usage"]  = usages
+
+    sb.table("video_jobs").update({"gemini_output": new_out}).eq("id", job_id).execute()
+    print(f"[phase2.4] MERGED into gemini_output. "
+          f"crosses={len(results['crosses'])} sweeper={len(results['sweeper'])} 1v1={len(results['one_v_one'])}",
+          flush=True)
+
+    # Fire-and-forget clip generation so the new events get clip_storage_path
+    # under their respective gemini_output arrays (backfill_clips scans every
+    # array in gemini_output that has timestamps).
+    try:
+        spawn_call = backfill_clips.spawn(job_id, False)
+        print(f"[phase2.4] spawned backfill_clips (modal_call_id={spawn_call.object_id})", flush=True)
+    except Exception as spawn_err:
+        print(f"[phase2.4] backfill_clips spawn FAILED: {spawn_err}", flush=True)
+
+    return {
+        "job_id": job_id,
+        "status": "phase_2_4_complete",
+        "crosses":   len(results["crosses"]),
+        "sweeper":   len(results["sweeper"]),
+        "one_v_one": len(results["one_v_one"]),
+    }
+
+
 @app.function(image=IMAGE, secrets=[secret], timeout=1800)
 def backfill_clips(job_id: str, force: bool = False) -> dict:
     """Generate per-event review clips for a job that's already been analyzed.
@@ -1470,8 +1810,11 @@ def backfill_clips(job_id: str, force: bool = False) -> dict:
     goals = (out.get("parsed") or {}).get("goals", []) if out.get("parsed") else []
     saves = ((out.get("saves") or {}).get("parsed") or {}).get("saves", []) if out.get("saves") else []
     dist = ((out.get("distribution") or {}).get("parsed") or {}).get("distribution", []) if out.get("distribution") else []
+    crosses   = ((out.get("crosses")   or {}).get("parsed") or {}).get("crosses",   []) if out.get("crosses")   else []
+    sweeper   = ((out.get("sweeper")   or {}).get("parsed") or {}).get("sweeper",   []) if out.get("sweeper")   else []
+    one_v_one = ((out.get("one_v_one") or {}).get("parsed") or {}).get("one_v_one", []) if out.get("one_v_one") else []
 
-    if not (goals or saves or dist):
+    if not (goals or saves or dist or crosses or sweeper or one_v_one):
         return {"job_id": job_id, "error": "no_events_in_gemini_output"}
 
     # Resolve a fresh download URL.
@@ -1529,7 +1872,13 @@ def backfill_clips(job_id: str, force: bool = False) -> dict:
     n_g = _process(goals, "goal")
     n_s = _process(saves, "save")
     n_d = _process(dist, "dist")
-    print(f"[backfill] produced {n_g} goal / {n_s} save / {n_d} dist clips in {time.time() - clip_start:.0f}s", flush=True)
+    # Phase 2.4 event types — same 7s window semantics as the existing three
+    n_c   = _process(crosses,   "cross")
+    n_sw  = _process(sweeper,   "sweeper")
+    n_o   = _process(one_v_one, "one_v_one")
+    print(f"[backfill] produced {n_g} goal / {n_s} save / {n_d} dist / "
+          f"{n_c} cross / {n_sw} sweeper / {n_o} 1v1 clips in {time.time() - clip_start:.0f}s",
+          flush=True)
 
     # Write back, preserving the rest of gemini_output structure.
     new_out = dict(out)
@@ -1544,6 +1893,18 @@ def backfill_clips(job_id: str, force: bool = False) -> dict:
         new_out["distribution"] = dict(new_out["distribution"])
         new_out["distribution"]["parsed"] = dict(new_out["distribution"].get("parsed") or {})
         new_out["distribution"]["parsed"]["distribution"] = dist
+    if new_out.get("crosses") is not None:
+        new_out["crosses"] = dict(new_out["crosses"])
+        new_out["crosses"]["parsed"] = dict(new_out["crosses"].get("parsed") or {})
+        new_out["crosses"]["parsed"]["crosses"] = crosses
+    if new_out.get("sweeper") is not None:
+        new_out["sweeper"] = dict(new_out["sweeper"])
+        new_out["sweeper"]["parsed"] = dict(new_out["sweeper"].get("parsed") or {})
+        new_out["sweeper"]["parsed"]["sweeper"] = sweeper
+    if new_out.get("one_v_one") is not None:
+        new_out["one_v_one"] = dict(new_out["one_v_one"])
+        new_out["one_v_one"]["parsed"] = dict(new_out["one_v_one"].get("parsed") or {})
+        new_out["one_v_one"]["parsed"]["one_v_one"] = one_v_one
     new_out["clips_backfilled_at"] = datetime.now(timezone.utc).isoformat()
 
     sb.table("video_jobs").update({"gemini_output": new_out}).eq("id", job_id).execute()
@@ -1555,8 +1916,10 @@ def backfill_clips(job_id: str, force: bool = False) -> dict:
 
     return {
         "job_id": job_id,
-        "clips_produced": {"goal": n_g, "save": n_s, "dist": n_d},
-        "total_events": {"goal": len(goals), "save": len(saves), "dist": len(dist)},
+        "clips_produced": {"goal": n_g, "save": n_s, "dist": n_d,
+                            "cross": n_c, "sweeper": n_sw, "one_v_one": n_o},
+        "total_events": {"goal": len(goals), "save": len(saves), "dist": len(dist),
+                          "cross": len(crosses), "sweeper": len(sweeper), "one_v_one": len(one_v_one)},
     }
 
 
@@ -1804,3 +2167,33 @@ def trigger(payload: dict, x_trigger_secret: str = Header(default="")):
         raise HTTPException(status_code=400, detail="job_id required")
     call = process.spawn(job_id)
     return {"job_id": job_id, "modal_call_id": call.object_id}
+
+
+@app.function(image=IMAGE, secrets=[secret])
+@modal.fastapi_endpoint(method="POST")
+def trigger_backfill_from_events(payload: dict, x_trigger_secret: str = Header(default="")):
+    """HTTP entry point used by the Next.js publish route to spawn
+    ``backfill_clips_from_events`` after a match is committed to the DB.
+
+    Expects: POST {"match_id": "<uuid>", "force": <bool>} with header
+    X-Trigger-Secret matching MODAL_TRIGGER_SECRET. Spawns the backfill and
+    returns immediately so the coach's publish UX doesn't block on ffmpeg.
+
+    Why this exists: publish route writes clip_storage_path from
+    gemini_output at insert time, but that only works for Gemini-detected
+    events whose timestamp survived coach review unchanged. Coach-added
+    events land with clip_storage_path=NULL, and coach-edited timestamps
+    can point to the wrong (or no) clip in the JSON index. Post-publish
+    backfill re-slices every event from the DB row's timestamp using the
+    event's UUID as a stable filename suffix — guaranteeing the video the
+    coach sees on the dashboard matches the event they saved.
+    """
+    expected = os.environ.get("MODAL_TRIGGER_SECRET", "")
+    if not expected or x_trigger_secret != expected:
+        raise HTTPException(status_code=401, detail="unauthorized")
+    match_id = (payload or {}).get("match_id")
+    if not match_id:
+        raise HTTPException(status_code=400, detail="match_id required")
+    force = bool((payload or {}).get("force", False))
+    call = backfill_clips_from_events.spawn(match_id, force)
+    return {"match_id": match_id, "force": force, "modal_call_id": call.object_id}

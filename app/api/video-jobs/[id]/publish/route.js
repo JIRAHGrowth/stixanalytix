@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase-server';
 import { createAdminClient } from '@/lib/supabase-admin';
+import { triggerBackfillClipsFromEvents } from '@/lib/modal-trigger';
 
 import {
   VALID_ZONES, VALID_ORIGINS, VALID_SOURCES, VALID_SHOT_TYPES,
@@ -242,6 +243,16 @@ export async function POST(request, { params }) {
     const clipPathBySaveTs = indexClipPaths(gOut?.saves?.parsed?.saves);
     const clipPathByDistTs = indexClipPaths(gOut?.distribution?.parsed?.distribution);
     const clipPathByGoalTs = indexClipPaths(gOut?.parsed?.goals);
+    // Phase 2.4 event types — index clips off the new detector outputs so
+    // Gemini-detected crosses / sweeper / 1v1 events carry a clip pointer at
+    // insert time (matches the saves/dist/goals pattern above). Coach-added
+    // events won't be in gemini_output → clipPathFor returns null → clip is
+    // filled by the post-publish backfill_clips_from_events trigger fired at
+    // the bottom of this handler (force=true so coach-edited-timestamp events
+    // get re-sliced too, not just the NULLs).
+    const clipPathByCrossTs = indexClipPaths(gOut?.crosses?.parsed?.crosses);
+    const clipPathBySweepTs = indexClipPaths(gOut?.sweeper?.parsed?.sweeper);
+    const clipPathByOneV1Ts = indexClipPaths(gOut?.one_v_one?.parsed?.one_v_one);
 
     const matchId = crypto.randomUUID();
 
@@ -480,7 +491,10 @@ export async function POST(request, { params }) {
         gk_starting_pos: c.gk_starting_pos || null,
         outcome: c.outcome || null,
         notes: c.notes || null,
+        gk_observations: c.gk_observations || null,
+        confidence: c.confidence || null,
         keeper_team: (c.keeper_team === 'us' || c.keeper_team === 'opp') ? c.keeper_team : null,
+        clip_storage_path: c.clip_storage_path || clipPathFor(clipPathByCrossTs, c.timestamp_seconds),
         source: 'video',
         coach_added: !!c.coach_added,
       }));
@@ -500,11 +514,16 @@ export async function POST(request, { params }) {
         trigger: s.trigger || null,
         gk_starting_depth: s.gk_starting_depth || null,
         timing: s.timing || null,
+        sweep_zone: s.sweep_zone || null,
         action: s.action || null,
         pressure: s.pressure || null,
         risk_grade: s.risk_grade || null,
         result: s.result || null,
         notes: s.notes || null,
+        action_description: s.action_description || null,
+        gk_observations: s.gk_observations || null,
+        confidence: s.confidence || null,
+        clip_storage_path: s.clip_storage_path || clipPathFor(clipPathBySweepTs, s.timestamp_seconds),
         source: 'video',
         coach_added: !!s.coach_added,
       }));
@@ -531,6 +550,10 @@ export async function POST(request, { params }) {
         result: o.result || null,
         rebound_quality: o.rebound_quality || null,
         notes: o.notes || null,
+        shot_description: o.shot_description || null,
+        gk_observations: o.gk_observations || null,
+        confidence: o.confidence || null,
+        clip_storage_path: o.clip_storage_path || clipPathFor(clipPathByOneV1Ts, o.timestamp_seconds),
         source: 'video',
         coach_added: !!o.coach_added,
       }));
@@ -581,6 +604,29 @@ export async function POST(request, { params }) {
       }
     } catch (e) {
       console.error('coach_corrections diff failed (non-fatal):', e);
+    }
+
+    // Post-publish clip backfill — spawn a Modal worker (fire-and-forget) that
+    // re-slices every event in this match from the DB row's persisted
+    // timestamp, using the event's UUID as a stable filename suffix. Fixes
+    // two classes of stale clips the insert-time indexing can't:
+    //   (a) coach-added events → clip_storage_path=NULL at insert
+    //   (b) coach-edited timestamps → clipPathFor() may have looked up
+    //       a wrong event's clip via rounded-timestamp collision
+    // force=true so it re-slices everything and guarantees the clip a coach
+    // sees on the dashboard matches the event they saved. Cost is ~1-3 s of
+    // ffmpeg per event on Modal; a 40-event match is ~3-5 min post-publish.
+    // The coach's publish request returns immediately — this runs in the
+    // background via Modal spawn.
+    try {
+      const backfillErr = await triggerBackfillClipsFromEvents(matchId, { force: true });
+      if (backfillErr) {
+        console.error('[publish] backfill_clips_from_events trigger failed (non-fatal):', backfillErr);
+      } else {
+        console.log(`[publish] spawned backfill_clips_from_events for match_id=${matchId}`);
+      }
+    } catch (e) {
+      console.error('[publish] backfill trigger threw (non-fatal):', e);
     }
 
     // Retention policy 2026-05-22: source videos are KEPT in Supabase Storage

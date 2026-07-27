@@ -1,0 +1,37 @@
+{
+  "$comment": "Gemini response-schema contract for the 1v1 prompt. Loaded by worker/app.py (Python) and scripts/test-gemini-match.js (JS). Types use Gemini Python SDK conventions (uppercase). Enum values MUST match the CHECK constraints in supabase/migrations/20260601_event_types_expansion.sql (one_v_one_events table).",
+  "type": "OBJECT",
+  "properties": {
+    "one_v_one": {
+      "type": "ARRAY",
+      "items": {
+        "type": "OBJECT",
+        "properties": {
+          "timestamp_seconds":  { "type": "INTEGER" },
+          "match_clock":        { "type": "STRING" },
+          "situation_type":     { "type": "STRING" },
+          "approach_corridor":  { "type": "STRING" },
+          "set_position":       { "type": "STRING" },
+          "body_shape":         { "type": "STRING" },
+          "engagement_depth":   { "type": "STRING" },
+          "decision":           { "type": "STRING" },
+          "timing":             { "type": "STRING" },
+          "result":             { "type": "STRING" },
+          "rebound_quality":    { "type": "STRING" },
+          "notes":              { "type": "STRING" },
+          "shot_description":   { "type": "STRING" },
+          "gk_observations":    { "type": "STRING" },
+          "confidence":         { "type": "STRING" },
+          "keeper_team":        { "type": "STRING" }
+        },
+        "required": [
+          "timestamp_seconds", "match_clock", "situation_type", "approach_corridor",
+          "set_position", "body_shape", "engagement_depth", "decision", "timing",
+          "result", "rebound_quality", "notes", "shot_description",
+          "gk_observations", "confidence", "keeper_team"
+        ]
+      }
+    }
+  },
+  "required": ["one_v_one"]
+}

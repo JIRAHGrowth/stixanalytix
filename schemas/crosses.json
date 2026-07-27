@@ -1,0 +1,32 @@
+{
+  "$comment": "Gemini response-schema contract for the crosses prompt. Loaded by worker/app.py (Python) and scripts/test-gemini-match.js (JS). Types use Gemini Python SDK conventions (uppercase). JS loader converts to SchemaType enum. Update this file AND prompts/crosses.md in the same change — prompts/README.md changelog tracks both. Enum values MUST match the DB comments in supabase/migrations/20260714_cross_events.sql.",
+  "type": "OBJECT",
+  "properties": {
+    "crosses": {
+      "type": "ARRAY",
+      "items": {
+        "type": "OBJECT",
+        "properties": {
+          "timestamp_seconds":  { "type": "INTEGER" },
+          "match_clock":        { "type": "STRING" },
+          "side":               { "type": "STRING" },
+          "cross_type":         { "type": "STRING" },
+          "destination":        { "type": "STRING" },
+          "gk_action":          { "type": "STRING" },
+          "gk_starting_pos":    { "type": "STRING" },
+          "outcome":            { "type": "STRING" },
+          "notes":              { "type": "STRING" },
+          "gk_observations":    { "type": "STRING" },
+          "confidence":         { "type": "STRING" },
+          "keeper_team":        { "type": "STRING" }
+        },
+        "required": [
+          "timestamp_seconds", "match_clock", "side", "cross_type",
+          "destination", "gk_action", "gk_starting_pos", "outcome",
+          "notes", "gk_observations", "confidence", "keeper_team"
+        ]
+      }
+    }
+  },
+  "required": ["crosses"]
+}

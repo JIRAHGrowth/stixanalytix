@@ -1,0 +1,35 @@
+{
+  "$comment": "Gemini response-schema contract for the sweeper prompt. Loaded by worker/app.py (Python) and scripts/test-gemini-match.js (JS). Types use Gemini Python SDK conventions (uppercase). Enum values MUST match the CHECK constraints in supabase/migrations/20260601_event_types_expansion.sql (sweeper_events table).",
+  "type": "OBJECT",
+  "properties": {
+    "sweeper": {
+      "type": "ARRAY",
+      "items": {
+        "type": "OBJECT",
+        "properties": {
+          "timestamp_seconds":    { "type": "INTEGER" },
+          "match_clock":          { "type": "STRING" },
+          "trigger":              { "type": "STRING" },
+          "gk_starting_depth":    { "type": "STRING" },
+          "timing":               { "type": "STRING" },
+          "sweep_zone":           { "type": "STRING" },
+          "action":               { "type": "STRING" },
+          "pressure":             { "type": "STRING" },
+          "risk_grade":           { "type": "STRING" },
+          "result":               { "type": "STRING" },
+          "notes":                { "type": "STRING" },
+          "action_description":   { "type": "STRING" },
+          "gk_observations":      { "type": "STRING" },
+          "confidence":           { "type": "STRING" },
+          "keeper_team":          { "type": "STRING" }
+        },
+        "required": [
+          "timestamp_seconds", "match_clock", "trigger", "gk_starting_depth",
+          "timing", "sweep_zone", "action", "pressure", "risk_grade", "result",
+          "notes", "action_description", "gk_observations", "confidence", "keeper_team"
+        ]
+      }
+    }
+  },
+  "required": ["sweeper"]
+}
