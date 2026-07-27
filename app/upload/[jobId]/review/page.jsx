@@ -312,6 +312,73 @@ export default function ReviewPage() {
         });
       });
 
+      // Phase 2.4 — load cross / sweeper / 1v1 events from gemini_output.
+      // Same shape as saves/dists: gemini raw preserved under .gemini for
+      // clip URL refresh + review-diff logging. keeper_team default: 'us'
+      // (analyzed keeper is the majority case; coach flips to 'opp' if
+      // needed via the review UI's per-event field).
+      const crossesParsed = json.job?.gemini_output?.crosses?.parsed || null;
+      const initialCrosses = (crossesParsed?.crosses || []).map((c, i) => ({
+        _id: `c${i}`,
+        keep: true,
+        timestamp_seconds: c.timestamp_seconds,
+        match_clock: c.match_clock,
+        side: c.side || "",
+        cross_type: c.cross_type || "",
+        destination: c.destination || "",
+        gk_action: c.gk_action || "",
+        gk_starting_pos: c.gk_starting_pos || "",
+        outcome: c.outcome || "",
+        notes: c.notes || "",
+        gk_observations: c.gk_observations || "",
+        confidence: c.confidence || "",
+        keeper_team: (c.keeper_team === 'us' || c.keeper_team === 'opp') ? c.keeper_team : 'us',
+        gemini: c,
+      }));
+      const sweeperParsed = json.job?.gemini_output?.sweeper?.parsed || null;
+      const initialSweeper = (sweeperParsed?.sweeper || []).map((s, i) => ({
+        _id: `sw${i}`,
+        keep: true,
+        timestamp_seconds: s.timestamp_seconds,
+        match_clock: s.match_clock,
+        trigger: s.trigger || "",
+        gk_starting_depth: s.gk_starting_depth || "",
+        timing: s.timing || "",
+        sweep_zone: s.sweep_zone || "",
+        action: s.action || "",
+        pressure: s.pressure || "",
+        risk_grade: s.risk_grade || "",
+        result: s.result || "",
+        notes: s.notes || "",
+        action_description: s.action_description || "",
+        gk_observations: s.gk_observations || "",
+        confidence: s.confidence || "",
+        keeper_team: (s.keeper_team === 'us' || s.keeper_team === 'opp') ? s.keeper_team : 'us',
+        gemini: s,
+      }));
+      const oneV1Parsed = json.job?.gemini_output?.one_v_one?.parsed || null;
+      const initialOneV1 = (oneV1Parsed?.one_v_one || []).map((o, i) => ({
+        _id: `o${i}`,
+        keep: true,
+        timestamp_seconds: o.timestamp_seconds,
+        match_clock: o.match_clock,
+        situation_type: o.situation_type || "",
+        approach_corridor: o.approach_corridor || "",
+        set_position: o.set_position || "",
+        body_shape: o.body_shape || "",
+        engagement_depth: o.engagement_depth || "",
+        decision: o.decision || "",
+        timing: o.timing || "",
+        result: o.result || "",
+        rebound_quality: o.rebound_quality || "",
+        notes: o.notes || "",
+        shot_description: o.shot_description || "",
+        gk_observations: o.gk_observations || "",
+        confidence: o.confidence || "",
+        keeper_team: (o.keeper_team === 'us' || o.keeper_team === 'opp') ? o.keeper_team : 'us',
+        gemini: o,
+      }));
+
       // Build a fresh path → signed-URL map from THIS request's API response.
       // The draft we may restore below was serialized with whatever URLs were
       // live when it was saved, and signed-URL tokens expire (Supabase rejects
@@ -319,7 +386,7 @@ export default function ReviewPage() {
       // where it expected MP4 → SRC_NOT_SUPPORTED). We have to overwrite any
       // cached clip_url on restored events with the freshly-minted one.
       const freshClipUrlByPath = {};
-      [...cands, ...initialSaves, ...initialDist].forEach(item => {
+      [...cands, ...initialSaves, ...initialDist, ...initialCrosses, ...initialSweeper, ...initialOneV1].forEach(item => {
         const path = item.gemini?.clip_storage_path;
         const url = item.gemini?.clip_url;
         if (path && url) freshClipUrlByPath[path] = url;
@@ -436,6 +503,9 @@ export default function ReviewPage() {
         setCandidates(cands);
         setSaveRows(initialSaves);
         setDistRows(initialDist);
+        setCrossRows(initialCrosses);
+        setSweeperRows(initialSweeper);
+        setOneV1Rows(initialOneV1);
         setSaveState('idle');
       }
 
@@ -1192,6 +1262,8 @@ export default function ReviewPage() {
       gk_starting_pos: r.gk_starting_pos || null,
       outcome: r.outcome || null,
       notes: r.notes || null,
+      gk_observations: r.gk_observations || r.gemini?.gk_observations || null,
+      confidence: r.confidence || r.gemini?.confidence || null,
       keeper_team: r.keeper_team || null,
       coach_added: !!r.coach_added,
     }));
@@ -1201,11 +1273,15 @@ export default function ReviewPage() {
       trigger: r.trigger || null,
       gk_starting_depth: r.gk_starting_depth || null,
       timing: r.timing || null,
+      sweep_zone: r.sweep_zone || null,
       action: r.action || null,
       pressure: r.pressure || null,
       risk_grade: r.risk_grade || null,
       result: r.result || null,
       notes: r.notes || null,
+      action_description: r.action_description || r.gemini?.action_description || null,
+      gk_observations: r.gk_observations || r.gemini?.gk_observations || null,
+      confidence: r.confidence || r.gemini?.confidence || null,
       keeper_team: r.keeper_team || null,
       coach_added: !!r.coach_added,
     }));
@@ -1222,6 +1298,9 @@ export default function ReviewPage() {
       result: r.result || null,
       rebound_quality: r.rebound_quality || null,
       notes: r.notes || null,
+      shot_description: r.shot_description || r.gemini?.shot_description || null,
+      gk_observations: r.gk_observations || r.gemini?.gk_observations || null,
+      confidence: r.confidence || r.gemini?.confidence || null,
       keeper_team: r.keeper_team || null,
       coach_added: !!r.coach_added,
     }));
@@ -1741,8 +1820,9 @@ export default function ReviewPage() {
         </div>
 
         {/* ── CROSSES ─────────────────────────────────────────────────
-            Gemini doesn't detect crosses yet, so this section starts empty.
-            Coach adds via + button or reclassifies from saves/dists. */}
+            Gemini detects crosses via prompts/crosses.md (Phase 2.4, 2026-07-16).
+            Detected events seed the list; coach can Add, reclassify from
+            saves/dists, or drop rows via the keep toggle. */}
         <h2 style={{ fontSize: 15, fontWeight: 700, color: t.bright, letterSpacing: 0.4, marginTop: 28, marginBottom: 12 }}>
           🎯 CROSSES <span style={{ fontSize: 11, color: t.dim, fontWeight: 400, marginLeft: 8 }}>({crossRows.length})</span>
         </h2>
