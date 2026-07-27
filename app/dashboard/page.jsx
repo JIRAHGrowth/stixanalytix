@@ -149,7 +149,7 @@ function ModalityBadge({ modality }) {
 }
 
 // ─── HERO ───────────────────────────────────────────────────────────────────
-function KeeperHero({ keeper, club, formScore, latestMatch, pendingClipCount, totalMatches, since }) {
+function KeeperHero({ keeper, club, formScore, latestMatch, pendingClipCount, totalMatches, since, activeKeeperId }) {
   const delta = formScore.delta;
   const initials = fmtInitials(keeper?.name);
   const ageGroup = keeper?.age_group || keeper?.depth || "—";
@@ -324,7 +324,7 @@ function KeeperHero({ keeper, club, formScore, latestMatch, pendingClipCount, to
         )}
 
         {latestMatch && (
-          <Link href={`/matches/${latestMatch.id}`} style={{ textDecoration: "none" }}>
+          <Link href={`/matches/${latestMatch.id}${activeKeeperId ? `?keeper=${activeKeeperId}` : ''}`} style={{ textDecoration: "none" }}>
             <button style={{
               width: "100%", padding: "14px 16px",
               background: t.accent, border: "none", borderRadius: 12,
@@ -465,7 +465,7 @@ function StatsStrip({ seasonAgg, totalMatches }) {
   );
 }
 
-function RecentMatches({ matches, shotEvents, goalsConceded }) {
+function RecentMatches({ matches, shotEvents, goalsConceded, activeKeeperId }) {
   const recent = useMemo(() => {
     return [...matches]
       .filter(m => m.session_type === "match" || m.session_type === "friendly")
@@ -517,7 +517,7 @@ function RecentMatches({ matches, shotEvents, goalsConceded }) {
           const sot = hasEvents ? (ec.sv + ec.ga) : (m.shots_on_target || 0);
           const sotPct = sot > 0 ? Math.min(100, (sv / sot) * 100) : null;
           return (
-            <Link key={m.id} href={`/matches/${m.id}`} style={{ textDecoration: "none" }}>
+            <Link key={m.id} href={`/matches/${m.id}${activeKeeperId ? `?keeper=${activeKeeperId}` : ''}`} style={{ textDecoration: "none" }}>
               <div style={{
                 display: "grid",
                 gridTemplateColumns: "70px 28px 1fr 90px 70px 90px",
@@ -710,6 +710,7 @@ export default function DashboardPreview() {
               pendingClipCount={data.pendingClipCount}
               totalMatches={totalMatches}
               since={since}
+              activeKeeperId={activeKeeperId}
             />
 
             <div style={{
@@ -743,7 +744,7 @@ export default function DashboardPreview() {
             </div>
 
             <div style={{ marginTop: 20 }}>
-              <RecentMatches matches={data.matches} shotEvents={data.shotEvents} goalsConceded={data.goalsConceded} />
+              <RecentMatches matches={data.matches} shotEvents={data.shotEvents} goalsConceded={data.goalsConceded} activeKeeperId={activeKeeperId} />
             </div>
 
             <DesignerNotes />

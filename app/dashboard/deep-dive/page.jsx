@@ -1246,7 +1246,7 @@ export default function DashboardPage() {
                                   // Video-tagged matches get the rich /matches/[id] view;
                                   // pitchside-logged matches keep the legacy inline drill-down.
                                   if (matchRecord?.logged_via === "video") {
-                                    window.location.href = `/matches/${m.id}`;
+                                    window.location.href = `/matches/${m.id}${selectedKeeper ? `?keeper=${selectedKeeper}` : ''}`;
                                   } else {
                                     openGameDrillDown(m);
                                   }
