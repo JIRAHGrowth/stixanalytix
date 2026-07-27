@@ -17,6 +17,9 @@ out/
 # debug
 npm-debug.log*
 dev.log
+# one-shot backfill / migration progress logs
+backfill-progress.log
+backfill-*.log
 
 # vercel
 .vercel
