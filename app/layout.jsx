@@ -1,6 +1,7 @@
 import { AuthProvider } from "@/context/AuthContext";
 
 export const metadata = {
+  metadataBase: new URL("https://www.stixanalytix.com"),
   title: "StixAnalytix — Goalkeeper Coaching Intelligence",
   description: "Track, analyze, and develop your goalkeepers with data-driven coaching intelligence.",
   icons: { icon: "/logo.svg", apple: "/logo.svg" },
@@ -9,7 +10,7 @@ export const metadata = {
     description: "Track, analyze, and develop your goalkeepers with data-driven coaching intelligence. Built for the goalkeeper coach.",
     siteName: "StixAnalytix",
     type: "website",
-    url: "https://stixanalytix.com",
+    url: "https://www.stixanalytix.com",
     images: [{ url: "/logo.svg", width: 500, height: 168, alt: "StixAnalytix Logo" }],
   },
   twitter: {
