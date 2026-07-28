@@ -679,7 +679,9 @@ function MockVideoReview() {
 
 function MockDistributionMap() {
   // Landscape pitch view: 4 distance bands (cols, short → x-long) × 3 lanes (rows L/C/R)
-  // Cells 72×62 → total 297×194 = ~1.53:1 (real football pitch aspect).
+  // Cells 65×56 → total 269×174 = ~1.55:1 (real football pitch aspect). 10% smaller
+  // than v1 so the header + grid + distance labels + insight caption all sit cleanly
+  // inside the 260px mock height.
   const zones = [
     [{ pct: 85 }, { pct: 71 }, { pct: 55 }, { pct: 42 }],
     [{ gk: true }, { pct: 68 }, { pct: 48 }, { pct: 28 }],
@@ -693,35 +695,35 @@ function MockDistributionMap() {
   };
   return (
     <div style={{
-      background: t.bg, padding: 16, height: 260,
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
+      background: t.bg, padding: 12, height: 260,
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 5,
     }}>
       <div style={{ fontSize: 9, fontWeight: 500, letterSpacing: 2.4, color: t.dim, textTransform: 'uppercase' }}>
         Distribution · Completion by Zone
       </div>
       <div style={{
         position: 'relative',
-        padding: 6,
+        padding: 5,
         border: `1px solid ${t.border}`,
         borderRadius: 4,
         background: 'rgba(16,185,129,0.045)',
       }}>
         {/* Halfway line */}
         <div style={{
-          position: 'absolute', left: '50%', top: 6, bottom: 6,
+          position: 'absolute', left: '50%', top: 5, bottom: 5,
           borderLeft: '1px dashed rgba(237,234,225,0.10)', transform: 'translateX(-0.5px)',
         }} />
         {/* Center circle */}
         <div style={{
           position: 'absolute', left: '50%', top: '50%',
-          width: 34, height: 34, borderRadius: '50%',
+          width: 30, height: 30, borderRadius: '50%',
           border: '1px dashed rgba(237,234,225,0.08)',
           transform: 'translate(-50%, -50%)', pointerEvents: 'none',
         }} />
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(4, 72px)',
-          gridTemplateRows: 'repeat(3, 62px)',
+          gridTemplateColumns: 'repeat(4, 65px)',
+          gridTemplateRows: 'repeat(3, 56px)',
           gap: 3,
         }}>
           {zones.flat().map((z, i) => {
@@ -732,7 +734,7 @@ function MockDistributionMap() {
                   border: `1px dashed ${t.dim}`,
                   borderRadius: 2,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 10, color: t.dim, fontWeight: 700, letterSpacing: 1,
+                  fontSize: 9, color: t.dim, fontWeight: 700, letterSpacing: 1,
                 }}>GK</div>
               );
             }
@@ -744,7 +746,7 @@ function MockDistributionMap() {
                 borderRadius: 2,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontFamily: 'var(--font-outfit)', fontWeight: 800,
-                fontSize: 14, color: c.text,
+                fontSize: 13, color: c.text,
               }}>{z.pct}%</div>
             );
           })}
@@ -752,14 +754,14 @@ function MockDistributionMap() {
       </div>
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(4, 72px)',
-        gap: 3, paddingLeft: 6, paddingRight: 6,
+        gridTemplateColumns: 'repeat(4, 65px)',
+        gap: 3, paddingLeft: 5, paddingRight: 5,
       }}>
         {['SHORT', 'MID', 'LONG', 'X-LONG'].map(l => (
           <div key={l} style={{ fontSize: 8, color: t.dim, letterSpacing: 1.4, textAlign: 'center', fontWeight: 700 }}>{l}</div>
         ))}
       </div>
-      <div style={{ fontSize: 10, color: t.dim, textAlign: 'center', whiteSpace: 'nowrap', lineHeight: 1.4 }}>
+      <div style={{ fontSize: 9, color: t.dim, textAlign: 'center', whiteSpace: 'nowrap', lineHeight: 1.4 }}>
         Long-Center <span style={{ color: '#ff9a9a', fontWeight: 700 }}>28%</span> — the lane to coach around.
       </div>
     </div>
