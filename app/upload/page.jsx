@@ -16,7 +16,6 @@ export default function UploadPageWrapper() {
 import { tDark } from "@/lib/theme";
 import { FONT } from "@/lib/constants";
 import { fetchActiveKeepers } from "@/lib/queries";
-import { getFreshToken } from "@/lib/supabase-token";
 import { authedFetch } from "@/lib/authed-fetch";
 
 const t = tDark;
@@ -117,97 +116,58 @@ function UploadPage() {
     setPickedFile(file);
   };
 
-  // Upload via Supabase's S3-compatible endpoint with multipart PUT.
+  // Upload via a server-issued signed PUT URL against the standard Supabase
+  // Storage endpoint.
   //
-  // We previously used TUS (PATCH with application/offset+octet-stream chunks).
-  // That protocol is correct but the verb + content-type combination is rare
-  // enough on the public internet that AV web-shields, corporate proxies and
-  // even some home-router rules silently drop the PATCHes — observed in
-  // production as "tus: failed to upload chunk at offset 0 / [object
-  // ProgressEvent]" with no server-side log entry (Supabase only sees the
-  // HEADs that bracket each retry). The S3 path uses bog-standard PUT with
-  // application/octet-stream, which passes every middlebox that allows file
-  // uploads at all. Same bucket, same RLS, same JWT auth — only the wire
-  // protocol changes. Path: <user_id>/<timestamp>_<rand>/<filename>.
+  // History: TUS (PATCH+offset chunks) was blocked by AV/proxy middleboxes
+  // that drop unfamiliar verb+content-type combos. We then moved to the
+  // S3-compatible endpoint (multipart PUT with SigV4). That path stopped
+  // working when Supabase migrated the client anon key to the new opaque
+  // format (sb_publishable_…) — the S3 endpoint's SigV4 signer only accepts
+  // the legacy JWT anon key as the secretAccessKey and returns "The session
+  // token should be a valid JWT token" for the new format.
+  //
+  // Standard signed uploads accept the new keys, use a single PUT
+  // (universally middlebox-friendly), and keep RLS enforcement via the
+  // server route below which scopes `path` to `<user_id>/...`.
+  //
+  // XHR is used instead of fetch to get real upload-progress events, which
+  // fetch still can't stream from a request body in most browsers.
   const uploadFile = (file) => new Promise(async (resolve, reject) => {
-    const { S3Client } = await import("@aws-sdk/client-s3");
-    const { Upload } = await import("@aws-sdk/lib-storage");
-
-    const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-    const ref = baseUrl.match(/^https:\/\/([a-z0-9-]+)\.supabase\.co/i)?.[1];
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!ref) return reject(new Error("Could not derive project ref from NEXT_PUBLIC_SUPABASE_URL."));
-    if (!anonKey) return reject(new Error("NEXT_PUBLIC_SUPABASE_ANON_KEY is not set in this environment. Check .env.local."));
-
-    // Warm the session before signing the first request. The page may have
-    // been idle for hours and the access token may already be stale.
-    try { await getFreshToken(supabase, { forceRefresh: true }); }
-    catch (e) { return reject(e); }
-
-    const folder = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const objectPath = `${user.id}/${folder}/${safeName}`;
-
-    // Credential PROVIDER (function), not a static object. AWS SDK caches the
-    // returned credentials in memory and re-invokes the provider when the
-    // `expiration` field is past — so on a 30-minute multi-GB upload, every
-    // part that signs after the JWT expires gets re-issued automatically
-    // with a fresh token. Without this, parts uploaded > 1 hour after start
-    // would fail signature validation server-side.
-    const credentials = async () => {
-      const fresh = await getFreshToken(supabase);
-      let expiration;
-      try {
-        const payload = JSON.parse(atob(fresh.split(".")[1]));
-        if (payload?.exp) expiration = new Date(payload.exp * 1000);
-      } catch { /* malformed JWT — let signing fail loudly later */ }
-      return {
-        accessKeyId: ref,           // Supabase: project ref is the access key
-        secretAccessKey: anonKey,   // Supabase: anon key is the S3 secret
-        sessionToken: fresh,        // RLS-scoped user JWT
-        ...(expiration ? { expiration } : {}),
-      };
-    };
-
-    // Direct-storage hostname for large-upload throughput; us-east-1 is the
-    // project's deployment region (S3 SigV4 region must match what the server
-    // expects, even though Supabase doesn't actually use AWS regions).
-    const s3 = new S3Client({
-      region: "us-east-1",
-      endpoint: `https://${ref}.storage.supabase.co/storage/v1/s3`,
-      forcePathStyle: true,
-      credentials,
-    });
-
-    const upload = new Upload({
-      client: s3,
-      params: {
-        Bucket: "match-videos",
-        Key: objectPath,
-        Body: file,
-        ContentType: file.type || "video/mp4",
-        CacheControl: "3600",
-      },
-      // 8 MB parts × 4 in-flight = ~32 MB inflight, comfortable for home
-      // upload links and well above S3's 5 MB minimum part size.
-      partSize: 8 * 1024 * 1024,
-      queueSize: 4,
-      // Abort the whole multipart upload on failure so we don't leave dangling
-      // parts costing storage. Supabase also auto-aborts after 24h.
-      leavePartsOnError: false,
-    });
-
-    upload.on("httpUploadProgress", (p) => {
-      if (p.total) setUploadProgress(Math.round((p.loaded / p.total) * 100));
-    });
-
+    let signPayload;
     try {
-      await upload.done();
-      resolve(objectPath);
-    } catch (err) {
-      console.error("[s3 upload] error:", err);
-      reject(new Error(`Upload failed: ${err?.message || String(err)}`));
+      const signRes = await authedFetch(supabase, "/api/video-jobs/upload-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: file.name }),
+      });
+      signPayload = await signRes.json();
+      if (!signRes.ok || !signPayload?.signedUrl) {
+        return reject(new Error(signPayload?.error || `Could not sign upload URL (HTTP ${signRes.status})`));
+      }
+    } catch (e) {
+      return reject(new Error(`Could not sign upload URL: ${e?.message || String(e)}`));
     }
+
+    const { signedUrl, path } = signPayload;
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", signedUrl, true);
+    xhr.setRequestHeader("Content-Type", file.type || "video/mp4");
+    xhr.setRequestHeader("Cache-Control", "3600");
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(path);
+      } else {
+        reject(new Error(`Upload failed: HTTP ${xhr.status}${xhr.responseText ? " — " + xhr.responseText.slice(0, 200) : ""}`));
+      }
+    };
+    xhr.onerror = () => reject(new Error("Upload failed: network error"));
+    xhr.onabort = () => reject(new Error("Upload aborted"));
+    xhr.send(file);
   });
 
   // Load keepers + initial job list
